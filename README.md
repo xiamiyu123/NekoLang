@@ -88,6 +88,13 @@ python neko.py examples/demo.neko --compile demo
 python -m unittest discover tests/ -v
 ```
 
+## 相关文档
+
+- [文法规范](/Users/xiami/Learning/NekoLang/docs/grammar.md)
+- [LLVM 后端说明](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)
+- [开发路线图](/Users/xiami/Learning/NekoLang/docs/roadmap.md)
+- [v0.1 规格](/Users/xiami/Learning/NekoLang/docs/v0.1-spec.md)
+
 ## 编译器架构
 
 ```
