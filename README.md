@@ -24,12 +24,11 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `nya` | `program` | 程序入口 |
 | `nyan` | `var` | 变量声明 |
 | `paw` | `begin` | 代码块 |
-| `if-nya` | `if` | 条件语句 |
 | `purr-while` | `while` | 循环语句 |
 | `purr` | `print` | 输出 |
 | `meow` | `print` | 输出 |
 | `nyaa-def` | `function` | 函数定义 |
-| `litter-box` | `array` | 数组类型 |
+| `neko-box` | `array` | 数组类型 |
 | `meow-arr` | `array-set` | 数组赋值 |
 | `purr-arr` | `array-print` | 数组输出 |
 

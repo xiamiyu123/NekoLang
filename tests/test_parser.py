@@ -41,6 +41,11 @@ class TestParserVarDecl(unittest.TestCase):
         decl = ast.block.var_decls[0]
         self.assertEqual(decl.variables, [("a", "int"), ("b", "float"), ("c", "char")])
 
+    def test_neko_box_array_alias(self):
+        ast = parse("(program t (var ((arr (neko-box int 5)))) (begin (print 0)))")
+        decl = ast.block.var_decls[0]
+        self.assertEqual(decl.variables, [("arr", "(array int 5)")])
+
 
 class TestParserAssign(unittest.TestCase):
     def test_assign_literal(self):

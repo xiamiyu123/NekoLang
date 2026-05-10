@@ -109,12 +109,11 @@
 | `nya` | PROGRAM | `program` | 程序入口 |
 | `nyan` | VAR | `var` | 变量声明 |
 | `paw` | BEGIN | `begin` | 代码块 |
-| `if-nya` | IF | `if` | 条件语句 |
 | `purr-while` | WHILE | `while` | 循环语句 |
 | `purr` | PRINT | `print` | 输出 |
 | `meow` | PRINT | `print` | 输出 |
 | `nyaa-def` | FUNCTION | `function` | 函数定义 |
-| `litter-box` | ARRAY | `array` | 数组类型 |
+| `neko-box` | ARRAY | `array` | 数组类型 |
 | `meow-arr` | ARRAY_SET | `array-set` | 数组赋值 |
 | `purr-arr` | ARRAY_PRINT | `array-print` | 数组输出 |
 
