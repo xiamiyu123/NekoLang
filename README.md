@@ -56,6 +56,13 @@ python neko.py examples/demo.neko --ast
 
 # 仅输出符号表
 python neko.py examples/demo.neko --symbols
+
+# 输出 LLVM IR
+python neko.py examples/demo.neko --llvm-ir
+
+# 编译为可执行文件
+python neko.py examples/demo.neko --compile demo
+./demo
 ```
 
 ## 运行测试
@@ -70,6 +77,7 @@ python -m unittest discover tests/ -v
 源代码 → [词法分析器] → Token 流
          [语法分析器] → AST
          [语义分析器] → 符号表 + 四元式
+         [LLVM代码生成] → LLVM IR → 可执行文件
 ```
 
 ## 项目结构
@@ -82,5 +90,9 @@ neko/
 ├── parser.py       # 递归下降语法分析器
 ├── symbol_table.py # 符号表系统
 ├── semantic.py     # 语义分析 + 四元式生成
+├── codegen_llvm.py # LLVM IR 代码生成
 └── errors.py       # 猫猫风格错误提示
+
+runtime/
+└── runtime.c       # C 运行时 (printf 包装)
 ```
