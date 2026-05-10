@@ -51,6 +51,14 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(len(analyzer.errors), 0)
         self.assertGreaterEqual(len(analyzer.quadruples), 4)
 
+    def test_personalized_alias_program(self):
+        source = "(nya hello (nyan ((x int))) (paw (:= x 42) (meow x)))"
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn(":=", ops)
+        self.assertIn("print", ops)
+
     def test_arithmetic_program(self):
         source = """(program math
   (var ((a int) (b int)))

@@ -62,18 +62,29 @@ class Token:
 # Keyword table: string -> TokenType
 KEYWORDS: dict[str, TokenType] = {
     "program": TokenType.PROGRAM,
+    "nya": TokenType.PROGRAM,
     "var": TokenType.VAR,
+    "nyan": TokenType.VAR,
     "begin": TokenType.BEGIN,
+    "paw": TokenType.BEGIN,
     "if": TokenType.IF,
+    "if-nya": TokenType.IF,
     "while": TokenType.WHILE,
+    "purr-while": TokenType.WHILE,
     "print": TokenType.PRINT,
+    "purr": TokenType.PRINT,
+    "meow": TokenType.PRINT,
     "function": TokenType.FUNCTION,
+    "nyaa-def": TokenType.FUNCTION,
     "int": TokenType.KW_INT,
     "float": TokenType.KW_FLOAT,
     "char": TokenType.KW_CHAR,
     "array": TokenType.ARRAY,
+    "litter-box": TokenType.ARRAY,
     "array-set": TokenType.ARRAY_SET,
+    "meow-arr": TokenType.ARRAY_SET,
     "array-print": TokenType.ARRAY_PRINT,
+    "purr-arr": TokenType.ARRAY_PRINT,
 }
 
 # Delimiter table: single/double char -> TokenType

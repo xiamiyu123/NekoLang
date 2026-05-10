@@ -124,6 +124,8 @@ while.end:
 - 浮点：`call void @nekoprint_float(double %val)`
 - 字符：`call void @nekoprint_char(i8 %val)`
 
+`purr` 和 `meow` 作为输出别名会生成同样的调用。
+
 ### 数组
 
 ```scheme

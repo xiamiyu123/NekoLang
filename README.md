@@ -17,6 +17,24 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `(while cond body)` | `while cond do body` | 循环语句 |
 | `(print expr)` | `print(expr)` | 输出 |
 
+个性化关键字作为别名保留，可与标准关键字混用：
+
+| 别名 | 标准写法 | 说明 |
+|------|----------|------|
+| `nya` | `program` | 程序入口 |
+| `nyan` | `var` | 变量声明 |
+| `paw` | `begin` | 代码块 |
+| `if-nya` | `if` | 条件语句 |
+| `purr-while` | `while` | 循环语句 |
+| `purr` | `print` | 输出 |
+| `meow` | `print` | 输出 |
+| `nyaa-def` | `function` | 函数定义 |
+| `litter-box` | `array` | 数组类型 |
+| `meow-arr` | `array-set` | 数组赋值 |
+| `purr-arr` | `array-print` | 数组输出 |
+
+类型只保留 `int`、`float`、`char`，不再提供类型别名。
+
 ## 示例程序
 
 ```scheme

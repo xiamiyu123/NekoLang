@@ -134,6 +134,10 @@ class TestBasicExecution(unittest.TestCase):
         output = compile_and_run("(program t (begin (print 42)))")
         self.assertEqual(output, "42")
 
+    def test_meow_print_alias(self):
+        output = compile_and_run("(program t (var ((x int))) (begin (:= x 42) (meow x)))")
+        self.assertEqual(output, "42")
+
     def test_variable_assign(self):
         output = compile_and_run("(program t (var ((x int))) (begin (:= x 99) (print x)))")
         self.assertEqual(output, "99")

@@ -117,6 +117,16 @@ class TestParserPrint(unittest.TestCase):
         self.assertIsInstance(stmt, PrintNode)
         self.assertIsInstance(stmt.value, IdentifierNode)
 
+    def test_meow_is_print_alias(self):
+        ast = parse("(program t (var ((x int))) (begin (meow x)))")
+        stmt = ast.block.body.statements[0]
+        self.assertIsInstance(stmt, PrintNode)
+        self.assertIsInstance(stmt.value, IdentifierNode)
+
+    def test_meow_is_not_assignment_alias(self):
+        with self.assertRaises(ParseError):
+            parse("(program t (var ((x int))) (begin (meow x 1)))")
+
 
 class TestParserBeginBlock(unittest.TestCase):
     def test_nested_begin(self):

@@ -48,6 +48,29 @@ class TestLexerKeywords(unittest.TestCase):
             tokens = Lexer(kw).tokenize()
             self.assertEqual(tokens[0].type, expected)
 
+    def test_personalized_keyword_aliases(self):
+        aliases = [
+            ("nya", TokenType.PROGRAM),
+            ("nyan", TokenType.VAR),
+            ("paw", TokenType.BEGIN),
+            ("if-nya", TokenType.IF),
+            ("purr-while", TokenType.WHILE),
+            ("purr", TokenType.PRINT),
+            ("meow", TokenType.PRINT),
+            ("nyaa-def", TokenType.FUNCTION),
+            ("litter-box", TokenType.ARRAY),
+            ("meow-arr", TokenType.ARRAY_SET),
+            ("purr-arr", TokenType.ARRAY_PRINT),
+        ]
+        for alias, expected in aliases:
+            tokens = Lexer(alias).tokenize()
+            self.assertEqual(tokens[0].type, expected)
+
+    def test_removed_type_aliases_are_identifiers(self):
+        for old_alias in ["nya-int", "nya-float", "nya-char"]:
+            tokens = Lexer(old_alias).tokenize()
+            self.assertEqual(tokens[0].type, TokenType.IDENTIFIER)
+
 
 class TestLexerIdentifiers(unittest.TestCase):
     def test_simple_identifier(self):
