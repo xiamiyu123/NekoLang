@@ -4,7 +4,7 @@ import llvmlite.ir as ir
 import llvmlite.binding as llvm
 
 from .ast_nodes import (
-    ASTNode, ProgramNode, BlockNode, VarDeclNode, PawBlockNode,
+    ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode,
     FuncDefNode, FuncCallNode, ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
@@ -131,7 +131,7 @@ class LLVMCodegen:
     def _gen_block(self, node: BlockNode):
         for decl in node.var_decls:
             self._gen_var_decl(decl)
-        self._gen_paw_block(node.body)
+        self._gen_begin_block(node.body)
 
     def _gen_var_decl(self, node: VarDeclNode):
         for name, type_str in node.variables:
@@ -146,7 +146,7 @@ class LLVMCodegen:
             self.named_values[name] = alloca
             self.var_types[name] = type_str
 
-    def _gen_paw_block(self, node: PawBlockNode):
+    def _gen_begin_block(self, node: BeginBlockNode):
         for stmt in node.statements:
             self._gen_statement(stmt)
 
@@ -159,8 +159,8 @@ class LLVMCodegen:
             self._gen_while(node)
         elif isinstance(node, PrintNode):
             self._gen_print(node)
-        elif isinstance(node, PawBlockNode):
-            self._gen_paw_block(node)
+        elif isinstance(node, BeginBlockNode):
+            self._gen_begin_block(node)
         elif isinstance(node, ArrayAssignNode):
             self._gen_array_assign(node)
         elif isinstance(node, ArrayPrintNode):

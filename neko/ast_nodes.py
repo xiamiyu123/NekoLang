@@ -17,7 +17,7 @@ class ProgramNode(ASTNode):
 @dataclass
 class BlockNode(ASTNode):
     var_decls: list['VarDeclNode'] = field(default_factory=list)
-    body: 'PawBlockNode' = field(default_factory=lambda: PawBlockNode())
+    body: 'BeginBlockNode' = field(default_factory=lambda: BeginBlockNode())
     line: int = 0
     column: int = 0
 
@@ -30,7 +30,7 @@ class VarDeclNode(ASTNode):
 
 
 @dataclass
-class PawBlockNode(ASTNode):
+class BeginBlockNode(ASTNode):
     statements: list[ASTNode] = field(default_factory=list)
     line: int = 0
     column: int = 0
@@ -156,8 +156,8 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
     elif isinstance(node, VarDeclNode):
         vars_str = ", ".join(f"({n}:{t})" for n, t in node.variables)
         return f"{prefix}VarDecl[{vars_str}]\n"
-    elif isinstance(node, PawBlockNode):
-        result = f"{prefix}PawBlock\n"
+    elif isinstance(node, BeginBlockNode):
+        result = f"{prefix}BeginBlock\n"
         for stmt in node.statements:
             result += dump_ast(stmt, indent + 1)
         return result

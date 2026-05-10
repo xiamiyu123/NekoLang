@@ -1,42 +1,42 @@
 # NEKOLANG
 
-一个类 Scheme 的自制语言，到处充满可爱的猫猫 QWQ
+一个类 Scheme 的自制教学语言，使用 S 表达式和常规关键字。
 
 ## 语言特性
 
-NekoLang 使用 S 表达式（前缀表示法），以猫猫风格的关键字替代传统语法：
+NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程序结构：
 
 | NekoLang | 传统语言 | 说明 |
 |----------|---------|------|
-| `(nya name ...)` | `program name ...` | 程序入口 |
-| `(nyan ((a int)))` | `var a:integer;` | 变量声明 |
-| `(paw ...)` | `begin ... end` | 代码块 |
-| `(meow a 42)` | `a := 42` | 赋值 |
+| `(program name ...)` | `program name ...` | 程序入口 |
+| `(var ((a int)))` | `var a:integer;` | 变量声明 |
+| `(begin ...)` | `begin ... end` | 代码块 |
+| `(:= a 42)` | `a := 42` | 赋值 |
 | `(+ a b)` | `a + b` | 算术表达式 |
-| `(if-nya cond then else)` | `if cond then else` | 条件语句 |
-| `(purr-while cond body)` | `while cond do body` | 循环语句 |
-| `(purr expr)` | `print(expr)` | 输出 |
+| `(if cond then else)` | `if cond then else` | 条件语句 |
+| `(while cond body)` | `while cond do body` | 循环语句 |
+| `(print expr)` | `print(expr)` | 输出 |
 
 ## 示例程序
 
 ```scheme
 ; 斐波那契数列
-(nya fibonacci
-  (nyan ((a int) (b int) (c int) (n int) (i int)))
-  (paw
-    (meow a 0)
-    (meow b 1)
-    (meow n 10)
-    (meow i 0)
-    (purr a)
-    (purr b)
-    (purr-while (< i n)
-      (paw
-        (meow c (+ a b))
-        (meow a b)
-        (meow b c)
-        (purr c)
-        (meow i (+ i 1))))))
+(program fibonacci
+  (var ((a int) (b int) (c int) (n int) (i int)))
+  (begin
+    (:= a 0)
+    (:= b 1)
+    (:= n 10)
+    (:= i 0)
+    (print a)
+    (print b)
+    (while (< i n)
+      (begin
+        (:= c (+ a b))
+        (:= a b)
+        (:= b c)
+        (print c)
+        (:= i (+ i 1))))))
 ```
 
 ## 使用方法
@@ -91,7 +91,7 @@ neko/
 ├── symbol_table.py # 符号表系统
 ├── semantic.py     # 语义分析 + 四元式生成
 ├── codegen_llvm.py # LLVM IR 代码生成
-└── errors.py       # 猫猫风格错误提示
+└── errors.py       # 编译错误提示
 
 runtime/
 └── runtime.c       # C 运行时 (printf 包装)

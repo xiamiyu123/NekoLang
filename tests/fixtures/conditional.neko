@@ -1,9 +1,9 @@
 ; Conditional test
-(nya cond_test
-  (nyan ((x int) (y int)))
-  (paw
-    (meow x 10)
-    (if-nya (> x 5)
-      (meow y 1)
-      (meow y 0))
-    (purr y)))
+(program cond_test
+  (var ((x int) (y int)))
+  (begin
+    (:= x 10)
+    (if (> x 5)
+      (:= y 1)
+      (:= y 0))
+    (print y)))

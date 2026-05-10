@@ -1,6 +1,6 @@
 from .tokens import Token, TokenType
 from .ast_nodes import (
-    ASTNode, ProgramNode, BlockNode, VarDeclNode, PawBlockNode,
+    ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode,
     FuncDefNode, FuncCallNode, ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
@@ -46,7 +46,7 @@ class Parser:
 
     def parse(self) -> ProgramNode:
         self._expect(TokenType.LPAREN)
-        self._expect(TokenType.NYA)
+        self._expect(TokenType.PROGRAM)
         name_tok = self._expect(TokenType.IDENTIFIER)
         block = self._parse_block()
         self._expect(TokenType.RPAREN)
@@ -56,22 +56,22 @@ class Parser:
     def _parse_block(self) -> BlockNode:
         var_decls = []
         while self._current().type == TokenType.LPAREN:
-            # Peek ahead to see if it's a nyan declaration
+            # Peek ahead to see if it's a var declaration.
             saved = self.pos
             self._advance()  # consume '('
-            if self._current().type == TokenType.NYAN:
+            if self._current().type == TokenType.VAR:
                 self.pos = saved  # put back '('
                 var_decls.append(self._parse_var_decl())
             else:
                 self.pos = saved  # put back '('
                 break
-        body = self._parse_paw_block()
+        body = self._parse_begin_block()
         return BlockNode(var_decls=var_decls, body=body)
 
     def _parse_var_decl(self) -> VarDeclNode:
         tok = self._current()
         self._expect(TokenType.LPAREN)
-        self._expect(TokenType.NYAN)
+        self._expect(TokenType.VAR)
         self._expect(TokenType.LPAREN)  # outer list
 
         variables = []
@@ -81,19 +81,19 @@ class Parser:
             type_tok = self._advance()  # type keyword or '(' for array
             type_name = type_tok.value
 
-            # Handle litter-box array type: (litter-box int 10) or ((litter-box int 10))
+            # Handle array type: (array int 10) or ((array int 10)).
             if type_tok.type == TokenType.LPAREN:
-                # Parenthesized type like (litter-box int 10)
+                # Parenthesized type like (array int 10).
                 inner = self._advance()
-                if inner.type == TokenType.LITTER_BOX:
+                if inner.type == TokenType.ARRAY:
                     elem_type_tok = self._advance()
                     elem_type = elem_type_tok.value
                     size_tok = self._expect(TokenType.INTEGER)
                     type_name = f"(array {elem_type} {size_tok.value})"
-                    self._expect(TokenType.RPAREN)  # close (litter-box ...)
+                    self._expect(TokenType.RPAREN)  # close (array ...)
                 else:
                     type_name = inner.value
-            elif type_tok.type == TokenType.LITTER_BOX:
+            elif type_tok.type == TokenType.ARRAY:
                 elem_type_tok = self._advance()
                 elem_type = elem_type_tok.value
                 size_tok = self._expect(TokenType.INTEGER)
@@ -103,39 +103,39 @@ class Parser:
             variables.append((name_tok.value, type_name))
 
         self._expect(TokenType.RPAREN)  # close outer list
-        self._expect(TokenType.RPAREN)  # close (nyan ...)
+        self._expect(TokenType.RPAREN)  # close (var ...)
         return VarDeclNode(variables=variables, line=tok.line, column=tok.column)
 
-    def _parse_paw_block(self, paren_consumed: bool = False) -> PawBlockNode:
+    def _parse_begin_block(self, paren_consumed: bool = False) -> BeginBlockNode:
         tok = self._current()
         if not paren_consumed:
             self._expect(TokenType.LPAREN)
-        self._expect(TokenType.PAW)
+        self._expect(TokenType.BEGIN)
         statements = []
         while self._current().type != TokenType.RPAREN:
             statements.append(self._parse_statement())
         self._expect(TokenType.RPAREN)
-        return PawBlockNode(statements=statements, line=tok.line, column=tok.column)
+        return BeginBlockNode(statements=statements, line=tok.line, column=tok.column)
 
     def _parse_statement(self) -> ASTNode:
         self._expect(TokenType.LPAREN)
         tok = self._current()
 
-        if tok.type == TokenType.MEOW:
+        if tok.type == TokenType.ASSIGN:
             return self._parse_assign()
-        elif tok.type == TokenType.IF_NYA:
+        elif tok.type == TokenType.IF:
             return self._parse_if()
-        elif tok.type == TokenType.PURR_WHILE:
+        elif tok.type == TokenType.WHILE:
             return self._parse_while()
-        elif tok.type == TokenType.PURR:
+        elif tok.type == TokenType.PRINT:
             return self._parse_print()
-        elif tok.type == TokenType.PAW:
-            return self._parse_paw_block(paren_consumed=True)
-        elif tok.type == TokenType.NYAA_DEF:
+        elif tok.type == TokenType.BEGIN:
+            return self._parse_begin_block(paren_consumed=True)
+        elif tok.type == TokenType.FUNCTION:
             return self._parse_func_def()
-        elif tok.type == TokenType.MEOW_ARR:
+        elif tok.type == TokenType.ARRAY_SET:
             return self._parse_array_assign()
-        elif tok.type == TokenType.PURR_ARR:
+        elif tok.type == TokenType.ARRAY_PRINT:
             return self._parse_array_print()
         else:
             src = self.source_lines[tok.line - 1] if 0 < tok.line <= len(self.source_lines) else ""
@@ -146,7 +146,7 @@ class Parser:
             )
 
     def _parse_assign(self) -> AssignNode:
-        tok = self._advance()  # consume 'meow'
+        tok = self._advance()  # consume ':='
         target_tok = self._expect(TokenType.IDENTIFIER)
         value = self._parse_expression()
         self._expect(TokenType.RPAREN)
@@ -154,7 +154,7 @@ class Parser:
                           line=tok.line, column=tok.column)
 
     def _parse_if(self) -> IfNode:
-        tok = self._advance()  # consume 'if-nya'
+        tok = self._advance()  # consume 'if'
         condition = self._parse_expression()
         then_branch = self._parse_statement()
         else_branch = self._parse_statement()
@@ -163,7 +163,7 @@ class Parser:
                       else_branch=else_branch, line=tok.line, column=tok.column)
 
     def _parse_while(self) -> WhileNode:
-        tok = self._advance()  # consume 'purr-while'
+        tok = self._advance()  # consume 'while'
         condition = self._parse_expression()
         body = self._parse_statement()
         self._expect(TokenType.RPAREN)
@@ -171,13 +171,13 @@ class Parser:
                          line=tok.line, column=tok.column)
 
     def _parse_print(self) -> PrintNode:
-        tok = self._advance()  # consume 'purr'
+        tok = self._advance()  # consume 'print'
         value = self._parse_expression()
         self._expect(TokenType.RPAREN)
         return PrintNode(value=value, line=tok.line, column=tok.column)
 
     def _parse_func_def(self) -> FuncDefNode:
-        tok = self._advance()  # consume 'nyaa-def'
+        tok = self._advance()  # consume 'function'
         name_tok = self._expect(TokenType.IDENTIFIER)
         self._expect(TokenType.LPAREN)  # param list
         params = []
@@ -196,7 +196,7 @@ class Parser:
                            line=tok.line, column=tok.column)
 
     def _parse_array_assign(self) -> ArrayAssignNode:
-        tok = self._advance()  # consume 'meow-arr'
+        tok = self._advance()  # consume 'array-set'
         name_tok = self._expect(TokenType.IDENTIFIER)
         index = self._parse_expression()
         value = self._parse_expression()
@@ -205,7 +205,7 @@ class Parser:
                                line=tok.line, column=tok.column)
 
     def _parse_array_print(self) -> ArrayPrintNode:
-        tok = self._advance()  # consume 'purr-arr'
+        tok = self._advance()  # consume 'array-print'
         name_tok = self._expect(TokenType.IDENTIFIER)
         index = self._parse_expression()
         self._expect(TokenType.RPAREN)

@@ -1,4 +1,4 @@
-/* NekoLang Runtime - printf wrappers for purr */
+/* NekoLang Runtime - printf wrappers for print */
 
 #include <stdio.h>
 

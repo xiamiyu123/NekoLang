@@ -8,15 +8,15 @@ class TokenType(Enum):
     INTEGER = "INTEGER"
     FLOAT = "FLOAT"
 
-    # Keywords - cat-themed
-    NYA = "nya"               # program entry
-    NYAN = "nyan"             # var declaration
-    MEOW = "meow"             # assignment
-    PAW = "paw"               # begin/end block
-    IF_NYA = "if-nya"         # if conditional
-    PURR_WHILE = "purr-while" # while loop
-    PURR = "purr"             # print
-    NYAA_DEF = "nyaa-def"     # function definition
+    # Language keywords
+    PROGRAM = "program"        # program entry
+    VAR = "var"                # variable declaration
+    ASSIGN = ":="              # assignment
+    BEGIN = "begin"            # begin/end block
+    IF = "if"                  # conditional
+    WHILE = "while"            # loop
+    PRINT = "print"            # print
+    FUNCTION = "function"      # function definition
 
     # Type keywords
     KW_INT = "int"
@@ -24,11 +24,11 @@ class TokenType(Enum):
     KW_CHAR = "char"
 
     # Array keyword
-    LITTER_BOX = "litter-box"
+    ARRAY = "array"
 
-    # Assignment operators for arrays
-    MEOW_ARR = "meow-arr"     # array assignment
-    PURR_ARR = "purr-arr"     # array print
+    # Array operations
+    ARRAY_SET = "array-set"    # array assignment
+    ARRAY_PRINT = "array-print" # array print
 
     # Delimiters / operators
     LPAREN = "("
@@ -61,23 +61,19 @@ class Token:
 
 # Keyword table: string -> TokenType
 KEYWORDS: dict[str, TokenType] = {
-    "nya": TokenType.NYA,
-    "nyan": TokenType.NYAN,
-    "meow": TokenType.MEOW,
-    "paw": TokenType.PAW,
-    "if-nya": TokenType.IF_NYA,
-    "purr-while": TokenType.PURR_WHILE,
-    "purr": TokenType.PURR,
-    "nyaa-def": TokenType.NYAA_DEF,
+    "program": TokenType.PROGRAM,
+    "var": TokenType.VAR,
+    "begin": TokenType.BEGIN,
+    "if": TokenType.IF,
+    "while": TokenType.WHILE,
+    "print": TokenType.PRINT,
+    "function": TokenType.FUNCTION,
     "int": TokenType.KW_INT,
     "float": TokenType.KW_FLOAT,
     "char": TokenType.KW_CHAR,
-    "nya-int": TokenType.KW_INT,
-    "nya-float": TokenType.KW_FLOAT,
-    "nya-char": TokenType.KW_CHAR,
-    "litter-box": TokenType.LITTER_BOX,
-    "meow-arr": TokenType.MEOW_ARR,
-    "purr-arr": TokenType.PURR_ARR,
+    "array": TokenType.ARRAY,
+    "array-set": TokenType.ARRAY_SET,
+    "array-print": TokenType.ARRAY_PRINT,
 }
 
 # Delimiter table: single/double char -> TokenType
@@ -94,6 +90,7 @@ DELIMITERS: dict[str, TokenType] = {
     "<=": TokenType.LE,
     ">=": TokenType.GE,
     "!=": TokenType.NE,
+    ":=": TokenType.ASSIGN,
 }
 
 # Type sizes for address calculation

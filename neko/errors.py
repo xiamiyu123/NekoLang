@@ -1,16 +1,10 @@
-CAT_ERROR = r"""
- /\_/\
-( o.o )
- > ^ <
-"""
-
 SUGGESTIONS = {
-    "undefined_var": "喵！是不是忘了用 nyan 声明这个变量？",
-    "unexpected_token": "喵？这个符号不该出现在这里！",
-    "missing_paren": "喵呜～是不是少了一个括号？",
-    "type_mismatch": "喵！类型不太对劲...",
-    "invalid_char": "喵！这个字符我不认识！",
-    "duplicate_var": "喵！这个变量已经声明过了！",
+    "undefined_var": "提示：请先使用 var 声明这个变量。",
+    "unexpected_token": "提示：这里出现了不符合语法的符号。",
+    "missing_paren": "提示：请检查括号是否匹配。",
+    "type_mismatch": "提示：请检查表达式和目标变量的类型是否一致。",
+    "invalid_char": "提示：源码中包含无法识别的字符。",
+    "duplicate_var": "提示：这个变量已经声明过了。",
 }
 
 
@@ -39,8 +33,7 @@ class NekoError(Exception):
                 result += f"\n  {' ' * (self.column - 1)}^"
 
         if self.suggestion_key and self.suggestion_key in SUGGESTIONS:
-            result += CAT_ERROR
-            result += SUGGESTIONS[self.suggestion_key]
+            result += "\n" + SUGGESTIONS[self.suggestion_key]
 
         return result
 

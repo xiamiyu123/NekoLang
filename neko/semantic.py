@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from .ast_nodes import (
-    ASTNode, ProgramNode, BlockNode, VarDeclNode, PawBlockNode,
+    ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode,
     FuncDefNode, FuncCallNode, ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
@@ -64,7 +64,7 @@ class SemanticAnalyzer:
     def _analyze_block(self, node: BlockNode):
         for decl in node.var_decls:
             self._analyze_var_decl(decl)
-        self._analyze_paw_block(node.body)
+        self._analyze_begin_block(node.body)
 
     def _analyze_var_decl(self, node: VarDeclNode):
         for name, type_ in node.variables:
@@ -79,7 +79,7 @@ class SemanticAnalyzer:
             else:
                 self.symbol_table.enter(name, type_, "v")
 
-    def _analyze_paw_block(self, node: PawBlockNode):
+    def _analyze_begin_block(self, node: BeginBlockNode):
         for stmt in node.statements:
             self._analyze_statement(stmt)
 
@@ -92,8 +92,8 @@ class SemanticAnalyzer:
             self._analyze_while(node)
         elif isinstance(node, PrintNode):
             self._analyze_print(node)
-        elif isinstance(node, PawBlockNode):
-            self._analyze_paw_block(node)
+        elif isinstance(node, BeginBlockNode):
+            self._analyze_begin_block(node)
         elif isinstance(node, FuncDefNode):
             self._analyze_func_def(node)
         elif isinstance(node, ArrayAssignNode):

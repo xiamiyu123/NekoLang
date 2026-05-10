@@ -87,7 +87,7 @@ class Lexer:
                 return self._read_number()
 
             # Two-char operators
-            if ch in '<>!' and self._peek() == '=':
+            if ch in '<>!:' and self._peek() == '=':
                 op = self._advance() + self._advance()
                 return Token(DELIMITERS[op], op, start_line, start_col)
 

@@ -21,12 +21,12 @@ class TestCourseExample(unittest.TestCase):
     """Test the exact example from the course PPT."""
 
     def test_course_example_quadruples(self):
-        source = """(nya example
-  (nyan ((a int) (b int)))
-  (paw
-    (meow a 2)
-    (meow b (+ (* 5 a) 2))
-    (purr b)))"""
+        source = """(program example
+  (var ((a int) (b int)))
+  (begin
+    (:= a 2)
+    (:= b (+ (* 5 a) 2))
+    (print b)))"""
         analyzer = compile_source(source)
         quads = analyzer.quadruples
 
@@ -46,32 +46,32 @@ class TestCourseExample(unittest.TestCase):
 
 class TestEndToEnd(unittest.TestCase):
     def test_hello_world(self):
-        source = "(nya hello (nyan ((x int))) (paw (meow x 42) (purr x)))"
+        source = "(program hello (var ((x int))) (begin (:= x 42) (print x)))"
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
         self.assertGreaterEqual(len(analyzer.quadruples), 4)
 
     def test_arithmetic_program(self):
-        source = """(nya math
-  (nyan ((a int) (b int)))
-  (paw
-    (meow a 3)
-    (meow b 5)
-    (purr (+ a b))))"""
+        source = """(program math
+  (var ((a int) (b int)))
+  (begin
+    (:= a 3)
+    (:= b 5)
+    (print (+ a b))))"""
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
         ops = [q.op for q in analyzer.quadruples]
         self.assertIn("+", ops)
 
     def test_conditional_program(self):
-        source = """(nya cond
-  (nyan ((x int) (y int)))
-  (paw
-    (meow x 10)
-    (if-nya (> x 5)
-      (meow y 1)
-      (meow y 0))
-    (purr y)))"""
+        source = """(program cond
+  (var ((x int) (y int)))
+  (begin
+    (:= x 10)
+    (if (> x 5)
+      (:= y 1)
+      (:= y 0))
+    (print y)))"""
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
         ops = [q.op for q in analyzer.quadruples]
@@ -79,16 +79,16 @@ class TestEndToEnd(unittest.TestCase):
         self.assertIn("if_false", ops)
 
     def test_while_program(self):
-        source = """(nya loop
-  (nyan ((i int) (sum int)))
-  (paw
-    (meow i 0)
-    (meow sum 0)
-    (purr-while (<= i 5)
-      (paw
-        (meow sum (+ sum i))
-        (meow i (+ i 1))))
-    (purr sum)))"""
+        source = """(program loop
+  (var ((i int) (sum int)))
+  (begin
+    (:= i 0)
+    (:= sum 0)
+    (while (<= i 5)
+      (begin
+        (:= sum (+ sum i))
+        (:= i (+ i 1))))
+    (print sum)))"""
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
         ops = [q.op for q in analyzer.quadruples]
@@ -96,13 +96,13 @@ class TestEndToEnd(unittest.TestCase):
         self.assertIn("if_false", ops)
 
     def test_nested_expressions(self):
-        source = """(nya nested
-  (nyan ((a int) (b int) (c int)))
-  (paw
-    (meow a 1)
-    (meow b 2)
-    (meow c 3)
-    (purr (+ (* a b) (- c 1)))))"""
+        source = """(program nested
+  (var ((a int) (b int) (c int)))
+  (begin
+    (:= a 1)
+    (:= b 2)
+    (:= c 3)
+    (print (+ (* a b) (- c 1)))))"""
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
         ops = [q.op for q in analyzer.quadruples]
@@ -111,43 +111,43 @@ class TestEndToEnd(unittest.TestCase):
         self.assertIn("+", ops)
 
     def test_full_feature_program(self):
-        source = """(nya full
-  (nyan ((a int) (b int) (result int) (flag int)))
-  (paw
-    (meow a 10)
-    (meow b 3)
-    (meow result (+ (* a b) (- a b)))
-    (purr result)
-    (if-nya (> result 20)
-      (meow flag 1)
-      (meow flag 0))
-    (purr flag)
-    (meow a 0)
-    (purr-while (< a 5)
-      (paw
-        (purr a)
-        (meow a (+ a 1))))))"""
+        source = """(program full
+  (var ((a int) (b int) (result int) (flag int)))
+  (begin
+    (:= a 10)
+    (:= b 3)
+    (:= result (+ (* a b) (- a b)))
+    (print result)
+    (if (> result 20)
+      (:= flag 1)
+      (:= flag 0))
+    (print flag)
+    (:= a 0)
+    (while (< a 5)
+      (begin
+        (print a)
+        (:= a (+ a 1))))))"""
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
         self.assertGreater(len(analyzer.quadruples), 15)
 
     def test_fibonacci(self):
-        source = """(nya fibonacci
-  (nyan ((a int) (b int) (c int) (n int) (i int)))
-  (paw
-    (meow a 0)
-    (meow b 1)
-    (meow n 10)
-    (meow i 0)
-    (purr a)
-    (purr b)
-    (purr-while (< i n)
-      (paw
-        (meow c (+ a b))
-        (meow a b)
-        (meow b c)
-        (purr c)
-        (meow i (+ i 1))))))"""
+        source = """(program fibonacci
+  (var ((a int) (b int) (c int) (n int) (i int)))
+  (begin
+    (:= a 0)
+    (:= b 1)
+    (:= n 10)
+    (:= i 0)
+    (print a)
+    (print b)
+    (while (< i n)
+      (begin
+        (:= c (+ a b))
+        (:= a b)
+        (:= b c)
+        (print c)
+        (:= i (+ i 1))))))"""
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
         self.assertGreaterEqual(len(analyzer.quadruples), 20)

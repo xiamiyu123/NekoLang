@@ -1,17 +1,17 @@
 ; Full example - all features
-(nya full
-  (nyan ((a int) (b int) (result int) (flag int)))
-  (paw
-    (meow a 10)
-    (meow b 3)
-    (meow result (+ (* a b) (- a b)))
-    (purr result)
-    (if-nya (> result 20)
-      (meow flag 1)
-      (meow flag 0))
-    (purr flag)
-    (meow a 0)
-    (purr-while (< a 5)
-      (paw
-        (purr a)
-        (meow a (+ a 1))))))
+(program full
+  (var ((a int) (b int) (result int) (flag int)))
+  (begin
+    (:= a 10)
+    (:= b 3)
+    (:= result (+ (* a b) (- a b)))
+    (print result)
+    (if (> result 20)
+      (:= flag 1)
+      (:= flag 0))
+    (print flag)
+    (:= a 0)
+    (while (< a 5)
+      (begin
+        (print a)
+        (:= a (+ a 1))))))

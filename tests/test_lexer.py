@@ -5,34 +5,34 @@ from neko.errors import LexError
 
 
 class TestLexerKeywords(unittest.TestCase):
-    def test_nya_keyword(self):
-        tokens = Lexer("nya").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.NYA)
-        self.assertEqual(tokens[0].value, "nya")
+    def test_program_keyword(self):
+        tokens = Lexer("program").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.PROGRAM)
+        self.assertEqual(tokens[0].value, "program")
 
-    def test_nyan_keyword(self):
-        tokens = Lexer("nyan").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.NYAN)
+    def test_var_keyword(self):
+        tokens = Lexer("var").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.VAR)
 
-    def test_meow_keyword(self):
-        tokens = Lexer("meow").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.MEOW)
+    def test_assign_operator(self):
+        tokens = Lexer(":=").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.ASSIGN)
 
-    def test_paw_keyword(self):
-        tokens = Lexer("paw").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.PAW)
+    def test_begin_keyword(self):
+        tokens = Lexer("begin").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.BEGIN)
 
-    def test_if_nya_keyword(self):
-        tokens = Lexer("if-nya").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.IF_NYA)
+    def test_if_keyword(self):
+        tokens = Lexer("if").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.IF)
 
-    def test_purr_while_keyword(self):
-        tokens = Lexer("purr-while").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.PURR_WHILE)
+    def test_while_keyword(self):
+        tokens = Lexer("while").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.WHILE)
 
-    def test_purr_keyword(self):
-        tokens = Lexer("purr").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.PURR)
+    def test_print_keyword(self):
+        tokens = Lexer("print").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.PRINT)
 
     def test_type_keywords(self):
         for kw, expected in [("int", TokenType.KW_INT),
@@ -41,11 +41,11 @@ class TestLexerKeywords(unittest.TestCase):
             tokens = Lexer(kw).tokenize()
             self.assertEqual(tokens[0].type, expected)
 
-    def test_type_aliases(self):
-        for alias, expected in [("nya-int", TokenType.KW_INT),
-                                ("nya-float", TokenType.KW_FLOAT),
-                                ("nya-char", TokenType.KW_CHAR)]:
-            tokens = Lexer(alias).tokenize()
+    def test_array_keywords(self):
+        for kw, expected in [("array", TokenType.ARRAY),
+                             ("array-set", TokenType.ARRAY_SET),
+                             ("array-print", TokenType.ARRAY_PRINT)]:
+            tokens = Lexer(kw).tokenize()
             self.assertEqual(tokens[0].type, expected)
 
 
@@ -101,12 +101,12 @@ class TestLexerOperators(unittest.TestCase):
 
 class TestLexerComments(unittest.TestCase):
     def test_comment_is_skipped(self):
-        tokens = Lexer("; this is a comment\nnya").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.NYA)
+        tokens = Lexer("; this is a comment\nprogram").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.PROGRAM)
 
     def test_inline_comment(self):
-        tokens = Lexer("nya ; program name\nfoo").tokenize()
-        self.assertEqual(tokens[0].type, TokenType.NYA)
+        tokens = Lexer("program ; program name\nfoo").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.PROGRAM)
         self.assertEqual(tokens[1].type, TokenType.IDENTIFIER)
         self.assertEqual(tokens[1].value, "foo")
 
@@ -141,15 +141,15 @@ class TestLexerErrors(unittest.TestCase):
 
 class TestLexerFullProgram(unittest.TestCase):
     def test_tokenize_demo(self):
-        source = "(nya example (nyan ((a int))) (paw (meow a 2) (purr a)))"
+        source = "(program example (var ((a int))) (begin (:= a 2) (print a)))"
         tokens = Lexer(source).tokenize()
         self.assertEqual(tokens[-1].type, TokenType.EOF)
         types = [t.type for t in tokens]
-        self.assertIn(TokenType.NYA, types)
-        self.assertIn(TokenType.NYAN, types)
-        self.assertIn(TokenType.MEOW, types)
-        self.assertIn(TokenType.PAW, types)
-        self.assertIn(TokenType.PURR, types)
+        self.assertIn(TokenType.PROGRAM, types)
+        self.assertIn(TokenType.VAR, types)
+        self.assertIn(TokenType.ASSIGN, types)
+        self.assertIn(TokenType.BEGIN, types)
+        self.assertIn(TokenType.PRINT, types)
 
 
 if __name__ == "__main__":

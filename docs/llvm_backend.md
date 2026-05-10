@@ -32,10 +32,10 @@
 
 ## 三、AST 节点 → LLVM IR 映射
 
-### 变量声明 `nyan`
+### 变量声明 `var`
 
 ```scheme
-(nyan ((a int) (b float)))
+(var ((a int) (b float)))
 ```
 
 ```llvm
@@ -45,10 +45,10 @@ store i32 0, i32* %a
 store double 0.0, double* %b
 ```
 
-### 赋值 `meow`
+### 赋值 `:=`
 
 ```scheme
-(meow a 42)
+(:= a 42)
 ```
 
 ```llvm
@@ -78,10 +78,10 @@ store i32 42, i32* %a
 %cmp = icmp sgt i32 %x1, 0
 ```
 
-### 条件语句 `if-nya`
+### 条件语句 `if`
 
 ```scheme
-(if-nya (> x 0) (meow y 1) (meow y 0))
+(if (> x 0) (:= y 1) (:= y 0))
 ```
 
 ```llvm
@@ -96,10 +96,10 @@ if.end:
   ; 继续...
 ```
 
-### 循环 `purr-while`
+### 循环 `while`
 
 ```scheme
-(purr-while (< i 10) (meow i (+ i 1)))
+(while (< i 10) (:= i (+ i 1)))
 ```
 
 ```llvm
@@ -117,7 +117,7 @@ while.end:
   ; 继续...
 ```
 
-### 输出 `purr`
+### 输出 `print`
 
 调用 C 运行时函数：
 - 整型：`call void @nekoprint_int(i32 %val)`
@@ -127,8 +127,8 @@ while.end:
 ### 数组
 
 ```scheme
-(nyan ((arr (litter-box int 5))))
-(meow-arr arr 0 42)
+(var ((arr (array int 5))))
+(array-set arr 0 42)
 ```
 
 ```llvm
@@ -175,7 +175,7 @@ python neko.py examples/fibonacci.neko --compile fib
 
 ## 七、已知限制
 
-- 函数定义 (`nyaa-def`) 的 LLVM 代码生成尚未完整支持
+- 函数定义 (`function`) 的 LLVM 代码生成尚未完整支持
 - 数组仅支持一维
 - 无字符串类型
 - 浮点使用 `double` 精度

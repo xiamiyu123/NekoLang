@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NekoLang Compiler - A Scheme-like language with cat-themed syntax."""
+"""NekoLang Compiler - A Scheme-like language with standard keywords."""
 
 import sys
 import os
