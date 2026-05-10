@@ -1,0 +1,23 @@
+; NekoLang v0.1 demo
+; Computes 1 + 2 + 3 + 4 + 5, then checks whether the result is positive.
+(program v0_1_demo
+  (var ((n int) (i int) (total int) (flag bool)))
+  (begin
+    (function add ((a int) (b int)) int
+      (return (+ a b)))
+
+    (function positive ((x int)) bool
+      (return (> x 0)))
+
+    (:= n 5)
+    (:= i 1)
+    (:= total 0)
+
+    (while (<= i n)
+      (begin
+        (:= total (add total i))
+        (:= i (+ i 1))))
+
+    (:= flag (positive total))
+    (print total)
+    (print flag)))
