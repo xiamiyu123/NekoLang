@@ -78,12 +78,24 @@ class Parser:
         while self._current().type == TokenType.LPAREN:
             self._advance()  # consume '('
             name_tok = self._expect(TokenType.IDENTIFIER)
-            type_tok = self._advance()  # type keyword (int, float, char, litter-box, etc.)
+            type_tok = self._advance()  # type keyword or '(' for array
             type_name = type_tok.value
 
-            # Handle litter-box array type: (litter-box int 10)
-            if type_tok.type == TokenType.LITTER_BOX:
-                elem_type = self._expect(TokenType.IDENTIFIER).value
+            # Handle litter-box array type: (litter-box int 10) or ((litter-box int 10))
+            if type_tok.type == TokenType.LPAREN:
+                # Parenthesized type like (litter-box int 10)
+                inner = self._advance()
+                if inner.type == TokenType.LITTER_BOX:
+                    elem_type_tok = self._advance()
+                    elem_type = elem_type_tok.value
+                    size_tok = self._expect(TokenType.INTEGER)
+                    type_name = f"(array {elem_type} {size_tok.value})"
+                    self._expect(TokenType.RPAREN)  # close (litter-box ...)
+                else:
+                    type_name = inner.value
+            elif type_tok.type == TokenType.LITTER_BOX:
+                elem_type_tok = self._advance()
+                elem_type = elem_type_tok.value
                 size_tok = self._expect(TokenType.INTEGER)
                 type_name = f"(array {elem_type} {size_tok.value})"
 
