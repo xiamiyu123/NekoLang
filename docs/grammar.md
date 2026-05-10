@@ -1,0 +1,173 @@
+# NekoLang 文法规范
+
+## 一、BNF 文法定义
+
+```bnf
+<program>       ::= "(" "nya" <identifier> <block> ")"
+
+<block>         ::= { <var-decl> } <paw-block>
+
+<var-decl>      ::= "(" "nyan" "(" { <var-item> } ")" ")"
+
+<var-item>      ::= "(" <identifier> <type> ")"
+
+<type>          ::= "int" | "float" | "char"
+                  | "nya-int" | "nya-float" | "nya-char"
+                  | "(" "litter-box" <identifier> <integer> ")"
+
+<paw-block>     ::= "(" "paw" { <statement> } ")"
+
+<statement>     ::= <assign-stmt>
+                  | <if-stmt>
+                  | <while-stmt>
+                  | <print-stmt>
+                  | <paw-block>
+                  | <func-def>
+                  | <array-assign>
+                  | <array-print>
+
+<assign-stmt>   ::= "(" "meow" <identifier> <expression> ")"
+
+<if-stmt>       ::= "(" "if-nya" <expression> <statement> <statement> ")"
+
+<while-stmt>    ::= "(" "purr-while" <expression> <statement> ")"
+
+<print-stmt>    ::= "(" "purr" <expression> ")"
+
+<func-def>      ::= "(" "nyaa-def" <identifier> "(" { <param> } ")" <type> <statement> ")"
+
+<param>         ::= "(" <identifier> <type> ")"
+
+<array-assign>  ::= "(" "meow-arr" <identifier> <expression> <expression> ")"
+
+<array-print>   ::= "(" "purr-arr" <identifier> <expression> ")"
+
+<expression>    ::= <identifier>
+                  | <constant>
+                  | <binop-expr>
+                  | <func-call>
+
+<binop-expr>    ::= "(" <operator> <expression> <expression> ")"
+
+<func-call>     ::= "(" <identifier> { <expression> } ")"
+
+<operator>      ::= "+" | "-" | "*" | "/"
+                  | "<" | ">" | "=" | "<=" | ">=" | "!="
+
+<constant>      ::= <integer> | <real>
+
+<identifier>    ::= <letter> { <letter> | <digit> | "_" | "-" }
+
+<integer>       ::= <digit> { <digit> }
+
+<real>          ::= <digit> { <digit> } "." <digit> { <digit> }
+
+<letter>        ::= "a" | ... | "z" | "A" | ... | "Z"
+
+<digit>         ::= "0" | "1" | ... | "9"
+```
+
+## 二、与课设参考文法的对照
+
+| 课设参考文法 | NekoLang 文法 | 说明 |
+|-------------|--------------|------|
+| `PROGRAM -> program id SUB_PROGRAM.` | `<program>` | 程序入口 |
+| `SUB_PROGRAM -> VARIABLE COM_SENTENCE` | `<block>` | 变量声明 + 语句块 |
+| `VARIABLE -> var ID_SEQUENCE : TYPE ;` | `<var-decl>` | 每个变量单独声明类型 |
+| `TYPE -> integer \| real \| char` | `<type>` | 类型关键字，支持 cat 别名 |
+| `COM_SENTENCE -> begin SEN_SEQUENCE end` | `<paw-block>` | S 表达式括号包裹 |
+| `SEN_SEQUENCE -> EVA_SENTENCE { ; EVA_SENTENCE }` | `{ <statement> }` | 空格分隔，无需分号 |
+| `EVA_SENTENCE -> id := EXPRESSION` | `<assign-stmt>` | 前缀 `(meow id expr)` |
+| `EXPRESSION -> EXPRESSION + TERM \| ...` | `<expression>` | 前缀表示，无左递归 |
+| `TERM -> TERM * FACTOR \| ...` | `<binop-expr>` | 运算符前置 `(+ a b)` |
+| `FACTOR -> id \| cons \| ( EXPRESSION )` | `<expression>` | 原子表达式 |
+
+## 三、关键字表
+
+| 编号 | 关键字 | Token 类型 | 说明 |
+|------|--------|-----------|------|
+| 1 | `nya` | NYA | 程序入口 |
+| 2 | `nyan` | NYAN | 变量声明 |
+| 3 | `meow` | MEOW | 赋值 |
+| 4 | `paw` | PAW | 代码块 |
+| 5 | `if-nya` | IF_NYA | 条件语句 |
+| 6 | `purr-while` | PURR_WHILE | 循环语句 |
+| 7 | `purr` | PURR | 输出 |
+| 8 | `nyaa-def` | NYAA_DEF | 函数定义 |
+| 9 | `int` | KW_INT | 整型 |
+| 10 | `float` | KW_FLOAT | 浮点型 |
+| 11 | `char` | KW_CHAR | 字符型 |
+| 12 | `nya-int` | KW_INT | 整型别名 |
+| 13 | `nya-float` | KW_FLOAT | 浮点型别名 |
+| 14 | `nya-char` | KW_CHAR | 字符型别名 |
+| 15 | `litter-box` | LITTER_BOX | 数组类型 |
+| 16 | `meow-arr` | MEOW_ARR | 数组赋值 |
+| 17 | `purr-arr` | PURR_ARR | 数组输出 |
+
+## 四、界符表
+
+| 编号 | 界符 | Token 类型 | 说明 |
+|------|------|-----------|------|
+| 1 | `(` | LPAREN | 左括号 |
+| 2 | `)` | RPAREN | 右括号 |
+| 3 | `+` | PLUS | 加法 |
+| 4 | `-` | MINUS | 减法 |
+| 5 | `*` | STAR | 乘法 |
+| 6 | `/` | SLASH | 除法 |
+| 7 | `<` | LT | 小于 |
+| 8 | `>` | GT | 大于 |
+| 9 | `=` | EQ | 等于 |
+| 10 | `<=` | LE | 小于等于 |
+| 11 | `>=` | GE | 大于等于 |
+| 12 | `!=` | NE | 不等于 |
+
+## 五、符号表结构
+
+| 字段 | 含义 | 示例 |
+|------|------|------|
+| NAME | 标识符名 | `a`, `b` |
+| TYPE | 数据类型 | `int`, `float`, `char`, `(array int 10)` |
+| CAT | 类别 | `v`(变量), `c`(常量), `f`(函数) |
+| ADDR | 地址偏移 | 0, 4, 8 |
+
+## 六、四元式格式
+
+```
+(op, ob1, ob2, t)
+```
+
+| 四元式 | 含义 |
+|--------|------|
+| `(program, I1, _, _)` | 程序入口 |
+| `(end, I1, _, _)` | 程序结束 |
+| `(:=, addr, _, target)` | 赋值 |
+| `(op, left, right, temp)` | 算术/比较运算 |
+| `(if_false, cond, _, label)` | 条件跳转 |
+| `(goto, _, _, label)` | 无条件跳转 |
+| `(label, L, _, _)` | 标签定义 |
+| `(print, addr, _, _)` | 输出 |
+
+地址命名：变量=`I{n}`, 常量=`C{n}`, 临时变量=`T{n}`, 标签=`L{n}`
+
+## 七、示例程序与四元式
+
+**源代码：**
+```scheme
+(nya example
+  (nyan ((a int) (b int)))
+  (paw
+    (meow a 2)
+    (meow b (+ (* 5 a) 2))
+    (purr b)))
+```
+
+**四元式输出：**
+```
+1: (program, I1, _, _)
+2: (:=, C1, _, I2)      ; a := 2
+3: (*, C2, I2, T1)      ; T1 := 5 * a
+4: (+, T1, C1, T2)      ; T2 := T1 + 2
+5: (:=, T2, _, I3)      ; b := T2
+6: (print, I3, _, _)    ; purr b
+7: (end, I1, _, _)      ; 程序结束
+```
