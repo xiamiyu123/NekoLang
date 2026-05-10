@@ -119,12 +119,23 @@ class TestIRGeneration(unittest.TestCase):
 
     def test_printf_declared(self):
         ir = generate_ir("(program t (begin (print 0)))")
-        self.assertIn('declare i32 @"printf"', ir)
         self.assertIn('declare void @"nekoprint_int"', ir)
+        self.assertIn('declare void @"nekoprint_bool"', ir)
 
     def test_array_gep(self):
         ir = generate_ir("(program t (var ((arr (array int 5)))) (begin (array-set arr 0 42)))")
         self.assertIn("getelementptr", ir)
+
+    def test_bool_type(self):
+        ir = generate_ir("(program t (var ((flag bool))) (begin (:= flag true) (print flag)))")
+        self.assertIn("i1", ir)
+
+    def test_function_definition_ir(self):
+        ir = generate_ir(
+            "(program t (begin (function add ((a int) (b int)) int (return (+ a b)))))"
+        )
+        self.assertIn('define i32 @"add"', ir)
+        self.assertIn("ret i32", ir)
 
 
 class TestBasicExecution(unittest.TestCase):
@@ -167,6 +178,19 @@ class TestBasicExecution(unittest.TestCase):
           (begin (:= a 10) (:= b 20) (print (+ a b))))"""
         output = compile_and_run(source)
         self.assertEqual(output, "30")
+
+    def test_bool_print(self):
+        output = compile_and_run("(program t (var ((flag bool))) (begin (:= flag true) (print flag)))")
+        self.assertEqual(output, "true")
+
+    def test_function_call(self):
+        source = """(program t (var ((x int)))
+          (begin
+            (function add ((a int) (b int)) int (return (+ a b)))
+            (:= x (add 4 5))
+            (print x)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "9")
 
 
 class TestControlFlow(unittest.TestCase):

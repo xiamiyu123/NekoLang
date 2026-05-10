@@ -13,3 +13,7 @@ void nekoprint_float(double val) {
 void nekoprint_char(char val) {
     printf("%c\n", val);
 }
+
+void nekoprint_bool(_Bool val) {
+    printf("%s\n", val ? "true" : "false");
+}

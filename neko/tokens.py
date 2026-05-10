@@ -7,6 +7,7 @@ class TokenType(Enum):
     IDENTIFIER = "IDENTIFIER"
     INTEGER = "INTEGER"
     FLOAT = "FLOAT"
+    BOOLEAN = "BOOLEAN"
 
     # Language keywords
     PROGRAM = "program"        # program entry
@@ -17,11 +18,13 @@ class TokenType(Enum):
     WHILE = "while"            # loop
     PRINT = "print"            # print
     FUNCTION = "function"      # function definition
+    RETURN = "return"          # function return
 
     # Type keywords
     KW_INT = "int"
     KW_FLOAT = "float"
     KW_CHAR = "char"
+    KW_BOOL = "bool"
 
     # Array keyword
     ARRAY = "array"
@@ -75,9 +78,13 @@ KEYWORDS: dict[str, TokenType] = {
     "meow": TokenType.PRINT,
     "function": TokenType.FUNCTION,
     "nyaa-def": TokenType.FUNCTION,
+    "return": TokenType.RETURN,
     "int": TokenType.KW_INT,
     "float": TokenType.KW_FLOAT,
     "char": TokenType.KW_CHAR,
+    "bool": TokenType.KW_BOOL,
+    "true": TokenType.BOOLEAN,
+    "false": TokenType.BOOLEAN,
     "array": TokenType.ARRAY,
     "neko-box": TokenType.ARRAY,
     "array-set": TokenType.ARRAY_SET,
@@ -108,4 +115,5 @@ TYPE_SIZES: dict[str, int] = {
     "int": 4,
     "float": 8,
     "char": 1,
+    "bool": 1,
 }

@@ -2,8 +2,9 @@ from .tokens import Token, TokenType
 from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
-    IdentifierNode, IntLiteralNode, FloatLiteralNode,
-    FuncDefNode, FuncCallNode, ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
+    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode,
+    FuncDefNode, FuncCallNode, ReturnNode,
+    ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
 )
 from .errors import ParseError
 
@@ -129,6 +130,8 @@ class Parser:
             return self._parse_while()
         elif tok.type == TokenType.PRINT:
             return self._parse_print()
+        elif tok.type == TokenType.RETURN:
+            return self._parse_return()
         elif tok.type == TokenType.BEGIN:
             return self._parse_begin_block(paren_consumed=True)
         elif tok.type == TokenType.FUNCTION:
@@ -195,6 +198,12 @@ class Parser:
                            return_type=return_type, body=body,
                            line=tok.line, column=tok.column)
 
+    def _parse_return(self) -> ReturnNode:
+        tok = self._advance()  # consume 'return'
+        value = self._parse_expression()
+        self._expect(TokenType.RPAREN)
+        return ReturnNode(value=value, line=tok.line, column=tok.column)
+
     def _parse_array_assign(self) -> ArrayAssignNode:
         tok = self._advance()  # consume 'array-set'
         name_tok = self._expect(TokenType.IDENTIFIER)
@@ -242,6 +251,9 @@ class Parser:
         elif tok.type == TokenType.FLOAT:
             self._advance()
             return FloatLiteralNode(value=float(tok.value), line=tok.line, column=tok.column)
+        elif tok.type == TokenType.BOOLEAN:
+            self._advance()
+            return BoolLiteralNode(value=(tok.value == "true"), line=tok.line, column=tok.column)
         else:
             src = self.source_lines[tok.line - 1] if 0 < tok.line <= len(self.source_lines) else ""
             raise ParseError(

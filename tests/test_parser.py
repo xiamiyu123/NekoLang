@@ -4,7 +4,8 @@ from neko.parser import Parser
 from neko.ast_nodes import (
     ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
-    IdentifierNode, IntLiteralNode, FloatLiteralNode,
+    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode,
+    FuncDefNode, FuncCallNode, ReturnNode,
 )
 from neko.errors import ParseError
 
@@ -87,6 +88,12 @@ class TestParserExpressions(unittest.TestCase):
         self.assertIsInstance(expr, IdentifierNode)
         self.assertEqual(expr.name, "y")
 
+    def test_bool_literal_expression(self):
+        ast = parse("(program t (var ((flag bool))) (begin (:= flag true)))")
+        expr = ast.block.body.statements[0].value
+        self.assertIsInstance(expr, BoolLiteralNode)
+        self.assertTrue(expr.value)
+
 
 class TestParserIf(unittest.TestCase):
     def test_if_statement(self):
@@ -107,6 +114,30 @@ class TestParserWhile(unittest.TestCase):
         self.assertIsInstance(stmt.condition, BinOpNode)
         self.assertEqual(stmt.condition.op, "<")
         self.assertIsInstance(stmt.body, AssignNode)
+
+
+class TestParserFunctions(unittest.TestCase):
+    def test_function_definition(self):
+        ast = parse(
+            "(program t (begin (function add ((a int) (b int)) int (return (+ a b)))))"
+        )
+        stmt = ast.block.body.statements[0]
+        self.assertIsInstance(stmt, FuncDefNode)
+        self.assertEqual(stmt.name, "add")
+        self.assertEqual(stmt.params, [("a", "int"), ("b", "int")])
+        self.assertEqual(stmt.return_type, "int")
+        self.assertIsInstance(stmt.body, ReturnNode)
+
+    def test_function_call_expression(self):
+        ast = parse(
+            "(program t (var ((x int))) (begin "
+            "(function add ((a int) (b int)) int (return (+ a b))) "
+            "(:= x (add 1 2))))"
+        )
+        expr = ast.block.body.statements[1].value
+        self.assertIsInstance(expr, FuncCallNode)
+        self.assertEqual(expr.name, "add")
+        self.assertEqual(len(expr.args), 2)
 
 
 class TestParserPrint(unittest.TestCase):

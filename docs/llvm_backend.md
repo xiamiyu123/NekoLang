@@ -27,6 +27,7 @@
 | `int` | `i32` | 4 字节 |
 | `float` | `double` | 8 字节 |
 | `char` | `i8` | 1 字节 |
+| `bool` | `i1` | 1 位 |
 | `(array int N)` | `[N x i32]` | N*4 字节 |
 | `(array float N)` | `[N x double]` | N*8 字节 |
 
@@ -123,8 +124,24 @@ while.end:
 - 整型：`call void @nekoprint_int(i32 %val)`
 - 浮点：`call void @nekoprint_float(double %val)`
 - 字符：`call void @nekoprint_char(i8 %val)`
+- 布尔：`call void @nekoprint_bool(i1 %val)`
 
 `purr` 和 `meow` 作为输出别名会生成同样的调用。
+
+### 函数返回 `return`
+
+```scheme
+(function add ((a int) (b int)) int
+  (return (+ a b)))
+```
+
+```llvm
+define i32 @add(i32 %a, i32 %b) {
+entry:
+  ; ...
+  ret i32 %tmp
+}
+```
 
 ### 数组
 

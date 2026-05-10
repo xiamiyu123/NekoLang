@@ -99,6 +99,13 @@ class FloatLiteralNode(ASTNode):
 
 
 @dataclass
+class BoolLiteralNode(ASTNode):
+    value: bool = False
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
 class FuncDefNode(ASTNode):
     name: str = ""
     params: list[tuple[str, str]] = field(default_factory=list)
@@ -112,6 +119,13 @@ class FuncDefNode(ASTNode):
 class FuncCallNode(ASTNode):
     name: str = ""
     args: list[ASTNode] = field(default_factory=list)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class ReturnNode(ASTNode):
+    value: ASTNode = field(default_factory=ASTNode)
     line: int = 0
     column: int = 0
 
@@ -196,6 +210,8 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
         return f"{prefix}Int({node.value})\n"
     elif isinstance(node, FloatLiteralNode):
         return f"{prefix}Float({node.value})\n"
+    elif isinstance(node, BoolLiteralNode):
+        return f"{prefix}Bool({node.value})\n"
     elif isinstance(node, FuncDefNode):
         params_str = ", ".join(f"({n}:{t})" for n, t in node.params)
         result = f"{prefix}FuncDef({node.name}, [{params_str}], {node.return_type})\n"
@@ -205,6 +221,10 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
         result = f"{prefix}FuncCall({node.name})\n"
         for arg in node.args:
             result += dump_ast(arg, indent + 1)
+        return result
+    elif isinstance(node, ReturnNode):
+        result = f"{prefix}Return\n"
+        result += dump_ast(node.value, indent + 1)
         return result
     elif isinstance(node, ArrayAccessNode):
         result = f"{prefix}ArrayAccess({node.name})\n"

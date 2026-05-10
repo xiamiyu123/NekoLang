@@ -16,6 +16,8 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `(if cond then else)` | `if cond then else` | 条件语句 |
 | `(while cond body)` | `while cond do body` | 循环语句 |
 | `(print expr)` | `print(expr)` | 输出 |
+| `(function add ((a int)) int ...)` | 函数定义 | 支持参数和返回值 |
+| `(return expr)` | `return expr` | 函数返回 |
 
 个性化关键字作为别名保留，可与标准关键字混用：
 
@@ -32,7 +34,7 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `meow-arr` | `array-set` | 数组赋值 |
 | `purr-arr` | `array-print` | 数组输出 |
 
-类型只保留 `int`、`float`、`char`，不再提供类型别名。
+类型只保留 `int`、`float`、`char`、`bool`，不再提供类型别名。
 
 ## 示例程序
 

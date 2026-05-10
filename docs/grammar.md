@@ -11,7 +11,7 @@
 
 <var-item>      ::= "(" <identifier> <type> ")"
 
-<type>          ::= "int" | "float" | "char"
+<type>          ::= "int" | "float" | "char" | "bool"
                   | "(" "array" <type> <integer> ")"
 
 <begin-block>     ::= "(" "begin" { <statement> } ")"
@@ -22,6 +22,7 @@
                   | <print-stmt>
                   | <begin-block>
                   | <func-def>
+                  | <return-stmt>
                   | <array-assign>
                   | <array-print>
 
@@ -34,6 +35,8 @@
 <print-stmt>    ::= "(" "print" <expression> ")"
 
 <func-def>      ::= "(" "function" <identifier> "(" { <param> } ")" <type> <statement> ")"
+
+<return-stmt>   ::= "(" "return" <expression> ")"
 
 <param>         ::= "(" <identifier> <type> ")"
 
@@ -96,9 +99,11 @@
 | 9 | `int` | KW_INT | 整型 |
 | 10 | `float` | KW_FLOAT | 浮点型 |
 | 11 | `char` | KW_CHAR | 字符型 |
-| 12 | `array` | ARRAY | 数组类型 |
-| 13 | `array-set` | ARRAY_SET | 数组赋值 |
-| 14 | `array-print` | ARRAY_PRINT | 数组输出 |
+| 12 | `bool` | KW_BOOL | 布尔型 |
+| 13 | `array` | ARRAY | 数组类型 |
+| 14 | `array-set` | ARRAY_SET | 数组赋值 |
+| 15 | `array-print` | ARRAY_PRINT | 数组输出 |
+| 16 | `return` | RETURN | 函数返回 |
 
 ## 四、个性化关键字别名
 
@@ -142,7 +147,7 @@
 | 字段 | 含义 | 示例 |
 |------|------|------|
 | NAME | 标识符名 | `a`, `b` |
-| TYPE | 数据类型 | `int`, `float`, `char`, `(array int 10)` |
+| TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `(array int 10)` |
 | CAT | 类别 | `v`(变量), `c`(常量), `f`(函数) |
 | ADDR | 地址偏移 | 0, 4, 8 |
 

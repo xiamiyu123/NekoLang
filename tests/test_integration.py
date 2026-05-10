@@ -59,6 +59,21 @@ class TestEndToEnd(unittest.TestCase):
         self.assertIn(":=", ops)
         self.assertIn("print", ops)
 
+    def test_function_and_bool_program(self):
+        source = """(program check
+  (var ((flag bool) (value int)))
+  (begin
+    (function positive ((x int)) bool
+      (return (> x 0)))
+    (:= value 3)
+    (:= flag (positive value))
+    (print flag)))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("call", ops)
+        self.assertIn("return", ops)
+
     def test_arithmetic_program(self):
         source = """(program math
   (var ((a int) (b int)))

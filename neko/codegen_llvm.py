@@ -1,58 +1,49 @@
 """LLVM IR code generator for NekoLang. Walks the AST and emits LLVM IR."""
 
 import llvmlite.ir as ir
-import llvmlite.binding as llvm
 
 from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
-    IdentifierNode, IntLiteralNode, FloatLiteralNode,
-    FuncDefNode, FuncCallNode, ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
+    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode,
+    FuncDefNode, FuncCallNode, ReturnNode,
+    ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
 )
-from .tokens import TYPE_SIZES
 
 
-# NekoLang type string -> LLVM IR type
 TYPE_MAP = {
     "int": ir.IntType(32),
     "float": ir.DoubleType(),
     "char": ir.IntType(8),
+    "bool": ir.IntType(1),
 }
 
-# Comparison operators -> (int predicate string, float predicate string)
 CMP_OPS = {
-    "<":  ("<", "olt"),
-    ">":  (">", "ogt"),
-    "=":  ("==", "oeq"),
+    "<": ("<", "olt"),
+    ">": (">", "ogt"),
+    "=": ("==", "oeq"),
     "<=": ("<=", "ole"),
     ">=": (">=", "oge"),
     "!=": ("!=", "one"),
 }
 
-# Arithmetic operators -> (int instruction, float instruction)
 ARITH_OPS = {
-    "+":  ("add",  "fadd"),
-    "-":  ("sub",  "fsub"),
-    "*":  ("mul",  "fmul"),
-    "/":  ("sdiv", "fdiv"),
+    "+": ("add", "fadd"),
+    "-": ("sub", "fsub"),
+    "*": ("mul", "fmul"),
+    "/": ("sdiv", "fdiv"),
 }
 
 
 def _llvm_type(type_str: str) -> ir.Type:
-    """Convert a NekoLang type string to an LLVM IR type."""
     if type_str in TYPE_MAP:
         return TYPE_MAP[type_str]
-    # Parse array type: "(array int 10)"
     if type_str.startswith("(array"):
         parts = type_str.rstrip(")").split()
         elem_type = TYPE_MAP.get(parts[1], ir.IntType(32))
         count = int(parts[2])
         return ir.ArrayType(elem_type, count)
-    return ir.IntType(32)  # default
-
-
-def _is_float_type(type_str: str) -> bool:
-    return type_str == "float"
+    return ir.IntType(32)
 
 
 class LLVMCodegen:
@@ -62,70 +53,107 @@ class LLVMCodegen:
         self.module = ir.Module(name="neko")
         self.module.triple = "arm64-apple-macosx15.0.0"
         self.builder: ir.IRBuilder | None = None
-        self.named_values: dict[str, ir.NamedValue] = {}  # name -> alloca
-        self.var_types: dict[str, str] = {}                # name -> neko type string
-        self.printf: ir.Function | None = None
+        self.named_values: dict[str, ir.NamedValue] = {}
+        self.var_types: dict[str, str] = {}
+        self.function_nodes: dict[str, FuncDefNode] = {}
         self.nekoprint_int: ir.Function | None = None
         self.nekoprint_float: ir.Function | None = None
         self.nekoprint_char: ir.Function | None = None
-        self._fmt_cache: dict[str, ir.GlobalVariable] = {}
+        self.nekoprint_bool: ir.Function | None = None
+        self.current_return_type: str | None = None
 
     def generate(self, ast: ProgramNode) -> str:
-        """Generate LLVM IR from AST, return IR text."""
         self._declare_runtime()
+        self.function_nodes = self._collect_function_nodes(ast.block.body)
+        self._declare_functions()
+        self._gen_functions()
         self._gen_program(ast)
         return str(self.module)
 
     def _declare_runtime(self):
-        """Declare external runtime functions (printf wrappers)."""
-        # printf
-        void_ptr = ir.IntType(8).as_pointer()
-        printf_ty = ir.FunctionType(ir.IntType(32), [void_ptr], var_arg=True)
-        self.printf = ir.Function(self.module, printf_ty, name="printf")
-
-        # nekoprint_int
-        ty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
-        self.nekoprint_int = ir.Function(self.module, ty, name="nekoprint_int")
-
-        # nekoprint_float
-        ty = ir.FunctionType(ir.VoidType(), [ir.DoubleType()])
-        self.nekoprint_float = ir.Function(self.module, ty, name="nekoprint_float")
-
-        # nekoprint_char
-        ty = ir.FunctionType(ir.VoidType(), [ir.IntType(8)])
-        self.nekoprint_char = ir.Function(self.module, ty, name="nekoprint_char")
-
-    def _get_fmt_const(self, fmt_str: str, name: str) -> ir.GlobalVariable:
-        """Get or create a global format string constant."""
-        if name in self._fmt_cache:
-            return self._fmt_cache[name]
-        data = bytearray((fmt_str + "\0").encode("utf-8"))
-        ty = ir.ArrayType(ir.IntType(8), len(data))
-        global_fmt = ir.GlobalVariable(self.module, ty, name=name)
-        global_fmt.global_constant = True
-        global_fmt.initializer = ir.Constant(ty, data)
-        self._fmt_cache[name] = global_fmt
-        return global_fmt
-
-    def _fmt_ptr(self, fmt_name: str) -> ir.Value:
-        """Get a pointer to the first byte of a format string constant."""
-        gv = self._get_fmt_const(
-            {"fmt_int": "%d\n", "fmt_float": "%lf\n", "fmt_char": "%c\n"}[fmt_name],
-            fmt_name
+        self.nekoprint_int = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(32)]), name="nekoprint_int"
         )
-        zero = ir.Constant(ir.IntType(32), 0)
-        return self.builder.gep(gv, [zero, zero], inbounds=True, name=fmt_name + ".ptr")
+        self.nekoprint_float = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [ir.DoubleType()]), name="nekoprint_float"
+        )
+        self.nekoprint_char = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(8)]), name="nekoprint_char"
+        )
+        self.nekoprint_bool = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(1)]), name="nekoprint_bool"
+        )
+
+    def _collect_function_nodes(self, node: ASTNode) -> dict[str, FuncDefNode]:
+        found: dict[str, FuncDefNode] = {}
+
+        def walk(stmt: ASTNode):
+            if isinstance(stmt, FuncDefNode):
+                found.setdefault(stmt.name, stmt)
+                walk(stmt.body)
+            elif isinstance(stmt, BeginBlockNode):
+                for inner in stmt.statements:
+                    walk(inner)
+            elif isinstance(stmt, IfNode):
+                walk(stmt.then_branch)
+                walk(stmt.else_branch)
+            elif isinstance(stmt, WhileNode):
+                walk(stmt.body)
+
+        walk(node)
+        return found
+
+    def _declare_functions(self):
+        for node in self.function_nodes.values():
+            ret_ty = _llvm_type(node.return_type)
+            param_tys = [_llvm_type(type_str) for _, type_str in node.params]
+            func_ty = ir.FunctionType(ret_ty, param_tys)
+            ir.Function(self.module, func_ty, name=node.name)
+
+    def _gen_functions(self):
+        for node in self.function_nodes.values():
+            self._gen_function(node)
+
+    def _gen_function(self, node: FuncDefNode):
+        func = self.module.globals[node.name]
+        entry = func.append_basic_block(name="entry")
+        saved_builder = self.builder
+        saved_named_values = self.named_values
+        saved_var_types = self.var_types
+        saved_return_type = self.current_return_type
+
+        self.builder = ir.IRBuilder(entry)
+        self.named_values = {}
+        self.var_types = {}
+        self.current_return_type = node.return_type
+
+        for arg, (name, type_str) in zip(func.args, node.params):
+            arg.name = name
+            alloca = self.builder.alloca(_llvm_type(type_str), name=name)
+            self.builder.store(arg, alloca)
+            self.named_values[name] = alloca
+            self.var_types[name] = type_str
+
+        self._gen_statement(node.body)
+
+        if not self.builder.block.is_terminated:
+            self.builder.ret(self._default_value(node.return_type))
+
+        self.builder = saved_builder
+        self.named_values = saved_named_values
+        self.var_types = saved_var_types
+        self.current_return_type = saved_return_type
 
     def _gen_program(self, node: ProgramNode):
-        # Create main function
         func_ty = ir.FunctionType(ir.IntType(32), [])
         main_func = ir.Function(self.module, func_ty, name="main")
         entry = main_func.append_basic_block(name="entry")
         self.builder = ir.IRBuilder(entry)
+        self.named_values = {}
+        self.var_types = {}
+        self.current_return_type = "int"
 
         self._gen_block(node.block)
-
-        # Return 0
         self.builder.ret(ir.Constant(ir.IntType(32), 0))
 
     def _gen_block(self, node: BlockNode):
@@ -137,12 +165,8 @@ class LLVMCodegen:
         for name, type_str in node.variables:
             llvm_ty = _llvm_type(type_str)
             alloca = self.builder.alloca(llvm_ty, name=name)
-            # Zero-initialize
-            if isinstance(llvm_ty, ir.ArrayType):
-                # Arrays are left uninitialized (or zero by default on most systems)
-                pass
-            else:
-                self.builder.store(ir.Constant(llvm_ty, 0), alloca)
+            if not isinstance(llvm_ty, ir.ArrayType):
+                self.builder.store(self._default_value(type_str), alloca)
             self.named_values[name] = alloca
             self.var_types[name] = type_str
 
@@ -161,6 +185,10 @@ class LLVMCodegen:
             self._gen_print(node)
         elif isinstance(node, BeginBlockNode):
             self._gen_begin_block(node)
+        elif isinstance(node, FuncDefNode):
+            return
+        elif isinstance(node, ReturnNode):
+            self._gen_return(node)
         elif isinstance(node, ArrayAssignNode):
             self._gen_array_assign(node)
         elif isinstance(node, ArrayPrintNode):
@@ -171,16 +199,11 @@ class LLVMCodegen:
         alloca = self.named_values.get(node.target)
         if alloca is None:
             raise RuntimeError(f"Undefined variable: {node.target}")
-        self.builder.store(val, alloca)
+        target_type = self.var_types.get(node.target, "int")
+        self.builder.store(self._coerce_value(val, target_type), alloca)
 
     def _gen_if(self, node: IfNode):
-        cond_val = self._gen_expression(node.condition)
-
-        # Ensure condition is i1 (boolean)
-        if cond_val.type == ir.IntType(32):
-            zero = ir.Constant(ir.IntType(32), 0)
-            cond_val = self.builder.icmp_signed("!=", cond_val, zero, name="cond")
-
+        cond_val = self._coerce_to_condition(self._gen_expression(node.condition))
         func = self.builder.function
         then_bb = func.append_basic_block(name="if.then")
         else_bb = func.append_basic_block(name="if.else")
@@ -188,19 +211,16 @@ class LLVMCodegen:
 
         self.builder.cbranch(cond_val, then_bb, else_bb)
 
-        # Then block
         self.builder.position_at_start(then_bb)
         self._gen_statement(node.then_branch)
         if not self.builder.block.is_terminated:
             self.builder.branch(end_bb)
 
-        # Else block
         self.builder.position_at_start(else_bb)
         self._gen_statement(node.else_branch)
         if not self.builder.block.is_terminated:
             self.builder.branch(end_bb)
 
-        # Continue at end
         self.builder.position_at_start(end_bb)
 
     def _gen_while(self, node: WhileNode):
@@ -209,136 +229,172 @@ class LLVMCodegen:
         body_bb = func.append_basic_block(name="while.body")
         end_bb = func.append_basic_block(name="while.end")
 
-        # Jump to condition
         self.builder.branch(loop_bb)
 
-        # Condition block
         self.builder.position_at_start(loop_bb)
-        cond_val = self._gen_expression(node.condition)
-        if cond_val.type == ir.IntType(32):
-            zero = ir.Constant(ir.IntType(32), 0)
-            cond_val = self.builder.icmp_signed("!=", cond_val, zero, name="while.cond")
+        cond_val = self._coerce_to_condition(self._gen_expression(node.condition))
         self.builder.cbranch(cond_val, body_bb, end_bb)
 
-        # Body block
         self.builder.position_at_start(body_bb)
         self._gen_statement(node.body)
         if not self.builder.block.is_terminated:
             self.builder.branch(loop_bb)
 
-        # End block
         self.builder.position_at_start(end_bb)
 
     def _gen_print(self, node: PrintNode):
-        val = self._gen_expression(node.value)
-        if val.type == ir.IntType(32):
-            self.builder.call(self.nekoprint_int, [val])
-        elif val.type == ir.DoubleType():
+        self._gen_print_value(self._gen_expression(node.value))
+
+    def _gen_print_value(self, val: ir.Value):
+        if val.type == ir.DoubleType():
             self.builder.call(self.nekoprint_float, [val])
-        elif val.type == ir.IntType(8):
+        elif isinstance(val.type, ir.IntType) and val.type.width == 1:
+            self.builder.call(self.nekoprint_bool, [val])
+        elif isinstance(val.type, ir.IntType) and val.type.width == 8:
             self.builder.call(self.nekoprint_char, [val])
         else:
-            # Fallback: treat as int
+            if isinstance(val.type, ir.IntType) and val.type.width != 32:
+                val = self.builder.zext(val, ir.IntType(32))
             self.builder.call(self.nekoprint_int, [val])
+
+    def _gen_return(self, node: ReturnNode):
+        if not self.current_return_type:
+            raise RuntimeError("return used outside of function")
+        value = self._coerce_value(self._gen_expression(node.value), self.current_return_type)
+        self.builder.ret(value)
 
     def _gen_array_assign(self, node: ArrayAssignNode):
         alloca = self.named_values.get(node.name)
         if alloca is None:
             raise RuntimeError(f"Undefined array: {node.name}")
-        idx = self._gen_expression(node.index)
+        idx = self._coerce_value(self._gen_expression(node.index), "int")
         val = self._gen_expression(node.value)
+        elem_type = self._array_element_type(self.var_types.get(node.name, "(array int 1)"))
         zero = ir.Constant(ir.IntType(32), 0)
         ptr = self.builder.gep(alloca, [zero, idx], name=f"{node.name}.ptr")
-        self.builder.store(val, ptr)
+        self.builder.store(self._coerce_value(val, elem_type), ptr)
 
     def _gen_array_print(self, node: ArrayPrintNode):
         alloca = self.named_values.get(node.name)
         if alloca is None:
             raise RuntimeError(f"Undefined array: {node.name}")
-        idx = self._gen_expression(node.index)
+        idx = self._coerce_value(self._gen_expression(node.index), "int")
         zero = ir.Constant(ir.IntType(32), 0)
         ptr = self.builder.gep(alloca, [zero, idx], name=f"{node.name}.ptr")
-        val = self.builder.load(ptr, name=f"{node.name}.val")
-        self._gen_print_value(val, self.var_types.get(node.name, "int"))
-
-    def _gen_print_value(self, val: ir.Value, type_str: str):
-        """Print a value of the given type."""
-        # Determine element type for arrays
-        elem_type = type_str
-        if type_str.startswith("(array"):
-            elem_type = type_str.split()[1]
-
-        if elem_type == "float":
-            self.builder.call(self.nekoprint_float, [val])
-        elif elem_type == "char":
-            self.builder.call(self.nekoprint_char, [val])
-        else:
-            self.builder.call(self.nekoprint_int, [val])
+        self._gen_print_value(self.builder.load(ptr, name=f"{node.name}.val"))
 
     def _gen_expression(self, node: ASTNode) -> ir.Value:
         if isinstance(node, IntLiteralNode):
             return ir.Constant(ir.IntType(32), node.value)
-        elif isinstance(node, FloatLiteralNode):
+        if isinstance(node, FloatLiteralNode):
             return ir.Constant(ir.DoubleType(), node.value)
-        elif isinstance(node, IdentifierNode):
+        if isinstance(node, BoolLiteralNode):
+            return ir.Constant(ir.IntType(1), int(node.value))
+        if isinstance(node, IdentifierNode):
             alloca = self.named_values.get(node.name)
             if alloca is None:
                 raise RuntimeError(f"Undefined variable: {node.name}")
             return self.builder.load(alloca, name=node.name)
-        elif isinstance(node, BinOpNode):
+        if isinstance(node, BinOpNode):
             return self._gen_binop(node)
-        elif isinstance(node, FuncCallNode):
+        if isinstance(node, FuncCallNode):
             return self._gen_func_call(node)
-        elif isinstance(node, ArrayAccessNode):
+        if isinstance(node, ArrayAccessNode):
             return self._gen_array_access(node)
-        else:
-            raise RuntimeError(f"Unknown expression type: {type(node).__name__}")
+        raise RuntimeError(f"Unknown expression type: {type(node).__name__}")
 
     def _gen_binop(self, node: BinOpNode) -> ir.Value:
         left = self._gen_expression(node.left)
         right = self._gen_expression(node.right)
 
         is_float = left.type == ir.DoubleType() or right.type == ir.DoubleType()
-
-        # Promote int to float if mixed
         if is_float:
-            if left.type == ir.IntType(32):
-                left = self.builder.sitofp(left, ir.DoubleType())
-            if right.type == ir.IntType(32):
-                right = self.builder.sitofp(right, ir.DoubleType())
+            left = self._coerce_value(left, "float")
+            right = self._coerce_value(right, "float")
+        else:
+            left_width = left.type.width if isinstance(left.type, ir.IntType) else 32
+            right_width = right.type.width if isinstance(right.type, ir.IntType) else 32
+            target_width = max(left_width, right_width, 32)
+            target_type = ir.IntType(target_width)
+            if left.type != target_type:
+                left = self.builder.zext(left, target_type)
+            if right.type != target_type:
+                right = self.builder.zext(right, target_type)
 
-        op = node.op
-
-        # Comparison
-        if op in CMP_OPS:
-            int_pred, float_pred = CMP_OPS[op]
+        if node.op in CMP_OPS:
+            int_pred, float_pred = CMP_OPS[node.op]
             if is_float:
                 return self.builder.fcmp_ordered(float_pred, left, right, name="cmp")
-            else:
-                return self.builder.icmp_signed(int_pred, left, right, name="cmp")
+            return self.builder.icmp_signed(int_pred, left, right, name="cmp")
 
-        # Arithmetic
-        if op in ARITH_OPS:
-            int_op, float_op = ARITH_OPS[op]
+        if node.op in ARITH_OPS:
+            int_op, float_op = ARITH_OPS[node.op]
             if is_float:
                 return getattr(self.builder, float_op)(left, right, name="tmp")
-            else:
-                return getattr(self.builder, int_op)(left, right, name="tmp")
+            return getattr(self.builder, int_op)(left, right, name="tmp")
 
-        raise RuntimeError(f"Unknown operator: {op}")
+        raise RuntimeError(f"Unknown operator: {node.op}")
 
     def _gen_func_call(self, node: FuncCallNode) -> ir.Value:
         func = self.module.globals.get(node.name)
         if func is None:
             raise RuntimeError(f"Undefined function: {node.name}")
-        args = [self._gen_expression(arg) for arg in node.args]
+        func_node = self.function_nodes.get(node.name)
+        args = []
+        for arg_value, (_, type_str) in zip((self._gen_expression(arg) for arg in node.args), func_node.params):
+            args.append(self._coerce_value(arg_value, type_str))
         return self.builder.call(func, args, name="calltmp")
 
     def _gen_array_access(self, node: ArrayAccessNode) -> ir.Value:
         alloca = self.named_values.get(node.name)
         if alloca is None:
             raise RuntimeError(f"Undefined array: {node.name}")
-        idx = self._gen_expression(node.index)
+        idx = self._coerce_value(self._gen_expression(node.index), "int")
         zero = ir.Constant(ir.IntType(32), 0)
         ptr = self.builder.gep(alloca, [zero, idx], name=f"{node.name}.ptr")
         return self.builder.load(ptr, name=f"{node.name}.val")
+
+    def _coerce_value(self, value: ir.Value, target_type_str: str) -> ir.Value:
+        target_type = _llvm_type(target_type_str)
+        if value.type == target_type:
+            return value
+
+        if target_type == ir.DoubleType():
+            if isinstance(value.type, ir.IntType):
+                return self.builder.sitofp(value, ir.DoubleType())
+
+        if isinstance(target_type, ir.IntType) and isinstance(value.type, ir.IntType):
+            if target_type.width > value.type.width:
+                return self.builder.zext(value, target_type)
+            if target_type.width < value.type.width:
+                return self.builder.trunc(value, target_type)
+
+        if isinstance(target_type, ir.IntType) and target_type.width == 1 and isinstance(value.type, ir.IntType):
+            zero = ir.Constant(value.type, 0)
+            return self.builder.icmp_signed("!=", value, zero, name="boolcast")
+
+        if isinstance(target_type, ir.IntType) and value.type == ir.DoubleType():
+            return self.builder.fptosi(value, target_type)
+
+        raise RuntimeError(f"Cannot coerce {value.type} to {target_type}")
+
+    def _coerce_to_condition(self, value: ir.Value) -> ir.Value:
+        if isinstance(value.type, ir.IntType) and value.type.width == 1:
+            return value
+        if value.type == ir.DoubleType():
+            zero = ir.Constant(ir.DoubleType(), 0.0)
+            return self.builder.fcmp_ordered("!=", value, zero, name="cond")
+        if isinstance(value.type, ir.IntType):
+            zero = ir.Constant(value.type, 0)
+            return self.builder.icmp_signed("!=", value, zero, name="cond")
+        raise RuntimeError(f"Cannot use {value.type} as condition")
+
+    def _default_value(self, type_str: str) -> ir.Constant:
+        llvm_type = _llvm_type(type_str)
+        if llvm_type == ir.DoubleType():
+            return ir.Constant(llvm_type, 0.0)
+        return ir.Constant(llvm_type, 0)
+
+    def _array_element_type(self, type_str: str) -> str:
+        parts = type_str.rstrip(")").split()
+        return parts[1] if len(parts) > 1 else "int"

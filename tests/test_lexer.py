@@ -34,10 +34,15 @@ class TestLexerKeywords(unittest.TestCase):
         tokens = Lexer("print").tokenize()
         self.assertEqual(tokens[0].type, TokenType.PRINT)
 
+    def test_return_keyword(self):
+        tokens = Lexer("return").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.RETURN)
+
     def test_type_keywords(self):
         for kw, expected in [("int", TokenType.KW_INT),
                              ("float", TokenType.KW_FLOAT),
-                             ("char", TokenType.KW_CHAR)]:
+                             ("char", TokenType.KW_CHAR),
+                             ("bool", TokenType.KW_BOOL)]:
             tokens = Lexer(kw).tokenize()
             self.assertEqual(tokens[0].type, expected)
 
@@ -107,6 +112,12 @@ class TestLexerNumbers(unittest.TestCase):
         tokens = Lexer("0").tokenize()
         self.assertEqual(tokens[0].type, TokenType.INTEGER)
         self.assertEqual(tokens[0].value, "0")
+
+    def test_boolean(self):
+        for value in ["true", "false"]:
+            tokens = Lexer(value).tokenize()
+            self.assertEqual(tokens[0].type, TokenType.BOOLEAN)
+            self.assertEqual(tokens[0].value, value)
 
 
 class TestLexerOperators(unittest.TestCase):

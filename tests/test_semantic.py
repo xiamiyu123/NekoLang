@@ -97,6 +97,18 @@ class TestQuadruples(unittest.TestCase):
         self.assertIn("goto", ops)
         self.assertGreaterEqual(ops.count("label"), 2)
 
+    def test_function_call_quadruples(self):
+        analyzer = compile_source(
+            "(program t (var ((x int))) "
+            "(begin "
+            "(function add ((a int) (b int)) int (return (+ a b))) "
+            "(:= x (add 1 2))))"
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("param", ops)
+        self.assertIn("call", ops)
+        self.assertIn("return", ops)
+
 
 class TestSemanticErrors(unittest.TestCase):
     def test_undefined_variable(self):
@@ -108,6 +120,23 @@ class TestSemanticErrors(unittest.TestCase):
         analyzer = compile_source("(program t (var ((a int) (a float))) (begin (:= a 1)))")
         self.assertGreater(len(analyzer.errors), 0)
         self.assertIn("已经声明", analyzer.errors[0].message)
+
+    def test_missing_return(self):
+        analyzer = compile_source(
+            "(program t (begin (function add ((a int) (b int)) int (print a))))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("缺少 return", analyzer.errors[0].message)
+
+    def test_function_argument_type_mismatch(self):
+        analyzer = compile_source(
+            "(program t (var ((x bool))) "
+            "(begin "
+            "(function keep ((flag bool)) bool (return flag)) "
+            "(:= x (keep 1))))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("参数", analyzer.errors[0].message)
 
 
 class TestAddressNaming(unittest.TestCase):
