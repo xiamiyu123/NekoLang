@@ -1,0 +1,8 @@
+; NekoLang Demo Program
+; 猫猫语言演示 - 对应课设示例 program example
+(nya example
+  (nyan ((a int) (b int)))
+  (paw
+    (meow a 2)
+    (meow b (+ (* 5 a) 2))
+    (purr b)))

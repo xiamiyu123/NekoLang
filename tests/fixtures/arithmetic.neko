@@ -1,0 +1,12 @@
+; Arithmetic expressions test
+(nya math
+  (nyan ((a int) (b int) (c float)))
+  (paw
+    (meow a 3)
+    (meow b 5)
+    (meow c 2.5)
+    (purr (+ a b))
+    (purr (* a b))
+    (purr (- b a))
+    (purr (/ b a))
+    (purr (+ (* a b) (- b a)))))

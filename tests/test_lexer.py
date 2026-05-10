@@ -1,0 +1,156 @@
+import unittest
+from neko.lexer import Lexer
+from neko.tokens import TokenType
+from neko.errors import LexError
+
+
+class TestLexerKeywords(unittest.TestCase):
+    def test_nya_keyword(self):
+        tokens = Lexer("nya").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.NYA)
+        self.assertEqual(tokens[0].value, "nya")
+
+    def test_nyan_keyword(self):
+        tokens = Lexer("nyan").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.NYAN)
+
+    def test_meow_keyword(self):
+        tokens = Lexer("meow").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.MEOW)
+
+    def test_paw_keyword(self):
+        tokens = Lexer("paw").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.PAW)
+
+    def test_if_nya_keyword(self):
+        tokens = Lexer("if-nya").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.IF_NYA)
+
+    def test_purr_while_keyword(self):
+        tokens = Lexer("purr-while").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.PURR_WHILE)
+
+    def test_purr_keyword(self):
+        tokens = Lexer("purr").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.PURR)
+
+    def test_type_keywords(self):
+        for kw, expected in [("int", TokenType.KW_INT),
+                             ("float", TokenType.KW_FLOAT),
+                             ("char", TokenType.KW_CHAR)]:
+            tokens = Lexer(kw).tokenize()
+            self.assertEqual(tokens[0].type, expected)
+
+    def test_type_aliases(self):
+        for alias, expected in [("nya-int", TokenType.KW_INT),
+                                ("nya-float", TokenType.KW_FLOAT),
+                                ("nya-char", TokenType.KW_CHAR)]:
+            tokens = Lexer(alias).tokenize()
+            self.assertEqual(tokens[0].type, expected)
+
+
+class TestLexerIdentifiers(unittest.TestCase):
+    def test_simple_identifier(self):
+        tokens = Lexer("foo").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.IDENTIFIER)
+        self.assertEqual(tokens[0].value, "foo")
+
+    def test_identifier_with_digits(self):
+        tokens = Lexer("var123").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.IDENTIFIER)
+        self.assertEqual(tokens[0].value, "var123")
+
+    def test_identifier_with_underscore(self):
+        tokens = Lexer("my_var").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.IDENTIFIER)
+
+
+class TestLexerNumbers(unittest.TestCase):
+    def test_integer(self):
+        tokens = Lexer("42").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.INTEGER)
+        self.assertEqual(tokens[0].value, "42")
+
+    def test_float(self):
+        tokens = Lexer("3.14").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.FLOAT)
+        self.assertEqual(tokens[0].value, "3.14")
+
+    def test_zero(self):
+        tokens = Lexer("0").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.INTEGER)
+        self.assertEqual(tokens[0].value, "0")
+
+
+class TestLexerOperators(unittest.TestCase):
+    def test_single_char_ops(self):
+        for op in ["+", "-", "*", "/", "(", ")"]:
+            tokens = Lexer(op).tokenize()
+            self.assertEqual(tokens[0].value, op)
+
+    def test_double_char_ops(self):
+        for op in ["<=", ">=", "!="]:
+            tokens = Lexer(op).tokenize()
+            self.assertEqual(tokens[0].value, op)
+
+    def test_comparison_ops(self):
+        for op in ["<", ">", "="]:
+            tokens = Lexer(op).tokenize()
+            self.assertEqual(tokens[0].value, op)
+
+
+class TestLexerComments(unittest.TestCase):
+    def test_comment_is_skipped(self):
+        tokens = Lexer("; this is a comment\nnya").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.NYA)
+
+    def test_inline_comment(self):
+        tokens = Lexer("nya ; program name\nfoo").tokenize()
+        self.assertEqual(tokens[0].type, TokenType.NYA)
+        self.assertEqual(tokens[1].type, TokenType.IDENTIFIER)
+        self.assertEqual(tokens[1].value, "foo")
+
+
+class TestLexerLineTracking(unittest.TestCase):
+    def test_line_number(self):
+        tokens = Lexer("a\nb\nc").tokenize()
+        self.assertEqual(tokens[0].line, 1)
+        self.assertEqual(tokens[1].line, 2)
+        self.assertEqual(tokens[2].line, 3)
+
+    def test_column_tracking(self):
+        tokens = Lexer("a b c").tokenize()
+        self.assertEqual(tokens[0].column, 1)
+        self.assertEqual(tokens[1].column, 3)
+        self.assertEqual(tokens[2].column, 5)
+
+
+class TestLexerErrors(unittest.TestCase):
+    def test_invalid_character(self):
+        with self.assertRaises(LexError):
+            Lexer("~").tokenize()
+
+    def test_error_has_line_info(self):
+        try:
+            Lexer("a\n~").tokenize()
+        except LexError as e:
+            self.assertEqual(e.line, 2)
+            return
+        self.fail("Expected LexError")
+
+
+class TestLexerFullProgram(unittest.TestCase):
+    def test_tokenize_demo(self):
+        source = "(nya example (nyan ((a int))) (paw (meow a 2) (purr a)))"
+        tokens = Lexer(source).tokenize()
+        self.assertEqual(tokens[-1].type, TokenType.EOF)
+        types = [t.type for t in tokens]
+        self.assertIn(TokenType.NYA, types)
+        self.assertIn(TokenType.NYAN, types)
+        self.assertIn(TokenType.MEOW, types)
+        self.assertIn(TokenType.PAW, types)
+        self.assertIn(TokenType.PURR, types)
+
+
+if __name__ == "__main__":
+    unittest.main()

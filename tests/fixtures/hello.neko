@@ -1,0 +1,6 @@
+; Minimal program
+(nya hello
+  (nyan ((x int)))
+  (paw
+    (meow x 42)
+    (purr x)))

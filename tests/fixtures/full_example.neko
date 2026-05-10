@@ -1,0 +1,17 @@
+; Full example - all features
+(nya full
+  (nyan ((a int) (b int) (result int) (flag int)))
+  (paw
+    (meow a 10)
+    (meow b 3)
+    (meow result (+ (* a b) (- a b)))
+    (purr result)
+    (if-nya (> result 20)
+      (meow flag 1)
+      (meow flag 0))
+    (purr flag)
+    (meow a 0)
+    (purr-while (< a 5)
+      (paw
+        (purr a)
+        (meow a (+ a 1))))))
