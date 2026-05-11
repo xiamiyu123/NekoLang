@@ -1,0 +1,10 @@
+; NekoLang runtime demo
+; Reads the first CLI argument, adds argc, writes the result to a file.
+(program runtime_demo
+  (var ((count int) (value int) (result int)))
+  (begin
+    (:= count (argc))
+    (:= value (argv-int 0))
+    (:= result (+ value count))
+    (write-int "runtime_output.txt" result)
+    (print result)))

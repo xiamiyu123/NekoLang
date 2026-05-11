@@ -1,5 +1,8 @@
 import unittest
 import os
+import subprocess
+import sys
+import tempfile
 from neko.lexer import Lexer
 from neko.parser import Parser
 from neko.semantic import SemanticAnalyzer
@@ -203,6 +206,41 @@ class TestFileFixtures(unittest.TestCase):
     def test_full_example(self):
         analyzer = self._compile_file("tests/fixtures/full_example.neko")
         self.assertEqual(len(analyzer.errors), 0)
+
+
+class TestCLI(unittest.TestCase):
+    def _run_cli(self, *args):
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return subprocess.run(
+            [sys.executable, os.path.join(repo_root, "neko.py"), *args],
+            capture_output=True,
+            text=True,
+            cwd=repo_root,
+        )
+
+    def test_check_command(self):
+        result = self._run_cli("check", "examples/demo.neko")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("检查通过", result.stdout)
+
+    def test_run_command_with_args(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = os.path.join(tmpdir, "args.neko")
+            with open(source_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "(program args (var ((count int) (value int))) "
+                    "(begin (:= count (argc)) (:= value (argv-int 0)) (print count) (print value)))"
+                )
+            result = self._run_cli("run", source_path, "--", "9")
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "1\n9")
+
+    def test_legacy_compile_flag(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, "legacy-demo")
+            result = self._run_cli("examples/demo.neko", "--compile", output_path)
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(os.path.exists(output_path))
 
 
 if __name__ == "__main__":

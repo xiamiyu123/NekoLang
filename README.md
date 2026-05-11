@@ -18,6 +18,10 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `(print expr)` | `print(expr)` | 输出 |
 | `(function add ((a int)) int ...)` | 函数定义 | 支持参数和返回值 |
 | `(return expr)` | `return expr` | 函数返回 |
+| `(argc)` | `argc` | 用户命令行参数个数 |
+| `(argv-int 0)` | `argv[0]` | 读取并解析第一个命令行参数 |
+| `(read-int "in.txt")` | 文件输入 | 读取文件中的整数 |
+| `(write-int "out.txt" expr)` | 文件输出 | 将整数写入文件 |
 
 个性化关键字作为别名保留，可与标准关键字混用：
 
@@ -35,6 +39,7 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `purr-arr` | `array-print` | 数组输出 |
 
 类型只保留 `int`、`float`、`char`、`bool`，不再提供类型别名。
+字符串字面量仅用于运行时接口，例如文件路径，不作为可声明变量类型。
 
 ## 示例程序
 
@@ -58,30 +63,42 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
         (:= i (+ i 1))))))
 ```
 
+```scheme
+; 读取命令行参数，写入文件
+(program runtime_demo
+  (var ((count int) (value int) (result int)))
+  (begin
+    (:= count (argc))
+    (:= value (argv-int 0))
+    (:= result (+ value count))
+    (write-int "runtime_output.txt" result)
+    (print result)))
+```
+
 ## 使用方法
 
 ```bash
-# 完整输出（词法分析 + 语法分析 + 符号表 + 四元式）
-python neko.py examples/demo.neko --all
-
-# 仅输出四元式
-python neko.py examples/demo.neko
-
-# 仅输出词法单元
-python neko.py examples/demo.neko --tokens
-
-# 仅输出 AST
-python neko.py examples/demo.neko --ast
-
-# 仅输出符号表
-python neko.py examples/demo.neko --symbols
+# 语义检查
+python neko.py check examples/demo.neko
 
 # 输出 LLVM IR
-python neko.py examples/demo.neko --llvm-ir
+python neko.py llvm-ir examples/demo.neko
 
 # 编译为可执行文件
-python neko.py examples/demo.neko --compile demo
+python neko.py build examples/demo.neko -o demo
 ./demo
+
+# 编译并运行，向程序传参
+python neko.py run examples/runtime_demo.neko -- 41
+
+# 仅输出 AST
+python neko.py ast examples/demo.neko
+
+# 仅输出词法单元
+python neko.py tokens examples/demo.neko
+
+# 兼容旧用法
+python neko.py examples/demo.neko --all
 ```
 
 ## 运行测试
@@ -120,5 +137,5 @@ neko/
 └── errors.py       # 编译错误提示
 
 runtime/
-└── runtime.c       # C 运行时 (printf 包装)
+└── runtime.c       # C 运行时 (输出、参数解析、基础文件读写)
 ```
