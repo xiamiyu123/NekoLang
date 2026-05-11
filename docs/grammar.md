@@ -54,6 +54,7 @@
                   | <func-call>
                   | <argc-expr>
                   | <argv-expr>
+                  | <stdin-input>
                   | <file-read>
 
 <binop-expr>    ::= "(" <operator> <expression> <expression> ")"
@@ -64,12 +65,16 @@
 
 <argv-expr>     ::= "(" <argv-op> <expression> ")"
 
+<stdin-input>   ::= "(" <input-op> ")"
+
 <file-read>     ::= "(" <read-op> <string> ")"
 
 <operator>      ::= "+" | "-" | "*" | "/"
                   | "<" | ">" | "=" | "<=" | ">=" | "!="
 
 <argv-op>       ::= "argv-int" | "argv-float" | "argv-char" | "argv-bool"
+
+<input-op>      ::= "input-int" | "input-float" | "input-char" | "input-bool"
 
 <read-op>       ::= "read-int" | "read-float" | "read-char" | "read-bool"
 
@@ -134,14 +139,18 @@
 | 19 | `argv-float` | ARGV_FLOAT | 读取浮点参数 |
 | 20 | `argv-char` | ARGV_CHAR | 读取字符参数 |
 | 21 | `argv-bool` | ARGV_BOOL | 读取布尔参数 |
-| 22 | `read-int` | READ_INT | 读整数文件 |
-| 23 | `read-float` | READ_FLOAT | 读浮点文件 |
-| 24 | `read-char` | READ_CHAR | 读字符文件 |
-| 25 | `read-bool` | READ_BOOL | 读布尔文件 |
-| 26 | `write-int` | WRITE_INT | 写整数文件 |
-| 27 | `write-float` | WRITE_FLOAT | 写浮点文件 |
-| 28 | `write-char` | WRITE_CHAR | 写字符文件 |
-| 29 | `write-bool` | WRITE_BOOL | 写布尔文件 |
+| 22 | `input-int` | INPUT_INT | 从标准输入读取整数 |
+| 23 | `input-float` | INPUT_FLOAT | 从标准输入读取浮点数 |
+| 24 | `input-char` | INPUT_CHAR | 从标准输入读取字符 |
+| 25 | `input-bool` | INPUT_BOOL | 从标准输入读取布尔值 |
+| 26 | `read-int` | READ_INT | 读整数文件 |
+| 27 | `read-float` | READ_FLOAT | 读浮点文件 |
+| 28 | `read-char` | READ_CHAR | 读字符文件 |
+| 29 | `read-bool` | READ_BOOL | 读布尔文件 |
+| 30 | `write-int` | WRITE_INT | 写整数文件 |
+| 31 | `write-float` | WRITE_FLOAT | 写浮点文件 |
+| 32 | `write-char` | WRITE_CHAR | 写字符文件 |
+| 33 | `write-bool` | WRITE_BOOL | 写布尔文件 |
 
 ## 四、个性化关键字别名
 
@@ -207,6 +216,7 @@
 | `(print, addr, _, _)` | 输出 |
 | `(argc, _, _, temp)` | 读取用户参数个数 |
 | `(argv-int, idx, _, temp)` | 读取整数参数 |
+| `(input-int, _, _, temp)` | 从标准输入读取整数 |
 | `(read-int, path, _, temp)` | 从文件读取整数 |
 | `(write-int, path, value, _)` | 将整数写入文件 |
 

@@ -6,7 +6,7 @@ from .ast_nodes import (
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
-    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, FileReadNode, FileWriteNode,
 )
 from .symbol_table import SymbolTable
 from .errors import SemanticError
@@ -397,6 +397,10 @@ class SemanticAnalyzer:
             temp = self.symbol_table.alloc_temp()
             self._emit(f"argv-{node.value_type}", index_addr, "_", temp)
             return temp
+        if isinstance(node, InputNode):
+            temp = self.symbol_table.alloc_temp()
+            self._emit(f"input-{node.value_type}", "_", "_", temp)
+            return temp
         if isinstance(node, FileReadNode):
             path_type = self._infer_expression_type(node.path)
             if path_type != "string":
@@ -431,6 +435,8 @@ class SemanticAnalyzer:
         if isinstance(node, ArgcNode):
             return "int"
         if isinstance(node, ArgvNode):
+            return node.value_type
+        if isinstance(node, InputNode):
             return node.value_type
         if isinstance(node, FileReadNode):
             return node.value_type

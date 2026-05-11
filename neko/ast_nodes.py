@@ -177,6 +177,13 @@ class ArgvNode(ASTNode):
 
 
 @dataclass
+class InputNode(ASTNode):
+    value_type: str = "int"
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
 class FileReadNode(ASTNode):
     value_type: str = "int"
     path: ASTNode = field(default_factory=ASTNode)
@@ -285,6 +292,8 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
         result = f"{prefix}Argv({node.value_type})\n"
         result += dump_ast(node.index, indent + 1)
         return result
+    elif isinstance(node, InputNode):
+        return f"{prefix}Input({node.value_type})\n"
     elif isinstance(node, FileReadNode):
         result = f"{prefix}FileRead({node.value_type})\n"
         result += dump_ast(node.path, indent + 1)

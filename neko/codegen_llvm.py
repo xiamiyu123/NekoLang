@@ -9,7 +9,7 @@ from .ast_nodes import (
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
-    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, FileReadNode, FileWriteNode,
 )
 
 
@@ -67,6 +67,10 @@ class LLVMCodegen:
         self.neko_argv_float: ir.Function | None = None
         self.neko_argv_char: ir.Function | None = None
         self.neko_argv_bool: ir.Function | None = None
+        self.neko_input_int: ir.Function | None = None
+        self.neko_input_float: ir.Function | None = None
+        self.neko_input_char: ir.Function | None = None
+        self.neko_input_bool: ir.Function | None = None
         self.neko_read_int: ir.Function | None = None
         self.neko_read_float: ir.Function | None = None
         self.neko_read_char: ir.Function | None = None
@@ -112,6 +116,18 @@ class LLVMCodegen:
         )
         self.neko_argv_bool = ir.Function(
             self.module, ir.FunctionType(ir.IntType(1), runtime_arg_types), name="neko_argv_bool"
+        )
+        self.neko_input_int = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), []), name="neko_input_int"
+        )
+        self.neko_input_float = ir.Function(
+            self.module, ir.FunctionType(ir.DoubleType(), []), name="neko_input_float"
+        )
+        self.neko_input_char = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(8), []), name="neko_input_char"
+        )
+        self.neko_input_bool = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(1), []), name="neko_input_bool"
         )
         char_ptr = ir.IntType(8).as_pointer()
         self.neko_read_int = ir.Function(
@@ -380,6 +396,9 @@ class LLVMCodegen:
             index = self._coerce_value(self._gen_expression(node.index), "int")
             reader = self._runtime_argv_function(node.value_type)
             return self.builder.call(reader, [self.argc_value, self.argv_value, index], name="argtmp")
+        if isinstance(node, InputNode):
+            reader = self._runtime_input_function(node.value_type)
+            return self.builder.call(reader, [], name="inputtmp")
         if isinstance(node, FileReadNode):
             path = self._coerce_string(self._gen_expression(node.path))
             reader = self._runtime_read_function(node.value_type)
@@ -496,6 +515,14 @@ class LLVMCodegen:
             "float": self.neko_read_float,
             "char": self.neko_read_char,
             "bool": self.neko_read_bool,
+        }[value_type]
+
+    def _runtime_input_function(self, value_type: str) -> ir.Function:
+        return {
+            "int": self.neko_input_int,
+            "float": self.neko_input_float,
+            "char": self.neko_input_char,
+            "bool": self.neko_input_bool,
         }[value_type]
 
     def _runtime_write_function(self, value_type: str) -> ir.Function:

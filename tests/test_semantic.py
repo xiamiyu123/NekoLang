@@ -121,6 +121,14 @@ class TestQuadruples(unittest.TestCase):
         self.assertIn("read-int", ops)
         self.assertIn("write-int", ops)
 
+    def test_input_quadruples(self):
+        analyzer = compile_source(
+            "(program t (var ((x int) (y bool))) (begin (:= x (input-int)) (:= y (input-bool))))"
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("input-int", ops)
+        self.assertIn("input-bool", ops)
+
 
 class TestSemanticErrors(unittest.TestCase):
     def test_undefined_variable(self):

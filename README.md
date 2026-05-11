@@ -20,6 +20,7 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `(return expr)` | `return expr` | 函数返回 |
 | `(argc)` | `argc` | 用户命令行参数个数 |
 | `(argv-int 0)` | `argv[0]` | 读取并解析第一个命令行参数 |
+| `(input-int)` | 标准输入 | 从标准输入读取一个整数 |
 | `(read-int "in.txt")` | 文件输入 | 读取文件中的整数 |
 | `(write-int "out.txt" expr)` | 文件输出 | 将整数写入文件 |
 
@@ -75,6 +76,43 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
     (meow result)))
 ```
 
+```scheme
+; 标准输入示例：读取两个整数并输出和
+(nya input_demo
+  (nyan ((a int) (b int)))
+  (paw
+    (:= a (input-int))
+    (:= b (input-int))
+    (meow (+ a b))))
+```
+
+```scheme
+; 猜数字：从命令行依次读取猜测值
+; 1 表示太小，2 表示太大，0 表示猜中
+(nya guess_number
+  (nyan ((count int) (index int) (guess int) (secret int) (solved int)))
+  (paw
+    (:= count (argc))
+    (:= index 0)
+    (:= secret 42)
+    (:= solved 0)
+    (purr-while (< index count)
+      (paw
+        (if (= solved 0)
+          (paw
+            (:= guess (argv-int index))
+            (if (< guess secret)
+              (meow 1)
+              (if (> guess secret)
+                (meow 2)
+                (paw
+                  (meow 0)
+                  (:= solved 1)))))
+          (:= solved solved))
+        (:= index (+ index 1))))
+    (meow solved)))
+```
+
 ## 使用方法
 
 ```bash
@@ -90,6 +128,12 @@ python neko.py build examples/demo.neko -o demo
 
 # 编译并运行，向程序传参
 python neko.py run examples/runtime_demo.neko -- 41
+
+# 交互式输入示例：输入 10 20，输出 30
+printf '10 20\n' | python neko.py run examples/input_demo.neko
+
+# 猜数字示例：30 太小，50 太大，42 猜中
+python neko.py run examples/guess_number.neko -- 30 50 42
 
 # 仅输出 AST
 python neko.py ast examples/demo.neko
@@ -139,5 +183,5 @@ neko/
 └── errors.py       # 编译错误提示
 
 runtime/
-└── runtime.c       # C 运行时 (输出、参数解析、基础文件读写)
+└── runtime.c       # C 运行时 (输出、参数解析、标准输入、基础文件读写)
 ```

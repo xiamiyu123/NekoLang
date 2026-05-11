@@ -6,7 +6,7 @@ from neko.ast_nodes import (
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
-    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, FileReadNode, FileWriteNode,
 )
 from neko.errors import ParseError
 
@@ -116,6 +116,12 @@ class TestParserExpressions(unittest.TestCase):
         ast = parse('(program t (var ((x int))) (begin (:= x (read-int "input.txt"))))')
         expr = ast.block.body.statements[0].value
         self.assertIsInstance(expr, FileReadNode)
+        self.assertEqual(expr.value_type, "int")
+
+    def test_input_expression(self):
+        ast = parse("(program t (var ((x int))) (begin (:= x (input-int))))")
+        expr = ast.block.body.statements[0].value
+        self.assertIsInstance(expr, InputNode)
         self.assertEqual(expr.value_type, "int")
 
 

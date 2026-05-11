@@ -5,7 +5,7 @@ from .ast_nodes import (
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
-    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, FileReadNode, FileWriteNode,
 )
 from .errors import ParseError
 
@@ -267,6 +267,19 @@ class Parser:
                     column=op_tok.column,
                 )
             if op_tok.type in {
+                TokenType.INPUT_INT,
+                TokenType.INPUT_FLOAT,
+                TokenType.INPUT_CHAR,
+                TokenType.INPUT_BOOL,
+            }:
+                self._advance()
+                self._expect(TokenType.RPAREN)
+                return InputNode(
+                    value_type=self._builtin_value_type(op_tok.type),
+                    line=op_tok.line,
+                    column=op_tok.column,
+                )
+            if op_tok.type in {
                 TokenType.READ_INT,
                 TokenType.READ_FLOAT,
                 TokenType.READ_CHAR,
@@ -326,6 +339,10 @@ class Parser:
             TokenType.ARGV_FLOAT: "float",
             TokenType.ARGV_CHAR: "char",
             TokenType.ARGV_BOOL: "bool",
+            TokenType.INPUT_INT: "int",
+            TokenType.INPUT_FLOAT: "float",
+            TokenType.INPUT_CHAR: "char",
+            TokenType.INPUT_BOOL: "bool",
             TokenType.READ_INT: "int",
             TokenType.READ_FLOAT: "float",
             TokenType.READ_CHAR: "char",

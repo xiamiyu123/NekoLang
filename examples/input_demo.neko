@@ -1,0 +1,8 @@
+; NekoLang input demo
+; Reads two integers from stdin and prints their sum.
+(nya input_demo
+  (nyan ((a int) (b int)))
+  (paw
+    (:= a (input-int))
+    (:= b (input-int))
+    (meow (+ a b))))
