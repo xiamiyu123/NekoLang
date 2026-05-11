@@ -126,6 +126,35 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
     (meow solved)))
 ```
 
+## 项目管理 (nekgo)
+
+```bash
+# 创建新项目
+python nekgo.py new hello
+cd hello
+
+# 编译项目
+python nekgo.py build
+
+# 编译并运行
+python nekgo.py run
+
+# 向程序传参
+python nekgo.py run -- 42
+```
+
+项目结构：
+
+```text
+hello/
+├── Neko.toml       # 项目清单
+├── .gitignore      # 忽略 build/
+├── src/
+│   └── main.neko   # 入口文件
+└── build/
+    └── hello       # 编译产物
+```
+
 ## 使用方法
 
 ```bash
@@ -187,17 +216,21 @@ python -m unittest discover tests/ -v
 
 ## 项目结构
 
-```
+```text
+neko.py               # 编译器 CLI
+nekgo.py              # 项目管理工具
+
 neko/
-├── tokens.py       # Token 类型、关键字表、界符表
-├── lexer.py        # 词法分析器
-├── ast_nodes.py    # AST 节点定义
-├── parser.py       # 递归下降语法分析器
-├── symbol_table.py # 符号表系统
-├── semantic.py     # 语义分析 + 四元式生成
-├── codegen_llvm.py # LLVM IR 代码生成
-└── errors.py       # 编译错误提示
+├── tokens.py         # Token 类型、关键字表、界符表
+├── lexer.py          # 词法分析器
+├── ast_nodes.py      # AST 节点定义
+├── parser.py         # 递归下降语法分析器
+├── symbol_table.py   # 符号表系统
+├── semantic.py       # 语义分析 + 四元式生成
+├── codegen_llvm.py   # LLVM IR 代码生成
+├── build_utils.py    # 共享编译工具函数
+└── errors.py         # 编译错误提示
 
 runtime/
-└── runtime.c       # C 运行时 (输出、参数解析、标准输入、基础文件读写)
+└── runtime.c         # C 运行时 (输出、参数解析、标准输入、基础文件读写)
 ```
