@@ -110,6 +110,8 @@ python -m unittest discover tests/ -v
 ## 相关文档
 
 - [文法规范](/Users/xiami/Learning/NekoLang/docs/grammar.md)
+- [语言元素详解（中文）](/Users/xiami/Learning/NekoLang/docs/language-elements.zh.md)
+- [Language Elements Guide (English)](/Users/xiami/Learning/NekoLang/docs/language-elements.en.md)
 - [LLVM 后端说明](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)
 - [开发路线图](/Users/xiami/Learning/NekoLang/docs/roadmap.md)
 - [v0.1 规格](/Users/xiami/Learning/NekoLang/docs/v0.1-spec.md)
