@@ -106,6 +106,13 @@ class BoolLiteralNode(ASTNode):
 
 
 @dataclass
+class StringLiteralNode(ASTNode):
+    value: str = ""
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
 class FuncDefNode(ASTNode):
     name: str = ""
     params: list[tuple[str, str]] = field(default_factory=list)
@@ -151,6 +158,37 @@ class ArrayAssignNode(ASTNode):
 class ArrayPrintNode(ASTNode):
     name: str = ""
     index: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class ArgcNode(ASTNode):
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class ArgvNode(ASTNode):
+    value_type: str = "int"
+    index: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class FileReadNode(ASTNode):
+    value_type: str = "int"
+    path: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class FileWriteNode(ASTNode):
+    value_type: str = "int"
+    path: ASTNode = field(default_factory=ASTNode)
+    value: ASTNode = field(default_factory=ASTNode)
     line: int = 0
     column: int = 0
 
@@ -212,6 +250,8 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
         return f"{prefix}Float({node.value})\n"
     elif isinstance(node, BoolLiteralNode):
         return f"{prefix}Bool({node.value})\n"
+    elif isinstance(node, StringLiteralNode):
+        return f'{prefix}String("{node.value}")\n'
     elif isinstance(node, FuncDefNode):
         params_str = ", ".join(f"({n}:{t})" for n, t in node.params)
         result = f"{prefix}FuncDef({node.name}, [{params_str}], {node.return_type})\n"
@@ -238,6 +278,21 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
     elif isinstance(node, ArrayPrintNode):
         result = f"{prefix}ArrayPrint({node.name})\n"
         result += dump_ast(node.index, indent + 1)
+        return result
+    elif isinstance(node, ArgcNode):
+        return f"{prefix}Argc\n"
+    elif isinstance(node, ArgvNode):
+        result = f"{prefix}Argv({node.value_type})\n"
+        result += dump_ast(node.index, indent + 1)
+        return result
+    elif isinstance(node, FileReadNode):
+        result = f"{prefix}FileRead({node.value_type})\n"
+        result += dump_ast(node.path, indent + 1)
+        return result
+    elif isinstance(node, FileWriteNode):
+        result = f"{prefix}FileWrite({node.value_type})\n"
+        result += dump_ast(node.path, indent + 1)
+        result += dump_ast(node.value, indent + 1)
         return result
     else:
         return f"{prefix}Unknown({type(node).__name__})\n"

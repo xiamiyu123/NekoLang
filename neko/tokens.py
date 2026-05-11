@@ -8,6 +8,7 @@ class TokenType(Enum):
     INTEGER = "INTEGER"
     FLOAT = "FLOAT"
     BOOLEAN = "BOOLEAN"
+    STRING = "STRING"
 
     # Language keywords
     PROGRAM = "program"        # program entry
@@ -32,6 +33,19 @@ class TokenType(Enum):
     # Array operations
     ARRAY_SET = "array-set"    # array assignment
     ARRAY_PRINT = "array-print" # array print
+    ARGC = "argc"
+    ARGV_INT = "argv-int"
+    ARGV_FLOAT = "argv-float"
+    ARGV_CHAR = "argv-char"
+    ARGV_BOOL = "argv-bool"
+    READ_INT = "read-int"
+    READ_FLOAT = "read-float"
+    READ_CHAR = "read-char"
+    READ_BOOL = "read-bool"
+    WRITE_INT = "write-int"
+    WRITE_FLOAT = "write-float"
+    WRITE_CHAR = "write-char"
+    WRITE_BOOL = "write-bool"
 
     # Delimiters / operators
     LPAREN = "("
@@ -91,6 +105,19 @@ KEYWORDS: dict[str, TokenType] = {
     "meow-arr": TokenType.ARRAY_SET,
     "array-print": TokenType.ARRAY_PRINT,
     "purr-arr": TokenType.ARRAY_PRINT,
+    "argc": TokenType.ARGC,
+    "argv-int": TokenType.ARGV_INT,
+    "argv-float": TokenType.ARGV_FLOAT,
+    "argv-char": TokenType.ARGV_CHAR,
+    "argv-bool": TokenType.ARGV_BOOL,
+    "read-int": TokenType.READ_INT,
+    "read-float": TokenType.READ_FLOAT,
+    "read-char": TokenType.READ_CHAR,
+    "read-bool": TokenType.READ_BOOL,
+    "write-int": TokenType.WRITE_INT,
+    "write-float": TokenType.WRITE_FLOAT,
+    "write-char": TokenType.WRITE_CHAR,
+    "write-bool": TokenType.WRITE_BOOL,
 }
 
 # Delimiter table: single/double char -> TokenType

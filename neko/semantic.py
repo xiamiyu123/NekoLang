@@ -3,9 +3,10 @@ from dataclasses import dataclass
 from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
-    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode,
+    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
+    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
 )
 from .symbol_table import SymbolTable
 from .errors import SemanticError
@@ -140,6 +141,8 @@ class SemanticAnalyzer:
             self._analyze_array_assign(node)
         elif isinstance(node, ArrayPrintNode):
             self._analyze_array_print(node)
+        elif isinstance(node, FileWriteNode):
+            self._analyze_file_write(node)
 
     def _analyze_assign(self, node: AssignNode):
         entry = self.symbol_table.lookup(node.target)
@@ -295,6 +298,25 @@ class SemanticAnalyzer:
         self._emit("+", base_addr, temp1, temp2)
         self._emit("print", f"({temp2})", "_", "_")
 
+    def _analyze_file_write(self, node: FileWriteNode):
+        path_type = self._infer_expression_type(node.path)
+        if path_type != "string":
+            self._error(node.path, "文件路径必须是字符串字面量", "type_mismatch")
+            return
+
+        value_type = self._infer_expression_type(node.value)
+        if value_type and not self._types_compatible(node.value_type, value_type):
+            self._error(
+                node.value,
+                f"write-{node.value_type} 需要 {node.value_type} 类型的值，但得到 {value_type}",
+                "type_mismatch",
+            )
+            return
+
+        path_addr = self._analyze_expression(node.path)
+        value_addr = self._analyze_expression(node.value)
+        self._emit(f"write-{node.value_type}", path_addr, value_addr, "_")
+
     def _analyze_expression(self, node: ASTNode) -> str:
         if isinstance(node, IntLiteralNode):
             return self.symbol_table.get_const_addr(node.value)
@@ -302,6 +324,8 @@ class SemanticAnalyzer:
             return self.symbol_table.get_const_addr(node.value)
         if isinstance(node, BoolLiteralNode):
             return self.symbol_table.get_const_addr(str(node.value).lower())
+        if isinstance(node, StringLiteralNode):
+            return self.symbol_table.get_const_addr(f'"{node.value}"')
         if isinstance(node, IdentifierNode):
             entry = self.symbol_table.lookup(node.name)
             if not entry:
@@ -360,6 +384,28 @@ class SemanticAnalyzer:
             temp2 = self.symbol_table.alloc_temp()
             self._emit("+", base_addr, temp1, temp2)
             return f"({temp2})"
+        if isinstance(node, ArgcNode):
+            temp = self.symbol_table.alloc_temp()
+            self._emit("argc", "_", "_", temp)
+            return temp
+        if isinstance(node, ArgvNode):
+            index_type = self._infer_expression_type(node.index)
+            if index_type and index_type != "int":
+                self._error(node.index, "命令行参数下标必须是 int 类型", "type_mismatch")
+                return "_"
+            index_addr = self._analyze_expression(node.index)
+            temp = self.symbol_table.alloc_temp()
+            self._emit(f"argv-{node.value_type}", index_addr, "_", temp)
+            return temp
+        if isinstance(node, FileReadNode):
+            path_type = self._infer_expression_type(node.path)
+            if path_type != "string":
+                self._error(node.path, "文件路径必须是字符串字面量", "type_mismatch")
+                return "_"
+            path_addr = self._analyze_expression(node.path)
+            temp = self.symbol_table.alloc_temp()
+            self._emit(f"read-{node.value_type}", path_addr, "_", temp)
+            return temp
         return "_"
 
     def _infer_expression_type(self, node: ASTNode) -> str | None:
@@ -369,6 +415,8 @@ class SemanticAnalyzer:
             return "float"
         if isinstance(node, BoolLiteralNode):
             return "bool"
+        if isinstance(node, StringLiteralNode):
+            return "string"
         if isinstance(node, IdentifierNode):
             entry = self.symbol_table.lookup(node.name)
             return entry.type if entry else None
@@ -380,6 +428,12 @@ class SemanticAnalyzer:
             if entry and entry.type.startswith("(array"):
                 return self._array_element_type(entry.type)
             return None
+        if isinstance(node, ArgcNode):
+            return "int"
+        if isinstance(node, ArgvNode):
+            return node.value_type
+        if isinstance(node, FileReadNode):
+            return node.value_type
         if isinstance(node, BinOpNode):
             left_type = self._infer_expression_type(node.left)
             right_type = self._infer_expression_type(node.right)

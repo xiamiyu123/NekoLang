@@ -65,6 +65,42 @@ class Lexer:
             return Token(TokenType.FLOAT, result, start_line, start_col)
         return Token(TokenType.INTEGER, result, start_line, start_col)
 
+    def _read_string(self) -> Token:
+        start_col = self.column
+        start_line = self.line
+        self._advance()  # consume opening quote
+        chars: list[str] = []
+
+        escapes = {
+            "n": "\n",
+            "t": "\t",
+            '"': '"',
+            "\\": "\\",
+        }
+
+        while self.pos < len(self.source):
+            ch = self._current()
+            if ch == '"':
+                self._advance()
+                return Token(TokenType.STRING, "".join(chars), start_line, start_col)
+            if ch == "\\":
+                self._advance()
+                esc = self._current()
+                if esc is None:
+                    break
+                chars.append(escapes.get(esc, esc))
+                self._advance()
+                continue
+            chars.append(self._advance())
+
+        source_line = self.source_lines[start_line - 1] if start_line <= len(self.source_lines) else ""
+        raise LexError(
+            "字符串字面量缺少结束引号",
+            line=start_line,
+            column=start_col,
+            source_line=source_line,
+        )
+
     def next_token(self) -> Token:
         while self.pos < len(self.source):
             self._skip_whitespace()
@@ -85,6 +121,9 @@ class Lexer:
             # Numbers
             if ch.isdigit():
                 return self._read_number()
+
+            if ch == '"':
+                return self._read_string()
 
             # Two-char operators
             if ch in '<>!:' and self._peek() == '=':

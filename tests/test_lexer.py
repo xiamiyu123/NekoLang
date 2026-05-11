@@ -53,6 +53,26 @@ class TestLexerKeywords(unittest.TestCase):
             tokens = Lexer(kw).tokenize()
             self.assertEqual(tokens[0].type, expected)
 
+    def test_runtime_keywords(self):
+        keywords = [
+            ("argc", TokenType.ARGC),
+            ("argv-int", TokenType.ARGV_INT),
+            ("argv-float", TokenType.ARGV_FLOAT),
+            ("argv-char", TokenType.ARGV_CHAR),
+            ("argv-bool", TokenType.ARGV_BOOL),
+            ("read-int", TokenType.READ_INT),
+            ("read-float", TokenType.READ_FLOAT),
+            ("read-char", TokenType.READ_CHAR),
+            ("read-bool", TokenType.READ_BOOL),
+            ("write-int", TokenType.WRITE_INT),
+            ("write-float", TokenType.WRITE_FLOAT),
+            ("write-char", TokenType.WRITE_CHAR),
+            ("write-bool", TokenType.WRITE_BOOL),
+        ]
+        for kw, expected in keywords:
+            tokens = Lexer(kw).tokenize()
+            self.assertEqual(tokens[0].type, expected)
+
     def test_personalized_keyword_aliases(self):
         aliases = [
             ("nya", TokenType.PROGRAM),
@@ -119,6 +139,11 @@ class TestLexerNumbers(unittest.TestCase):
             self.assertEqual(tokens[0].type, TokenType.BOOLEAN)
             self.assertEqual(tokens[0].value, value)
 
+    def test_string(self):
+        tokens = Lexer('"hello\\nworld"').tokenize()
+        self.assertEqual(tokens[0].type, TokenType.STRING)
+        self.assertEqual(tokens[0].value, "hello\nworld")
+
 
 class TestLexerOperators(unittest.TestCase):
     def test_single_char_ops(self):
@@ -175,6 +200,10 @@ class TestLexerErrors(unittest.TestCase):
             self.assertEqual(e.line, 2)
             return
         self.fail("Expected LexError")
+
+    def test_unterminated_string(self):
+        with self.assertRaises(LexError):
+            Lexer('"oops').tokenize()
 
 
 class TestLexerFullProgram(unittest.TestCase):

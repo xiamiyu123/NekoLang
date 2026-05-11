@@ -13,6 +13,10 @@ from neko.codegen_llvm import LLVMCodegen
 
 
 def compile_and_run(source: str) -> str:
+    return compile_and_run_with_args(source)
+
+
+def compile_and_run_with_args(source: str, args: list[str] | None = None) -> str:
     """Compile NekoLang source to executable, run it, return stdout."""
     # Parse and analyze
     lexer = Lexer(source)
@@ -51,7 +55,7 @@ def compile_and_run(source: str) -> str:
             raise RuntimeError(f"clang failed:\n{result.stderr}")
 
         # Run
-        result = subprocess.run([out_path], capture_output=True, text=True)
+        result = subprocess.run([out_path, *(args or [])], capture_output=True, text=True)
         return result.stdout.strip()
     finally:
         os.unlink(ll_path)
@@ -137,6 +141,14 @@ class TestIRGeneration(unittest.TestCase):
         self.assertIn('define i32 @"add"', ir)
         self.assertIn("ret i32", ir)
 
+    def test_runtime_declarations(self):
+        ir = generate_ir(
+            '(program t (var ((x int))) (begin (:= x (argc)) (:= x (read-int "a.txt"))))'
+        )
+        self.assertIn('declare i32 @"neko_argv_int"', ir)
+        self.assertIn('declare i32 @"neko_read_int"', ir)
+        self.assertIn('define i32 @"main"(i32 %"argc"', ir)
+
 
 class TestBasicExecution(unittest.TestCase):
     """Test compiled programs produce correct output."""
@@ -191,6 +203,34 @@ class TestBasicExecution(unittest.TestCase):
             (print x)))"""
         output = compile_and_run(source)
         self.assertEqual(output, "9")
+
+    def test_argc_and_argv(self):
+        source = """(program t (var ((count int) (value int)))
+          (begin
+            (:= count (argc))
+            (:= value (argv-int 0))
+            (print count)
+            (print value)))"""
+        output = compile_and_run_with_args(source, ["7"])
+        self.assertEqual(output, "1\n7")
+
+    def test_file_read_and_write(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.txt")
+            output_path = os.path.join(tmpdir, "output.txt")
+            with open(input_path, "w", encoding="utf-8") as f:
+                f.write("21\n")
+
+            source = f"""(program t (var ((value int)))
+              (begin
+                (:= value (read-int "{input_path}"))
+                (:= value (+ value 1))
+                (write-int "{output_path}" value)
+                (print value)))"""
+            output = compile_and_run(source)
+            self.assertEqual(output, "22")
+            with open(output_path, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read().strip(), "22")
 
 
 class TestControlFlow(unittest.TestCase):

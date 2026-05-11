@@ -4,8 +4,9 @@ from neko.parser import Parser
 from neko.ast_nodes import (
     ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
-    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode,
+    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
+    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
 )
 from neko.errors import ParseError
 
@@ -94,6 +95,29 @@ class TestParserExpressions(unittest.TestCase):
         self.assertIsInstance(expr, BoolLiteralNode)
         self.assertTrue(expr.value)
 
+    def test_string_literal_expression(self):
+        ast = parse('(program t (begin (print "hello.txt")))')
+        expr = ast.block.body.statements[0].value
+        self.assertIsInstance(expr, StringLiteralNode)
+        self.assertEqual(expr.value, "hello.txt")
+
+    def test_argc_expression(self):
+        ast = parse("(program t (var ((x int))) (begin (:= x (argc))))")
+        expr = ast.block.body.statements[0].value
+        self.assertIsInstance(expr, ArgcNode)
+
+    def test_argv_expression(self):
+        ast = parse("(program t (var ((x int))) (begin (:= x (argv-int 0))))")
+        expr = ast.block.body.statements[0].value
+        self.assertIsInstance(expr, ArgvNode)
+        self.assertEqual(expr.value_type, "int")
+
+    def test_file_read_expression(self):
+        ast = parse('(program t (var ((x int))) (begin (:= x (read-int "input.txt"))))')
+        expr = ast.block.body.statements[0].value
+        self.assertIsInstance(expr, FileReadNode)
+        self.assertEqual(expr.value_type, "int")
+
 
 class TestParserIf(unittest.TestCase):
     def test_if_statement(self):
@@ -162,6 +186,15 @@ class TestParserPrint(unittest.TestCase):
     def test_meow_is_not_assignment_alias(self):
         with self.assertRaises(ParseError):
             parse("(program t (var ((x int))) (begin (meow x 1)))")
+
+
+class TestParserRuntimeIO(unittest.TestCase):
+    def test_write_statement(self):
+        ast = parse('(program t (begin (write-int "out.txt" 42)))')
+        stmt = ast.block.body.statements[0]
+        self.assertIsInstance(stmt, FileWriteNode)
+        self.assertEqual(stmt.value_type, "int")
+        self.assertIsInstance(stmt.path, StringLiteralNode)
 
 
 class TestParserBeginBlock(unittest.TestCase):

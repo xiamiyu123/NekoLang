@@ -1,13 +1,15 @@
 """LLVM IR code generator for NekoLang. Walks the AST and emits LLVM IR."""
 
 import llvmlite.ir as ir
+from llvmlite import binding as llvm
 
 from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
-    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode,
+    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
+    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
 )
 
 
@@ -51,15 +53,30 @@ class LLVMCodegen:
 
     def __init__(self):
         self.module = ir.Module(name="neko")
-        self.module.triple = "arm64-apple-macosx15.0.0"
+        self.module.triple = llvm.get_default_triple()
         self.builder: ir.IRBuilder | None = None
         self.named_values: dict[str, ir.NamedValue] = {}
         self.var_types: dict[str, str] = {}
         self.function_nodes: dict[str, FuncDefNode] = {}
+        self.global_strings: dict[str, ir.GlobalVariable] = {}
         self.nekoprint_int: ir.Function | None = None
         self.nekoprint_float: ir.Function | None = None
         self.nekoprint_char: ir.Function | None = None
         self.nekoprint_bool: ir.Function | None = None
+        self.neko_argv_int: ir.Function | None = None
+        self.neko_argv_float: ir.Function | None = None
+        self.neko_argv_char: ir.Function | None = None
+        self.neko_argv_bool: ir.Function | None = None
+        self.neko_read_int: ir.Function | None = None
+        self.neko_read_float: ir.Function | None = None
+        self.neko_read_char: ir.Function | None = None
+        self.neko_read_bool: ir.Function | None = None
+        self.neko_write_int: ir.Function | None = None
+        self.neko_write_float: ir.Function | None = None
+        self.neko_write_char: ir.Function | None = None
+        self.neko_write_bool: ir.Function | None = None
+        self.argc_value: ir.Value | None = None
+        self.argv_value: ir.Value | None = None
         self.current_return_type: str | None = None
 
     def generate(self, ast: ProgramNode) -> str:
@@ -82,6 +99,44 @@ class LLVMCodegen:
         )
         self.nekoprint_bool = ir.Function(
             self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(1)]), name="nekoprint_bool"
+        )
+        runtime_arg_types = [ir.IntType(32), ir.IntType(8).as_pointer().as_pointer(), ir.IntType(32)]
+        self.neko_argv_int = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), runtime_arg_types), name="neko_argv_int"
+        )
+        self.neko_argv_float = ir.Function(
+            self.module, ir.FunctionType(ir.DoubleType(), runtime_arg_types), name="neko_argv_float"
+        )
+        self.neko_argv_char = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(8), runtime_arg_types), name="neko_argv_char"
+        )
+        self.neko_argv_bool = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(1), runtime_arg_types), name="neko_argv_bool"
+        )
+        char_ptr = ir.IntType(8).as_pointer()
+        self.neko_read_int = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), [char_ptr]), name="neko_read_int"
+        )
+        self.neko_read_float = ir.Function(
+            self.module, ir.FunctionType(ir.DoubleType(), [char_ptr]), name="neko_read_float"
+        )
+        self.neko_read_char = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(8), [char_ptr]), name="neko_read_char"
+        )
+        self.neko_read_bool = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(1), [char_ptr]), name="neko_read_bool"
+        )
+        self.neko_write_int = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [char_ptr, ir.IntType(32)]), name="neko_write_int"
+        )
+        self.neko_write_float = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [char_ptr, ir.DoubleType()]), name="neko_write_float"
+        )
+        self.neko_write_char = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [char_ptr, ir.IntType(8)]), name="neko_write_char"
+        )
+        self.neko_write_bool = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [char_ptr, ir.IntType(1)]), name="neko_write_bool"
         )
 
     def _collect_function_nodes(self, node: ASTNode) -> dict[str, FuncDefNode]:
@@ -145,12 +200,16 @@ class LLVMCodegen:
         self.current_return_type = saved_return_type
 
     def _gen_program(self, node: ProgramNode):
-        func_ty = ir.FunctionType(ir.IntType(32), [])
+        func_ty = ir.FunctionType(ir.IntType(32), [ir.IntType(32), ir.IntType(8).as_pointer().as_pointer()])
         main_func = ir.Function(self.module, func_ty, name="main")
+        main_func.args[0].name = "argc"
+        main_func.args[1].name = "argv"
         entry = main_func.append_basic_block(name="entry")
         self.builder = ir.IRBuilder(entry)
         self.named_values = {}
         self.var_types = {}
+        self.argc_value = main_func.args[0]
+        self.argv_value = main_func.args[1]
         self.current_return_type = "int"
 
         self._gen_block(node.block)
@@ -193,6 +252,8 @@ class LLVMCodegen:
             self._gen_array_assign(node)
         elif isinstance(node, ArrayPrintNode):
             self._gen_array_print(node)
+        elif isinstance(node, FileWriteNode):
+            self._gen_file_write(node)
 
     def _gen_assign(self, node: AssignNode):
         val = self._gen_expression(node.value)
@@ -283,6 +344,12 @@ class LLVMCodegen:
         ptr = self.builder.gep(alloca, [zero, idx], name=f"{node.name}.ptr")
         self._gen_print_value(self.builder.load(ptr, name=f"{node.name}.val"))
 
+    def _gen_file_write(self, node: FileWriteNode):
+        path = self._coerce_string(self._gen_expression(node.path))
+        value = self._coerce_value(self._gen_expression(node.value), node.value_type)
+        writer = self._runtime_write_function(node.value_type)
+        self.builder.call(writer, [path, value])
+
     def _gen_expression(self, node: ASTNode) -> ir.Value:
         if isinstance(node, IntLiteralNode):
             return ir.Constant(ir.IntType(32), node.value)
@@ -290,6 +357,8 @@ class LLVMCodegen:
             return ir.Constant(ir.DoubleType(), node.value)
         if isinstance(node, BoolLiteralNode):
             return ir.Constant(ir.IntType(1), int(node.value))
+        if isinstance(node, StringLiteralNode):
+            return self._string_constant(node.value)
         if isinstance(node, IdentifierNode):
             alloca = self.named_values.get(node.name)
             if alloca is None:
@@ -301,6 +370,20 @@ class LLVMCodegen:
             return self._gen_func_call(node)
         if isinstance(node, ArrayAccessNode):
             return self._gen_array_access(node)
+        if isinstance(node, ArgcNode):
+            if self.argc_value is None:
+                raise RuntimeError("argc is not available in this context")
+            return self.builder.sub(self.argc_value, ir.Constant(ir.IntType(32), 1), name="argc.user")
+        if isinstance(node, ArgvNode):
+            if self.argc_value is None or self.argv_value is None:
+                raise RuntimeError("argv is not available in this context")
+            index = self._coerce_value(self._gen_expression(node.index), "int")
+            reader = self._runtime_argv_function(node.value_type)
+            return self.builder.call(reader, [self.argc_value, self.argv_value, index], name="argtmp")
+        if isinstance(node, FileReadNode):
+            path = self._coerce_string(self._gen_expression(node.path))
+            reader = self._runtime_read_function(node.value_type)
+            return self.builder.call(reader, [path], name="readtmp")
         raise RuntimeError(f"Unknown expression type: {type(node).__name__}")
 
     def _gen_binop(self, node: BinOpNode) -> ir.Value:
@@ -398,3 +481,44 @@ class LLVMCodegen:
     def _array_element_type(self, type_str: str) -> str:
         parts = type_str.rstrip(")").split()
         return parts[1] if len(parts) > 1 else "int"
+
+    def _runtime_argv_function(self, value_type: str) -> ir.Function:
+        return {
+            "int": self.neko_argv_int,
+            "float": self.neko_argv_float,
+            "char": self.neko_argv_char,
+            "bool": self.neko_argv_bool,
+        }[value_type]
+
+    def _runtime_read_function(self, value_type: str) -> ir.Function:
+        return {
+            "int": self.neko_read_int,
+            "float": self.neko_read_float,
+            "char": self.neko_read_char,
+            "bool": self.neko_read_bool,
+        }[value_type]
+
+    def _runtime_write_function(self, value_type: str) -> ir.Function:
+        return {
+            "int": self.neko_write_int,
+            "float": self.neko_write_float,
+            "char": self.neko_write_char,
+            "bool": self.neko_write_bool,
+        }[value_type]
+
+    def _string_constant(self, value: str) -> ir.Value:
+        if value not in self.global_strings:
+            raw = value.encode("utf-8") + b"\x00"
+            string_type = ir.ArrayType(ir.IntType(8), len(raw))
+            global_var = ir.GlobalVariable(self.module, string_type, name=f".str.{len(self.global_strings)}")
+            global_var.linkage = "internal"
+            global_var.global_constant = True
+            global_var.initializer = ir.Constant(string_type, bytearray(raw))
+            self.global_strings[value] = global_var
+        zero = ir.Constant(ir.IntType(32), 0)
+        return self.builder.gep(self.global_strings[value], [zero, zero], inbounds=True, name="strptr")
+
+    def _coerce_string(self, value: ir.Value) -> ir.Value:
+        if value.type == ir.IntType(8).as_pointer():
+            return value
+        raise RuntimeError(f"Cannot use {value.type} as file path")

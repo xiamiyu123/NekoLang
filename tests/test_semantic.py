@@ -109,6 +109,18 @@ class TestQuadruples(unittest.TestCase):
         self.assertIn("call", ops)
         self.assertIn("return", ops)
 
+    def test_runtime_io_quadruples(self):
+        analyzer = compile_source(
+            '(program t (var ((x int))) '
+            '(begin (:= x (argc)) (:= x (argv-int 0)) (:= x (read-int "in.txt")) '
+            '(write-int "out.txt" x)))'
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("argc", ops)
+        self.assertIn("argv-int", ops)
+        self.assertIn("read-int", ops)
+        self.assertIn("write-int", ops)
+
 
 class TestSemanticErrors(unittest.TestCase):
     def test_undefined_variable(self):
@@ -137,6 +149,11 @@ class TestSemanticErrors(unittest.TestCase):
         )
         self.assertGreater(len(analyzer.errors), 0)
         self.assertIn("参数", analyzer.errors[0].message)
+
+    def test_file_path_must_be_string(self):
+        analyzer = compile_source("(program t (begin (write-int 1 2)))")
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("文件路径", analyzer.errors[0].message)
 
 
 class TestAddressNaming(unittest.TestCase):

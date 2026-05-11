@@ -2,9 +2,10 @@ from .tokens import Token, TokenType
 from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
-    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode,
+    IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
+    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
 )
 from .errors import ParseError
 
@@ -140,6 +141,13 @@ class Parser:
             return self._parse_array_assign()
         elif tok.type == TokenType.ARRAY_PRINT:
             return self._parse_array_print()
+        elif tok.type in {
+            TokenType.WRITE_INT,
+            TokenType.WRITE_FLOAT,
+            TokenType.WRITE_CHAR,
+            TokenType.WRITE_BOOL,
+        }:
+            return self._parse_file_write()
         else:
             src = self.source_lines[tok.line - 1] if 0 < tok.line <= len(self.source_lines) else ""
             raise ParseError(
@@ -221,11 +229,58 @@ class Parser:
         return ArrayPrintNode(name=name_tok.value, index=index,
                               line=tok.line, column=tok.column)
 
+    def _parse_file_write(self) -> FileWriteNode:
+        tok = self._advance()
+        path = self._parse_expression()
+        value = self._parse_expression()
+        self._expect(TokenType.RPAREN)
+        return FileWriteNode(
+            value_type=self._builtin_value_type(tok.type),
+            path=path,
+            value=value,
+            line=tok.line,
+            column=tok.column,
+        )
+
     def _parse_expression(self) -> ASTNode:
         tok = self._current()
         if tok.type == TokenType.LPAREN:
             self._advance()  # consume '('
             op_tok = self._current()
+            if op_tok.type == TokenType.ARGC:
+                self._advance()
+                self._expect(TokenType.RPAREN)
+                return ArgcNode(line=op_tok.line, column=op_tok.column)
+            if op_tok.type in {
+                TokenType.ARGV_INT,
+                TokenType.ARGV_FLOAT,
+                TokenType.ARGV_CHAR,
+                TokenType.ARGV_BOOL,
+            }:
+                self._advance()
+                index = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return ArgvNode(
+                    value_type=self._builtin_value_type(op_tok.type),
+                    index=index,
+                    line=op_tok.line,
+                    column=op_tok.column,
+                )
+            if op_tok.type in {
+                TokenType.READ_INT,
+                TokenType.READ_FLOAT,
+                TokenType.READ_CHAR,
+                TokenType.READ_BOOL,
+            }:
+                self._advance()
+                path = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return FileReadNode(
+                    value_type=self._builtin_value_type(op_tok.type),
+                    path=path,
+                    line=op_tok.line,
+                    column=op_tok.column,
+                )
             # Check if it's a function call: (func_name arg1 arg2 ...)
             if op_tok.type == TokenType.IDENTIFIER:
                 self._advance()
@@ -254,6 +309,9 @@ class Parser:
         elif tok.type == TokenType.BOOLEAN:
             self._advance()
             return BoolLiteralNode(value=(tok.value == "true"), line=tok.line, column=tok.column)
+        elif tok.type == TokenType.STRING:
+            self._advance()
+            return StringLiteralNode(value=tok.value, line=tok.line, column=tok.column)
         else:
             src = self.source_lines[tok.line - 1] if 0 < tok.line <= len(self.source_lines) else ""
             raise ParseError(
@@ -261,3 +319,20 @@ class Parser:
                 line=tok.line, column=tok.column,
                 source_line=src
             )
+
+    def _builtin_value_type(self, token_type: TokenType) -> str:
+        mapping = {
+            TokenType.ARGV_INT: "int",
+            TokenType.ARGV_FLOAT: "float",
+            TokenType.ARGV_CHAR: "char",
+            TokenType.ARGV_BOOL: "bool",
+            TokenType.READ_INT: "int",
+            TokenType.READ_FLOAT: "float",
+            TokenType.READ_CHAR: "char",
+            TokenType.READ_BOOL: "bool",
+            TokenType.WRITE_INT: "int",
+            TokenType.WRITE_FLOAT: "float",
+            TokenType.WRITE_CHAR: "char",
+            TokenType.WRITE_BOOL: "bool",
+        }
+        return mapping[token_type]
