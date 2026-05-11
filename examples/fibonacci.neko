@@ -1,17 +1,17 @@
 ; NekoLang Fibonacci - 斐波那契数列
-(program fibonacci
-  (var ((a int) (b int) (c int) (n int) (i int)))
-  (begin
+(nya fibonacci
+  (nyan ((a int) (b int) (c int) (n int) (i int)))
+  (paw
     (:= a 0)
     (:= b 1)
     (:= n 10)
     (:= i 0)
-    (print a)
-    (print b)
-    (while (< i n)
-      (begin
+    (meow a)
+    (meow b)
+    (purr-while (< i n)
+      (paw
         (:= c (+ a b))
         (:= a b)
         (:= b c)
-        (print c)
+        (meow c)
         (:= i (+ i 1))))))

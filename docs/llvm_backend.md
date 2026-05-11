@@ -36,7 +36,7 @@
 ### 变量声明 `var`
 
 ```scheme
-(var ((a int) (b float)))
+(nyan ((a int) (b float)))
 ```
 
 ```llvm
@@ -100,7 +100,7 @@ if.end:
 ### 循环 `while`
 
 ```scheme
-(while (< i 10) (:= i (+ i 1)))
+(purr-while (< i 10) (:= i (+ i 1)))
 ```
 
 ```llvm
@@ -131,7 +131,7 @@ while.end:
 ### 函数返回 `return`
 
 ```scheme
-(function add ((a int) (b int)) int
+(nyaa-def add ((a int) (b int)) int
   (return (+ a b)))
 ```
 
@@ -146,8 +146,8 @@ entry:
 ### 数组
 
 ```scheme
-(var ((arr (array int 5))))
-(array-set arr 0 42)
+(nyan ((arr (neko-box int 5))))
+(meow-arr arr 0 42)
 ```
 
 ```llvm

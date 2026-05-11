@@ -1,6 +1,6 @@
 ; Minimal program
-(program hello
-  (var ((x int)))
-  (begin
+(nya hello
+  (nyan ((x int)))
+  (paw
     (:= x 42)
-    (print x)))
+    (meow x)))

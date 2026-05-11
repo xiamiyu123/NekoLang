@@ -1,12 +1,12 @@
 ; Arithmetic expressions test
-(program math
-  (var ((a int) (b int) (c float)))
-  (begin
+(nya math
+  (nyan ((a int) (b int) (c float)))
+  (paw
     (:= a 3)
     (:= b 5)
     (:= c 2.5)
-    (print (+ a b))
-    (print (* a b))
-    (print (- b a))
-    (print (/ b a))
-    (print (+ (* a b) (- b a)))))
+    (meow (+ a b))
+    (meow (* a b))
+    (meow (- b a))
+    (meow (/ b a))
+    (meow (+ (* a b) (- b a)))))

@@ -216,12 +216,12 @@
 
 **源代码：**
 ```scheme
-(program example
-  (var ((a int) (b int)))
-  (begin
+(nya example
+  (nyan ((a int) (b int)))
+  (paw
     (:= a 2)
     (:= b (+ (* 5 a) 2))
-    (print b)))
+    (meow b)))
 ```
 
 **四元式输出：**

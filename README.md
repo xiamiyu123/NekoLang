@@ -45,34 +45,34 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 
 ```scheme
 ; 斐波那契数列
-(program fibonacci
-  (var ((a int) (b int) (c int) (n int) (i int)))
-  (begin
+(nya fibonacci
+  (nyan ((a int) (b int) (c int) (n int) (i int)))
+  (paw
     (:= a 0)
     (:= b 1)
     (:= n 10)
     (:= i 0)
-    (print a)
-    (print b)
-    (while (< i n)
-      (begin
+    (meow a)
+    (meow b)
+    (purr-while (< i n)
+      (paw
         (:= c (+ a b))
         (:= a b)
         (:= b c)
-        (print c)
+        (meow c)
         (:= i (+ i 1))))))
 ```
 
 ```scheme
 ; 读取命令行参数，写入文件
-(program runtime_demo
-  (var ((count int) (value int) (result int)))
-  (begin
+(nya runtime_demo
+  (nyan ((count int) (value int) (result int)))
+  (paw
     (:= count (argc))
     (:= value (argv-int 0))
     (:= result (+ value count))
     (write-int "runtime_output.txt" result)
-    (print result)))
+    (meow result)))
 ```
 
 ## 使用方法

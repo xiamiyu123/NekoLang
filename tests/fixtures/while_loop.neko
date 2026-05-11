@@ -1,11 +1,11 @@
 ; While loop test
-(program loop_test
-  (var ((i int) (sum int)))
-  (begin
+(nya loop_test
+  (nyan ((i int) (sum int)))
+  (paw
     (:= i 0)
     (:= sum 0)
-    (while (<= i 5)
-      (begin
+    (purr-while (<= i 5)
+      (paw
         (:= sum (+ sum i))
         (:= i (+ i 1))))
-    (print sum)))
+    (meow sum)))
