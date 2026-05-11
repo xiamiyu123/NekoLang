@@ -38,6 +38,12 @@ class TokenType(Enum):
     ARGV_FLOAT = "argv-float"
     ARGV_CHAR = "argv-char"
     ARGV_BOOL = "argv-bool"
+    INPUT_INT = "input-int"
+    INPUT_FLOAT = "input-float"
+    INPUT_CHAR = "input-char"
+    INPUT_BOOL = "input-bool"
+    RAND_SEED = "rand-seed"
+    RAND_RANGE = "rand-range"
     READ_INT = "read-int"
     READ_FLOAT = "read-float"
     READ_CHAR = "read-char"
@@ -110,6 +116,12 @@ KEYWORDS: dict[str, TokenType] = {
     "argv-float": TokenType.ARGV_FLOAT,
     "argv-char": TokenType.ARGV_CHAR,
     "argv-bool": TokenType.ARGV_BOOL,
+    "input-int": TokenType.INPUT_INT,
+    "input-float": TokenType.INPUT_FLOAT,
+    "input-char": TokenType.INPUT_CHAR,
+    "input-bool": TokenType.INPUT_BOOL,
+    "rand-seed": TokenType.RAND_SEED,
+    "rand-range": TokenType.RAND_RANGE,
     "read-int": TokenType.READ_INT,
     "read-float": TokenType.READ_FLOAT,
     "read-char": TokenType.READ_CHAR,

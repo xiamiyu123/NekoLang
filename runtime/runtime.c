@@ -2,9 +2,11 @@
 
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 void nekoprint_int(int val) {
     printf("%d\n", val);
@@ -20,6 +22,10 @@ void nekoprint_char(char val) {
 
 void nekoprint_bool(_Bool val) {
     printf("%s\n", val ? "true" : "false");
+}
+
+void nekoprint_string(const char *val) {
+    printf("%s\n", val);
 }
 
 static void runtime_fail(const char *message, const char *detail) {
@@ -61,6 +67,35 @@ static void runtime_expect(int ok, const char *message, const char *detail) {
     }
 }
 
+static void runtime_stdin_eof(void) {
+    runtime_fail("stdin reached EOF", NULL);
+}
+
+static void runtime_read_token(char *buffer, size_t size, const char *message) {
+    int ok = scanf("%63s", buffer);
+    if (ok == EOF) {
+        runtime_stdin_eof();
+    }
+    runtime_expect(ok == 1, message, NULL);
+    buffer[size - 1] = '\0';
+}
+
+static uint32_t runtime_rand_state = 1u;
+static int runtime_rand_seeded = 0;
+
+static void runtime_rand_ensure_seeded(void) {
+    if (!runtime_rand_seeded) {
+        runtime_rand_state = (uint32_t)time(NULL);
+        runtime_rand_seeded = 1;
+    }
+}
+
+static uint32_t runtime_rand_next(void) {
+    runtime_rand_ensure_seeded();
+    runtime_rand_state = runtime_rand_state * 1664525u + 1013904223u;
+    return runtime_rand_state;
+}
+
 int neko_argv_int(int argc, char **argv, int index) {
     int actual = runtime_arg_index(argc, index);
     char *end = NULL;
@@ -93,6 +128,64 @@ _Bool neko_argv_bool(int argc, char **argv, int index) {
     }
     runtime_fail("argv-bool parse failed", argv[actual]);
     return 0;
+}
+
+int neko_input_int(void) {
+    char buffer[64] = {0};
+    char *end = NULL;
+    long value = 0;
+    runtime_read_token(buffer, sizeof(buffer), "input-int failed");
+    value = strtol(buffer, &end, 10);
+    runtime_expect(end && *end == '\0', "input-int parse failed", buffer);
+    return (int)value;
+}
+
+double neko_input_float(void) {
+    char buffer[64] = {0};
+    char *end = NULL;
+    double value = 0.0;
+    runtime_read_token(buffer, sizeof(buffer), "input-float failed");
+    value = strtod(buffer, &end);
+    runtime_expect(end && *end == '\0', "input-float parse failed", buffer);
+    return value;
+}
+
+char neko_input_char(void) {
+    int value = 0;
+    do {
+        value = getchar();
+        if (value == EOF) {
+            runtime_stdin_eof();
+        }
+    } while (isspace(value));
+    return (char)value;
+}
+
+_Bool neko_input_bool(void) {
+    char buffer[64] = {0};
+    runtime_read_token(buffer, sizeof(buffer), "input-bool failed");
+    if (strcmp(buffer, "true") == 0) {
+        return 1;
+    }
+    if (strcmp(buffer, "false") == 0) {
+        return 0;
+    }
+    runtime_fail("input-bool parse failed", buffer);
+    return 0;
+}
+
+void neko_rand_seed(int seed) {
+    runtime_rand_state = (uint32_t)seed;
+    runtime_rand_seeded = 1;
+}
+
+int neko_rand_range(int low, int high) {
+    uint64_t span = 0;
+    uint32_t value = 0;
+    runtime_expect(low <= high, "rand-range invalid bounds", NULL);
+    span = (uint64_t)((int64_t)high - (int64_t)low) + 1u;
+    value = runtime_rand_next();
+    return low + (int)(value % span);
 }
 
 int neko_read_int(const char *path) {

@@ -6,7 +6,7 @@ from .ast_nodes import (
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
-    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
 from .symbol_table import SymbolTable
 from .errors import SemanticError
@@ -143,6 +143,8 @@ class SemanticAnalyzer:
             self._analyze_array_print(node)
         elif isinstance(node, FileWriteNode):
             self._analyze_file_write(node)
+        elif isinstance(node, RandomSeedNode):
+            self._analyze_rand_seed(node)
 
     def _analyze_assign(self, node: AssignNode):
         entry = self.symbol_table.lookup(node.target)
@@ -195,6 +197,14 @@ class SemanticAnalyzer:
     def _analyze_print(self, node: PrintNode):
         addr = self._analyze_expression(node.value)
         self._emit("print", addr, "_", "_")
+
+    def _analyze_rand_seed(self, node: RandomSeedNode):
+        seed_type = self._infer_expression_type(node.seed)
+        if seed_type and seed_type != "int":
+            self._error(node.seed, "rand-seed 需要 int 类型的种子", "type_mismatch")
+            return
+        seed_addr = self._analyze_expression(node.seed)
+        self._emit("rand-seed", seed_addr, "_", "_")
 
     def _analyze_func_def(self, node: FuncDefNode):
         previous_name = self.current_function_name
@@ -397,6 +407,24 @@ class SemanticAnalyzer:
             temp = self.symbol_table.alloc_temp()
             self._emit(f"argv-{node.value_type}", index_addr, "_", temp)
             return temp
+        if isinstance(node, InputNode):
+            temp = self.symbol_table.alloc_temp()
+            self._emit(f"input-{node.value_type}", "_", "_", temp)
+            return temp
+        if isinstance(node, RandomRangeNode):
+            low_type = self._infer_expression_type(node.low)
+            high_type = self._infer_expression_type(node.high)
+            if low_type and low_type != "int":
+                self._error(node.low, "rand-range 的下界必须是 int 类型", "type_mismatch")
+                return "_"
+            if high_type and high_type != "int":
+                self._error(node.high, "rand-range 的上界必须是 int 类型", "type_mismatch")
+                return "_"
+            low_addr = self._analyze_expression(node.low)
+            high_addr = self._analyze_expression(node.high)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("rand-range", low_addr, high_addr, temp)
+            return temp
         if isinstance(node, FileReadNode):
             path_type = self._infer_expression_type(node.path)
             if path_type != "string":
@@ -432,6 +460,10 @@ class SemanticAnalyzer:
             return "int"
         if isinstance(node, ArgvNode):
             return node.value_type
+        if isinstance(node, InputNode):
+            return node.value_type
+        if isinstance(node, RandomRangeNode):
+            return "int"
         if isinstance(node, FileReadNode):
             return node.value_type
         if isinstance(node, BinOpNode):

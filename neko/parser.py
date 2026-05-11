@@ -5,7 +5,7 @@ from .ast_nodes import (
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
-    ArgcNode, ArgvNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
 from .errors import ParseError
 
@@ -148,6 +148,8 @@ class Parser:
             TokenType.WRITE_BOOL,
         }:
             return self._parse_file_write()
+        elif tok.type == TokenType.RAND_SEED:
+            return self._parse_rand_seed()
         else:
             src = self.source_lines[tok.line - 1] if 0 < tok.line <= len(self.source_lines) else ""
             raise ParseError(
@@ -242,6 +244,12 @@ class Parser:
             column=tok.column,
         )
 
+    def _parse_rand_seed(self) -> RandomSeedNode:
+        tok = self._advance()
+        seed = self._parse_expression()
+        self._expect(TokenType.RPAREN)
+        return RandomSeedNode(seed=seed, line=tok.line, column=tok.column)
+
     def _parse_expression(self) -> ASTNode:
         tok = self._current()
         if tok.type == TokenType.LPAREN:
@@ -263,6 +271,30 @@ class Parser:
                 return ArgvNode(
                     value_type=self._builtin_value_type(op_tok.type),
                     index=index,
+                    line=op_tok.line,
+                    column=op_tok.column,
+                )
+            if op_tok.type in {
+                TokenType.INPUT_INT,
+                TokenType.INPUT_FLOAT,
+                TokenType.INPUT_CHAR,
+                TokenType.INPUT_BOOL,
+            }:
+                self._advance()
+                self._expect(TokenType.RPAREN)
+                return InputNode(
+                    value_type=self._builtin_value_type(op_tok.type),
+                    line=op_tok.line,
+                    column=op_tok.column,
+                )
+            if op_tok.type == TokenType.RAND_RANGE:
+                self._advance()
+                low = self._parse_expression()
+                high = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return RandomRangeNode(
+                    low=low,
+                    high=high,
                     line=op_tok.line,
                     column=op_tok.column,
                 )
@@ -326,6 +358,10 @@ class Parser:
             TokenType.ARGV_FLOAT: "float",
             TokenType.ARGV_CHAR: "char",
             TokenType.ARGV_BOOL: "bool",
+            TokenType.INPUT_INT: "int",
+            TokenType.INPUT_FLOAT: "float",
+            TokenType.INPUT_CHAR: "char",
+            TokenType.INPUT_BOOL: "bool",
             TokenType.READ_INT: "int",
             TokenType.READ_FLOAT: "float",
             TokenType.READ_CHAR: "char",

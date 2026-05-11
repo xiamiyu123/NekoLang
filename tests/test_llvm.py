@@ -16,9 +16,10 @@ def compile_and_run(source: str) -> str:
     return compile_and_run_with_args(source)
 
 
-def compile_and_run_with_args(source: str, args: list[str] | None = None) -> str:
-    """Compile NekoLang source to executable, run it, return stdout."""
-    # Parse and analyze
+def compile_and_run_process(
+    source: str, args: list[str] | None = None, stdin_data: str | None = None
+) -> subprocess.CompletedProcess:
+    """Compile NekoLang source to executable, run it, return the process result."""
     lexer = Lexer(source)
     tokens = lexer.tokenize()
     parser = Parser(tokens)
@@ -29,24 +30,19 @@ def compile_and_run_with_args(source: str, args: list[str] | None = None) -> str
     analyzer.set_source(source)
     analyzer.analyze(ast)
 
-    # Generate LLVM IR
     codegen = LLVMCodegen()
     ir_text = codegen.generate(ast)
 
-    # Find runtime.c
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     runtime_c = os.path.join(script_dir, "runtime", "runtime.c")
 
-    # Write IR to temp file
     with tempfile.NamedTemporaryFile(mode="w", suffix=".ll", delete=False) as f:
         f.write(ir_text)
         ll_path = f.name
 
-    # Create temp output path
     out_path = ll_path.replace(".ll", "")
 
     try:
-        # Compile with clang
         result = subprocess.run(
             ["clang", runtime_c, ll_path, "-o", out_path],
             capture_output=True, text=True
@@ -54,13 +50,25 @@ def compile_and_run_with_args(source: str, args: list[str] | None = None) -> str
         if result.returncode != 0:
             raise RuntimeError(f"clang failed:\n{result.stderr}")
 
-        # Run
-        result = subprocess.run([out_path, *(args or [])], capture_output=True, text=True)
-        return result.stdout.strip()
+        return subprocess.run(
+            [out_path, *(args or [])],
+            input=stdin_data,
+            capture_output=True,
+            text=True,
+        )
     finally:
         os.unlink(ll_path)
         if os.path.exists(out_path):
             os.unlink(out_path)
+
+
+def compile_and_run_with_args(source: str, args: list[str] | None = None) -> str:
+    """Compile NekoLang source to executable, run it, return stdout."""
+    return compile_and_run_process(source, args=args).stdout.strip()
+
+
+def compile_and_run_with_input(source: str, stdin_data: str) -> str:
+    return compile_and_run_process(source, stdin_data=stdin_data).stdout.strip()
 
 
 def generate_ir(source: str) -> str:
@@ -121,6 +129,11 @@ class TestIRGeneration(unittest.TestCase):
         ir = generate_ir("(program t (var ((x int))) (begin (:= x 42) (print x)))")
         self.assertIn('call void @"nekoprint_int"', ir)
 
+    def test_string_print_call(self):
+        ir = generate_ir('(program t (begin (print "你好")))')
+        self.assertIn('declare void @"nekoprint_string"', ir)
+        self.assertIn('call void @"nekoprint_string"', ir)
+
     def test_printf_declared(self):
         ir = generate_ir("(program t (begin (print 0)))")
         self.assertIn('declare void @"nekoprint_int"', ir)
@@ -148,6 +161,18 @@ class TestIRGeneration(unittest.TestCase):
         self.assertIn('declare i32 @"neko_argv_int"', ir)
         self.assertIn('declare i32 @"neko_read_int"', ir)
         self.assertIn('define i32 @"main"(i32 %"argc"', ir)
+
+    def test_input_runtime_declarations(self):
+        ir = generate_ir("(program t (var ((x int))) (begin (:= x (input-int))))")
+        self.assertIn('declare i32 @"neko_input_int"', ir)
+        self.assertIn('call i32 @"neko_input_int"', ir)
+
+    def test_random_runtime_declarations(self):
+        ir = generate_ir("(program t (var ((x int))) (begin (rand-seed 7) (:= x (rand-range 1 6))))")
+        self.assertIn('declare void @"neko_rand_seed"', ir)
+        self.assertIn('declare i32 @"neko_rand_range"', ir)
+        self.assertIn('call void @"neko_rand_seed"', ir)
+        self.assertIn('call i32 @"neko_rand_range"', ir)
 
 
 class TestBasicExecution(unittest.TestCase):
@@ -231,6 +256,133 @@ class TestBasicExecution(unittest.TestCase):
             self.assertEqual(output, "22")
             with open(output_path, "r", encoding="utf-8") as f:
                 self.assertEqual(f.read().strip(), "22")
+
+    def test_guess_number_demo_with_multiple_args(self):
+        source = """(program guess_number
+          (var ((count int) (index int) (guess int) (secret int) (solved int)))
+          (begin
+            (:= count (argc))
+            (:= index 0)
+            (:= secret 42)
+            (:= solved 0)
+            (while (< index count)
+              (begin
+                (if (= solved 0)
+                  (begin
+                    (:= guess (argv-int index))
+                    (if (< guess secret)
+                      (print 1)
+                      (if (> guess secret)
+                        (print 2)
+                        (begin
+                          (print 0)
+                          (:= solved 1)))))
+                  (:= solved solved))
+                (:= index (+ index 1))))
+            (print solved)))"""
+        output = compile_and_run_with_args(source, ["30", "50", "42", "99"])
+        self.assertEqual(output, "1\n2\n0\n1")
+
+    def test_input_int(self):
+        output = compile_and_run_with_input(
+            "(program t (var ((x int))) (begin (:= x (input-int)) (print x)))",
+            "7\n",
+        )
+        self.assertEqual(output, "7")
+
+    def test_input_float(self):
+        output = compile_and_run_with_input(
+            "(program t (var ((x float))) (begin (:= x (input-float)) (print x)))",
+            "3.5\n",
+        )
+        self.assertEqual(output, "3.500000")
+
+    def test_input_bool(self):
+        output = compile_and_run_with_input(
+            "(program t (var ((x bool))) (begin (:= x (input-bool)) (print x)))",
+            "true\n",
+        )
+        self.assertEqual(output, "true")
+
+    def test_input_char(self):
+        output = compile_and_run_with_input(
+            "(program t (var ((x char))) (begin (:= x (input-char)) (print x)))",
+            "x\n",
+        )
+        self.assertEqual(output, "x")
+
+    def test_print_string_literal(self):
+        output = compile_and_run('(program t (begin (print "猜大了")))')
+        self.assertEqual(output, "猜大了")
+
+    def test_multiple_input_tokens(self):
+        output = compile_and_run_with_input(
+            "(program t (var ((a int) (b int))) (begin (:= a (input-int)) (:= b (input-int)) (print a) (print b)))",
+            "10 20\n",
+        )
+        self.assertEqual(output, "10\n20")
+
+    def test_input_eof_error(self):
+        result = compile_and_run_process(
+            "(program t (var ((x int))) (begin (:= x (input-int)) (print x)))",
+            stdin_data="",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime error: stdin reached EOF", result.stderr)
+
+    def test_input_bool_parse_error(self):
+        result = compile_and_run_process(
+            "(program t (var ((x bool))) (begin (:= x (input-bool)) (print x)))",
+            stdin_data="maybe\n",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime error: input-bool parse failed: maybe", result.stderr)
+
+    def test_input_int_parse_error(self):
+        result = compile_and_run_process(
+            "(program t (var ((x int))) (begin (:= x (input-int)) (print x)))",
+            stdin_data="cat\n",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime error: input-int parse failed: cat", result.stderr)
+
+    def test_input_float_parse_error(self):
+        result = compile_and_run_process(
+            "(program t (var ((x float))) (begin (:= x (input-float)) (print x)))",
+            stdin_data="bird\n",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime error: input-float parse failed: bird", result.stderr)
+
+    def test_rand_range_with_seed_is_repeatable(self):
+        source = """(program t (var ((a int) (b int)))
+          (begin
+            (rand-seed 123)
+            (:= a (rand-range 1 10))
+            (rand-seed 123)
+            (:= b (rand-range 1 10))
+            (print a)
+            (print b)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "9\n9")
+
+    def test_rand_range_stays_in_bounds(self):
+        source = """(program t (var ((x int)))
+          (begin
+            (rand-seed 5)
+            (:= x (rand-range 3 7))
+            (print x)))"""
+        output = compile_and_run(source)
+        value = int(output)
+        self.assertGreaterEqual(value, 3)
+        self.assertLessEqual(value, 7)
+
+    def test_rand_range_invalid_bounds(self):
+        result = compile_and_run_process(
+            "(program t (var ((x int))) (begin (:= x (rand-range 5 3)) (print x)))"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime error: rand-range invalid bounds", result.stderr)
 
 
 class TestControlFlow(unittest.TestCase):

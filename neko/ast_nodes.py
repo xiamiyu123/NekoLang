@@ -177,6 +177,28 @@ class ArgvNode(ASTNode):
 
 
 @dataclass
+class InputNode(ASTNode):
+    value_type: str = "int"
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class RandomSeedNode(ASTNode):
+    seed: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class RandomRangeNode(ASTNode):
+    low: ASTNode = field(default_factory=ASTNode)
+    high: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
 class FileReadNode(ASTNode):
     value_type: str = "int"
     path: ASTNode = field(default_factory=ASTNode)
@@ -284,6 +306,17 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
     elif isinstance(node, ArgvNode):
         result = f"{prefix}Argv({node.value_type})\n"
         result += dump_ast(node.index, indent + 1)
+        return result
+    elif isinstance(node, InputNode):
+        return f"{prefix}Input({node.value_type})\n"
+    elif isinstance(node, RandomSeedNode):
+        result = f"{prefix}RandomSeed\n"
+        result += dump_ast(node.seed, indent + 1)
+        return result
+    elif isinstance(node, RandomRangeNode):
+        result = f"{prefix}RandomRange\n"
+        result += dump_ast(node.low, indent + 1)
+        result += dump_ast(node.high, indent + 1)
         return result
     elif isinstance(node, FileReadNode):
         result = f"{prefix}FileRead({node.value_type})\n"

@@ -1,0 +1,28 @@
+; NekoLang guess number demo
+; Secret number is 42.
+; Output code: 1 = too small, 2 = too large, 0 = correct.
+; The last line is 1 if any guess is correct, otherwise 0.
+(nya guess_number
+  (nyan ((count int) (index int) (guess int) (secret int) (solved int)))
+  (paw
+    (:= count (argc))
+    (:= index 0)
+    (:= secret 42)
+    (:= solved 0)
+
+    (purr-while (< index count)
+      (paw
+        (if (= solved 0)
+          (paw
+            (:= guess (argv-int index))
+            (if (< guess secret)
+              (meow 1)
+              (if (> guess secret)
+                (meow 2)
+                (paw
+                  (meow 0)
+                  (:= solved 1)))))
+          (:= solved solved))
+        (:= index (+ index 1))))
+
+    (meow solved)))

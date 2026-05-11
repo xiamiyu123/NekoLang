@@ -1,0 +1,20 @@
+; NekoLang guess number demo
+; Secret number is random. Read guesses from stdin and print Chinese hints.
+(nya guess_number_rand
+  (nyan ((guess int) (secret int) (solved bool)))
+  (paw
+    (:= secret (rand-range 1 100))
+    (:= solved false)
+    (meow "欢迎来到猜数字游戏，请输入 1 到 100 之间的整数。")
+
+    (purr-while (= solved false)
+      (paw
+        (meow "请输入你的猜测：")
+        (:= guess (input-int))
+        (if (< guess secret)
+          (meow "太小了，请再试一次。")
+          (if (> guess secret)
+            (meow "太大了，请再试一次。")
+            (paw
+              (meow "猜对了！")
+              (:= solved true))))))))
