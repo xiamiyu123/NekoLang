@@ -30,6 +30,7 @@
 | `bool` | `i1` | 1 位 |
 | `(array int N)` | `[N x i32]` | N*4 字节 |
 | `(array float N)` | `[N x double]` | N*8 字节 |
+| `(func (T...) R)` | `i8*` | 8 字节（函数指针） |
 
 ## 三、AST 节点 → LLVM IR 映射
 
@@ -143,6 +144,40 @@ entry:
 }
 ```
 
+### Lambda 表达式与函数指针
+
+```scheme
+(nyan ((f (func (int) int)) (r int)))
+(:= f (lambda ((x int)) int (return (* x 2))))
+(:= r (f 5))
+```
+
+Lambda 被生成为模块级 LLVM 函数（`@__lambda_1`），赋值时 bitcast 为 `i8*` 存储到变量。间接调用时从变量 load 出 `i8*`，bitcast 回具体函数指针类型后 `call`：
+
+```llvm
+define i32 @__lambda_1(i32 %x) {
+entry:
+  %tmp = mul i32 %x, 2
+  ret i32 %tmp
+}
+
+; 赋值: bitcast to i8*
+%f.fptr = bitcast i32 (i32)* @__lambda_1 to i8*
+store i8* %f.fptr, i8** %f
+
+; 间接调用: load, bitcast back, call
+%f.val = load i8*, i8** %f
+%f.concrete = bitcast i8* %f.val to i32 (i32)*
+%calltmp = call i32 %f.concrete(i32 5)
+```
+
+命名函数也可作为值赋给 `(func ...)` 类型变量：
+
+```scheme
+(function square ((n int)) int (return (* n n)))
+(:= f square)  ; f 的类型为 (func (int) int)
+```
+
 ### 数组
 
 ```scheme
@@ -194,7 +229,6 @@ python neko.py examples/fibonacci.neko --compile fib
 
 ## 七、已知限制
 
-- 函数定义 (`function`) 的 LLVM 代码生成尚未完整支持
 - 数组仅支持一维
 - 无字符串类型
 - 浮点使用 `double` 精度

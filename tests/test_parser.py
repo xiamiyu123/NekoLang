@@ -5,7 +5,7 @@ from neko.ast_nodes import (
     ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
-    FuncDefNode, FuncCallNode, ReturnNode,
+    FuncDefNode, LambdaDefNode, FuncCallNode, ReturnNode,
     ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
 from neko.errors import ParseError
@@ -230,6 +230,49 @@ class TestParserErrors(unittest.TestCase):
     def test_unexpected_token(self):
         with self.assertRaises(ParseError):
             parse("(program test (begin (unknown 1)))")
+
+
+class TestParserLambda(unittest.TestCase):
+    def test_lambda_definition(self):
+        ast = parse(
+            "(program t (var ((f (func (int) int)))) "
+            "(begin (:= f (lambda ((x int)) int (return (* x 2))))))"
+        )
+        assign = ast.block.body.statements[0]
+        self.assertIsInstance(assign, AssignNode)
+        self.assertIsInstance(assign.value, LambdaDefNode)
+        lam = assign.value
+        self.assertEqual(lam.params, [("x", "int")])
+        self.assertEqual(lam.return_type, "int")
+        self.assertIsInstance(lam.body, ReturnNode)
+
+    def test_lambda_two_params(self):
+        ast = parse(
+            "(program t (var ((f (func (int int) int)))) "
+            "(begin (:= f (lambda ((a int) (b int)) int (return (+ a b))))))"
+        )
+        lam = ast.block.body.statements[0].value
+        self.assertIsInstance(lam, LambdaDefNode)
+        self.assertEqual(len(lam.params), 2)
+        self.assertEqual(lam.params[0], ("a", "int"))
+        self.assertEqual(lam.params[1], ("b", "int"))
+
+    def test_func_type_in_var(self):
+        ast = parse(
+            "(program t (var ((f (func (int) int)))) (begin (:= f 0)))"
+        )
+        decl = ast.block.var_decls[0]
+        self.assertEqual(decl.variables[0], ("f", "(func (int) int)"))
+
+    def test_func_type_in_param(self):
+        ast = parse(
+            "(program t (begin "
+            "(function apply ((f (func (int) int)) (x int)) int (return (f x))) "
+            "(:= x 1)))"
+        )
+        func = ast.block.body.statements[0]
+        self.assertIsInstance(func, FuncDefNode)
+        self.assertEqual(func.params[0], ("f", "(func (int) int)"))
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
-    FuncDefNode, FuncCallNode, ReturnNode,
+    FuncDefNode, LambdaDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
     ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
@@ -70,6 +70,40 @@ class Parser:
         body = self._parse_begin_block()
         return BlockNode(var_decls=var_decls, body=body)
 
+    def _parse_type(self) -> str:
+        """Parse a type: int, float, char, bool, (array ...), or (func ...)."""
+        tok = self._current()
+        if tok.type == TokenType.LPAREN:
+            self._advance()  # consume '('
+            kw = self._current()
+            if kw.type == TokenType.ARRAY:
+                self._advance()
+                elem_type = self._advance().value
+                size_tok = self._expect(TokenType.INTEGER)
+                self._expect(TokenType.RPAREN)
+                return f"(array {elem_type} {size_tok.value})"
+            elif kw.type == TokenType.LAMBDA or kw.value == "func":
+                self._advance()
+                # (func (param_types...) return_type)
+                self._expect(TokenType.LPAREN)  # param type list
+                param_types = []
+                while self._current().type != TokenType.RPAREN:
+                    param_types.append(self._parse_type())
+                self._expect(TokenType.RPAREN)  # close param type list
+                ret_type = self._parse_type()
+                self._expect(TokenType.RPAREN)  # close (func ...)
+                params_str = " ".join(param_types)
+                return f"(func ({params_str}) {ret_type})"
+            else:
+                src = self.source_lines[tok.line - 1] if 0 < tok.line <= len(self.source_lines) else ""
+                raise ParseError(
+                    f"未知的类型括号: {kw.value!r}",
+                    line=kw.line, column=kw.column,
+                    source_line=src
+                )
+        else:
+            return self._advance().value
+
     def _parse_var_decl(self) -> VarDeclNode:
         tok = self._current()
         self._expect(TokenType.LPAREN)
@@ -80,27 +114,7 @@ class Parser:
         while self._current().type == TokenType.LPAREN:
             self._advance()  # consume '('
             name_tok = self._expect(TokenType.IDENTIFIER)
-            type_tok = self._advance()  # type keyword or '(' for array
-            type_name = type_tok.value
-
-            # Handle array type: (array int 10) or ((array int 10)).
-            if type_tok.type == TokenType.LPAREN:
-                # Parenthesized type like (array int 10).
-                inner = self._advance()
-                if inner.type == TokenType.ARRAY:
-                    elem_type_tok = self._advance()
-                    elem_type = elem_type_tok.value
-                    size_tok = self._expect(TokenType.INTEGER)
-                    type_name = f"(array {elem_type} {size_tok.value})"
-                    self._expect(TokenType.RPAREN)  # close (array ...)
-                else:
-                    type_name = inner.value
-            elif type_tok.type == TokenType.ARRAY:
-                elem_type_tok = self._advance()
-                elem_type = elem_type_tok.value
-                size_tok = self._expect(TokenType.INTEGER)
-                type_name = f"(array {elem_type} {size_tok.value})"
-
+            type_name = self._parse_type()
             self._expect(TokenType.RPAREN)
             variables.append((name_tok.value, type_name))
 
@@ -197,11 +211,11 @@ class Parser:
         while self._current().type == TokenType.LPAREN:
             self._advance()
             p_name = self._expect(TokenType.IDENTIFIER).value
-            p_type = self._advance().value
+            p_type = self._parse_type()
             self._expect(TokenType.RPAREN)
             params.append((p_name, p_type))
         self._expect(TokenType.RPAREN)  # close param list
-        return_type = self._advance().value
+        return_type = self._parse_type()
         body = self._parse_statement()
         self._expect(TokenType.RPAREN)
         return FuncDefNode(name=name_tok.value, params=params,
@@ -250,11 +264,31 @@ class Parser:
         self._expect(TokenType.RPAREN)
         return RandomSeedNode(seed=seed, line=tok.line, column=tok.column)
 
+    def _parse_lambda(self) -> LambdaDefNode:
+        tok = self._advance()  # consume 'lambda'
+        self._expect(TokenType.LPAREN)  # param list
+        params = []
+        while self._current().type == TokenType.LPAREN:
+            self._advance()
+            p_name = self._expect(TokenType.IDENTIFIER).value
+            p_type = self._parse_type()
+            self._expect(TokenType.RPAREN)
+            params.append((p_name, p_type))
+        self._expect(TokenType.RPAREN)  # close param list
+        return_type = self._parse_type()
+        body = self._parse_statement()
+        self._expect(TokenType.RPAREN)
+        return LambdaDefNode(params=params, return_type=return_type, body=body,
+                             line=tok.line, column=tok.column)
+
     def _parse_expression(self) -> ASTNode:
         tok = self._current()
         if tok.type == TokenType.LPAREN:
             self._advance()  # consume '('
             op_tok = self._current()
+            if op_tok.type == TokenType.LAMBDA:
+                # _parse_lambda expects to be at 'lambda' (after '(' already consumed)
+                return self._parse_lambda()
             if op_tok.type == TokenType.ARGC:
                 self._advance()
                 self._expect(TokenType.RPAREN)

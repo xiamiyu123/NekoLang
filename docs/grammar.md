@@ -13,6 +13,7 @@
 
 <type>          ::= "int" | "float" | "char" | "bool"
                   | "(" "array" <type> <integer> ")"
+                  | "(" "func" "(" { <type> } ")" <type> ")"
 
 <begin-block>     ::= "(" "begin" { <statement> } ")"
 
@@ -38,6 +39,8 @@
 
 <func-def>      ::= "(" "function" <identifier> "(" { <param> } ")" <type> <statement> ")"
 
+<lambda-def>    ::= "(" "lambda" "(" { <param> } ")" <type> <statement> ")"
+
 <return-stmt>   ::= "(" "return" <expression> ")"
 
 <param>         ::= "(" <identifier> <type> ")"
@@ -55,6 +58,7 @@
                   | <string>
                   | <binop-expr>
                   | <func-call>
+                  | <lambda-def>
                   | <argc-expr>
                   | <argv-expr>
                   | <stdin-input>
@@ -159,6 +163,7 @@
 | 33 | `write-float` | WRITE_FLOAT | 写浮点文件 |
 | 34 | `write-char` | WRITE_CHAR | 写字符文件 |
 | 35 | `write-bool` | WRITE_BOOL | 写布尔文件 |
+| 36 | `lambda` | LAMBDA | lambda 表达式 |
 
 ## 四、个性化关键字别名
 
@@ -177,7 +182,7 @@
 | `meow-arr` | ARRAY_SET | `array-set` | 数组赋值 |
 | `purr-arr` | ARRAY_PRINT | `array-print` | 数组输出 |
 
-类型关键字没有别名，只支持 `int`、`float`、`char`、`bool`。
+类型关键字和 `lambda` 没有别名。类型只支持 `int`、`float`、`char`、`bool`，函数类型使用 `(func ...)` 表示。
 
 ## 五、界符表
 
@@ -202,8 +207,8 @@
 | 字段 | 含义 | 示例 |
 |------|------|------|
 | NAME | 标识符名 | `a`, `b` |
-| TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `(array int 10)` |
-| CAT | 类别 | `v`(变量), `c`(常量), `f`(函数) |
+| TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `(array int 10)`, `(func (int) int)` |
+| CAT | 类别 | `v`(变量), `c`(常量), `f`(函数/lambda) |
 | ADDR | 地址偏移 | 0, 4, 8 |
 
 ## 七、四元式格式
@@ -229,6 +234,7 @@
 | `(rand-range, low, high, temp)` | 生成闭区间整数随机数 |
 | `(read-int, path, _, temp)` | 从文件读取整数 |
 | `(write-int, path, value, _)` | 将整数写入文件 |
+| `(lambda_ref, name, _, temp)` | 获取 lambda 函数指针 |
 
 地址命名：变量=`I{n}`, 常量=`C{n}`, 临时变量=`T{n}`, 标签=`L{n}`
 

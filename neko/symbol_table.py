@@ -37,7 +37,9 @@ class SymbolTable:
 
         # Calculate size
         size = TYPE_SIZES.get(type_, 4)
-        if type_.startswith("(array"):
+        if type_.startswith("(func"):
+            size = 8
+        elif type_.startswith("(array"):
             # Parse array type: (array int 10)
             parts = type_.split()
             elem_type = parts[1] if len(parts) > 1 else "int"

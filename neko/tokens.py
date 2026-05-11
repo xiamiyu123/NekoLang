@@ -27,6 +27,9 @@ class TokenType(Enum):
     KW_CHAR = "char"
     KW_BOOL = "bool"
 
+    # Lambda
+    LAMBDA = "lambda"
+
     # Array keyword
     ARRAY = "array"
 
@@ -105,6 +108,7 @@ KEYWORDS: dict[str, TokenType] = {
     "bool": TokenType.KW_BOOL,
     "true": TokenType.BOOLEAN,
     "false": TokenType.BOOLEAN,
+    "lambda": TokenType.LAMBDA,
     "array": TokenType.ARRAY,
     "neko-box": TokenType.ARRAY,
     "array-set": TokenType.ARRAY_SET,
@@ -155,4 +159,5 @@ TYPE_SIZES: dict[str, int] = {
     "float": 8,
     "char": 1,
     "bool": 1,
+    "func": 8,
 }

@@ -123,6 +123,16 @@ class FuncDefNode(ASTNode):
 
 
 @dataclass
+class LambdaDefNode(ASTNode):
+    name: str = ""
+    params: list[tuple[str, str]] = field(default_factory=list)
+    return_type: str = ""
+    body: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
 class FuncCallNode(ASTNode):
     name: str = ""
     args: list[ASTNode] = field(default_factory=list)
@@ -277,6 +287,11 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
     elif isinstance(node, FuncDefNode):
         params_str = ", ".join(f"({n}:{t})" for n, t in node.params)
         result = f"{prefix}FuncDef({node.name}, [{params_str}], {node.return_type})\n"
+        result += dump_ast(node.body, indent + 1)
+        return result
+    elif isinstance(node, LambdaDefNode):
+        params_str = ", ".join(f"({n}:{t})" for n, t in node.params)
+        result = f"{prefix}Lambda({node.name}, [{params_str}], {node.return_type})\n"
         result += dump_ast(node.body, indent + 1)
         return result
     elif isinstance(node, FuncCallNode):

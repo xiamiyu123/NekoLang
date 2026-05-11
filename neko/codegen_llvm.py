@@ -7,7 +7,7 @@ from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
-    FuncDefNode, FuncCallNode, ReturnNode,
+    FuncDefNode, LambdaDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
     ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
@@ -45,7 +45,20 @@ def _llvm_type(type_str: str) -> ir.Type:
         elem_type = TYPE_MAP.get(parts[1], ir.IntType(32))
         count = int(parts[2])
         return ir.ArrayType(elem_type, count)
+    if type_str.startswith("(func"):
+        return ir.IntType(8).as_pointer()
     return ir.IntType(32)
+
+
+def _parse_func_type_str(type_str: str) -> tuple[list[str], str]:
+    """Parse '(func (p1 p2 ...) ret)' into (param_types, return_type)."""
+    inner = type_str[len("(func "):-1]
+    paren_start = inner.index("(")
+    paren_end = inner.index(")")
+    param_str = inner[paren_start + 1:paren_end].strip()
+    param_types = param_str.split() if param_str else []
+    ret_type = inner[paren_end + 1:].strip()
+    return param_types, ret_type
 
 
 class LLVMCodegen:
@@ -174,6 +187,11 @@ class LLVMCodegen:
             if isinstance(stmt, FuncDefNode):
                 found.setdefault(stmt.name, stmt)
                 walk(stmt.body)
+            elif isinstance(stmt, LambdaDefNode):
+                found.setdefault(stmt.name, stmt)
+                walk(stmt.body)
+            elif isinstance(stmt, AssignNode):
+                walk(stmt.value)
             elif isinstance(stmt, BeginBlockNode):
                 for inner in stmt.statements:
                     walk(inner)
@@ -197,7 +215,7 @@ class LLVMCodegen:
         for node in self.function_nodes.values():
             self._gen_function(node)
 
-    def _gen_function(self, node: FuncDefNode):
+    def _gen_function(self, node: FuncDefNode | LambdaDefNode):
         func = self.module.globals[node.name]
         entry = func.append_basic_block(name="entry")
         saved_builder = self.builder
@@ -272,7 +290,7 @@ class LLVMCodegen:
             self._gen_print(node)
         elif isinstance(node, BeginBlockNode):
             self._gen_begin_block(node)
-        elif isinstance(node, FuncDefNode):
+        elif isinstance(node, (FuncDefNode, LambdaDefNode)):
             return
         elif isinstance(node, ReturnNode):
             self._gen_return(node)
@@ -396,12 +414,21 @@ class LLVMCodegen:
         if isinstance(node, StringLiteralNode):
             return self._string_constant(node.value)
         if isinstance(node, IdentifierNode):
+            # Check if it's a function name used as a value
+            if node.name in self.module.globals:
+                func = self.module.globals[node.name]
+                return self.builder.bitcast(func, ir.IntType(8).as_pointer())
             alloca = self.named_values.get(node.name)
             if alloca is None:
                 raise RuntimeError(f"Undefined variable: {node.name}")
             return self.builder.load(alloca, name=node.name)
         if isinstance(node, BinOpNode):
             return self._gen_binop(node)
+        if isinstance(node, LambdaDefNode):
+            func = self.module.globals.get(node.name)
+            if func is None:
+                raise RuntimeError(f"Undefined lambda: {node.name}")
+            return self.builder.bitcast(func, ir.IntType(8).as_pointer())
         if isinstance(node, FuncCallNode):
             return self._gen_func_call(node)
         if isinstance(node, ArrayAccessNode):
@@ -463,13 +490,33 @@ class LLVMCodegen:
 
     def _gen_func_call(self, node: FuncCallNode) -> ir.Value:
         func = self.module.globals.get(node.name)
-        if func is None:
+        if func is not None:
+            # Direct call
+            func_node = self.function_nodes.get(node.name)
+            args = []
+            for arg_value, (_, type_str) in zip((self._gen_expression(arg) for arg in node.args), func_node.params):
+                args.append(self._coerce_value(arg_value, type_str))
+            return self.builder.call(func, args, name="calltmp")
+
+        # Indirect call: load function pointer from variable
+        alloca = self.named_values.get(node.name)
+        if alloca is None:
             raise RuntimeError(f"Undefined function: {node.name}")
-        func_node = self.function_nodes.get(node.name)
+        var_type = self.var_types.get(node.name, "")
+        if not var_type.startswith("(func"):
+            raise RuntimeError(f"Variable '{node.name}' is not a function pointer")
+
+        param_types, ret_type = _parse_func_type_str(var_type)
+        func_ptr = self.builder.load(alloca, name=f"{node.name}.fptr")
+        ret_llvm_ty = _llvm_type(ret_type)
+        param_llvm_tys = [_llvm_type(p) for p in param_types]
+        concrete_func_ty = ir.FunctionType(ret_llvm_ty, param_llvm_tys)
+        casted = self.builder.bitcast(func_ptr, concrete_func_ty.as_pointer())
+
         args = []
-        for arg_value, (_, type_str) in zip((self._gen_expression(arg) for arg in node.args), func_node.params):
-            args.append(self._coerce_value(arg_value, type_str))
-        return self.builder.call(func, args, name="calltmp")
+        for arg_value, expected_type in zip((self._gen_expression(arg) for arg in node.args), param_types):
+            args.append(self._coerce_value(arg_value, expected_type))
+        return self.builder.call(casted, args, name="calltmp")
 
     def _gen_array_access(self, node: ArrayAccessNode) -> ir.Value:
         alloca = self.named_values.get(node.name)
@@ -519,6 +566,8 @@ class LLVMCodegen:
         llvm_type = _llvm_type(type_str)
         if llvm_type == ir.DoubleType():
             return ir.Constant(llvm_type, 0.0)
+        if isinstance(llvm_type, ir.PointerType):
+            return ir.Constant(llvm_type, None)
         return ir.Constant(llvm_type, 0)
 
     def _array_element_type(self, type_str: str) -> str:

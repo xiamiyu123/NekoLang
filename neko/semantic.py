@@ -4,7 +4,7 @@ from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
-    FuncDefNode, FuncCallNode, ReturnNode,
+    FuncDefNode, LambdaDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
     ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
@@ -49,6 +49,7 @@ class SemanticAnalyzer:
         self.current_function_name: str | None = None
         self.current_function_return_type: str | None = None
         self.current_function_has_return = False
+        self.lambda_counter: int = 0
 
     def set_source(self, source: str):
         self.source_lines = source.splitlines()
@@ -97,9 +98,23 @@ class SemanticAnalyzer:
             self._collect_function_definitions(node.body)
             return
 
+        if isinstance(node, LambdaDefNode):
+            self.lambda_counter += 1
+            node.name = f"__lambda_{self.lambda_counter}"
+            func_type = f"(func ({' '.join(t for _, t in node.params)}) {node.return_type})"
+            self.symbol_table.enter(node.name, func_type, "f")
+            self.function_signatures[node.name] = FunctionSignature(
+                param_types=[type_ for _, type_ in node.params],
+                return_type=node.return_type,
+            )
+            self._collect_function_definitions(node.body)
+            return
+
         if isinstance(node, BeginBlockNode):
             for stmt in node.statements:
                 self._collect_function_definitions(stmt)
+        elif isinstance(node, AssignNode):
+            self._collect_function_definitions(node.value)
         elif isinstance(node, IfNode):
             self._collect_function_definitions(node.then_branch)
             self._collect_function_definitions(node.else_branch)
@@ -205,6 +220,45 @@ class SemanticAnalyzer:
             return
         seed_addr = self._analyze_expression(node.seed)
         self._emit("rand-seed", seed_addr, "_", "_")
+
+    def _parse_func_type(self, type_str: str) -> FunctionSignature | None:
+        """Parse '(func (p1 p2 ...) ret)' into a FunctionSignature."""
+        if not type_str.startswith("(func"):
+            return None
+        inner = type_str[len("(func "):-1]  # strip "(func " and ")"
+        paren_start = inner.index("(")
+        paren_end = inner.index(")")
+        param_str = inner[paren_start + 1:paren_end].strip()
+        param_types = param_str.split() if param_str else []
+        ret_type = inner[paren_end + 1:].strip()
+        return FunctionSignature(param_types=param_types, return_type=ret_type)
+
+    def _analyze_lambda_def(self, node: LambdaDefNode) -> str:
+        previous_name = self.current_function_name
+        previous_return_type = self.current_function_return_type
+        previous_has_return = self.current_function_has_return
+
+        self.current_function_name = node.name
+        self.current_function_return_type = node.return_type
+        self.current_function_has_return = False
+        self.symbol_table.push_scope()
+
+        for param_name, param_type in node.params:
+            if self.symbol_table.lookup_current(param_name):
+                self._error(node, f"参数 '{param_name}' 已经声明过了", "duplicate_var")
+            else:
+                self.symbol_table.enter(param_name, param_type, "p")
+
+        self._analyze_statement(node.body)
+
+        if not self.current_function_has_return:
+            self._error(node, f"lambda 缺少 return 语句")
+
+        self.symbol_table.pop_scope()
+        self.current_function_name = previous_name
+        self.current_function_return_type = previous_return_type
+        self.current_function_has_return = previous_has_return
+        return node.name
 
     def _analyze_func_def(self, node: FuncDefNode):
         previous_name = self.current_function_name
@@ -348,8 +402,22 @@ class SemanticAnalyzer:
             temp = self.symbol_table.alloc_temp()
             self._emit(node.op, left_addr, right_addr, temp)
             return temp
+        if isinstance(node, LambdaDefNode):
+            self._analyze_lambda_def(node)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("lambda_ref", node.name, "_", temp)
+            return temp
         if isinstance(node, FuncCallNode):
             signature = self.function_signatures.get(node.name)
+
+            # Indirect call: name is a variable holding a function pointer
+            if not signature:
+                entry = self.symbol_table.lookup(node.name)
+                if entry and entry.type.startswith("(func"):
+                    sig = self._parse_func_type(entry.type)
+                    if sig:
+                        signature = sig
+
             if not signature:
                 self._error(node, f"未定义的函数 '{node.name}'", "undefined_var")
                 return "_"
@@ -447,10 +515,25 @@ class SemanticAnalyzer:
             return "string"
         if isinstance(node, IdentifierNode):
             entry = self.symbol_table.lookup(node.name)
-            return entry.type if entry else None
+            if entry:
+                if entry.cat == "f" and entry.name in self.function_signatures:
+                    sig = self.function_signatures[entry.name]
+                    return f"(func ({' '.join(sig.param_types)}) {sig.return_type})"
+                return entry.type
+            return None
+        if isinstance(node, LambdaDefNode):
+            return f"(func ({' '.join(t for _, t in node.params)}) {node.return_type})"
         if isinstance(node, FuncCallNode):
             signature = self.function_signatures.get(node.name)
-            return signature.return_type if signature else None
+            if signature:
+                return signature.return_type
+            # Indirect call: check variable type
+            entry = self.symbol_table.lookup(node.name)
+            if entry and entry.type.startswith("(func"):
+                sig = self._parse_func_type(entry.type)
+                if sig:
+                    return sig.return_type
+            return None
         if isinstance(node, ArrayAccessNode):
             entry = self.symbol_table.lookup(node.name)
             if entry and entry.type.startswith("(array"):

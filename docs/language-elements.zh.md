@@ -487,7 +487,113 @@ LLVM 生成器在必要时会补一个默认返回值，保证 IR 完整，但�
 
 这点和 C、Java、Python 比较接近。
 
-## 12. 综合示例
+## 12. Lambda 表达式 `lambda`
+
+### 作用
+
+`lambda` 用于定义匿名函数，可以赋值给变量或作为参数传递。
+
+```scheme
+(lambda ((x int)) int (return (* x 2)))
+```
+
+结构与 `function` 类似，但没有函数名：
+
+- 参数列表
+- 返回类型
+- 函数体
+
+### 函数类型 `(func ...)`
+
+要用变量保存函数，需要在 `var` 声明中使用 `(func ...)` 类型：
+
+```scheme
+(nyan ((double (func (int) int))))
+```
+
+`(func (int) int)` 表示"接受一个 `int` 参数、返回 `int` 的函数"。  
+`(func (int int) int)` 表示"接受两个 `int` 参数、返回 `int` 的函数"。
+
+### 赋值与调用
+
+Lambda 和命名函数都可以赋给 `(func ...)` 类型的变量：
+
+```scheme
+; Lambda 赋值
+(:= double (lambda ((n int)) int (return (* n 2))))
+(:= r (double 5))  ; r = 10
+
+; 命名函数作为值
+(function square ((n int)) int (return (* n n)))
+(:= f square)
+(:= r (f 6))  ; r = 36
+```
+
+### 高阶函数
+
+函数参数可以使用 `(func ...)` 类型，实现高阶函数：
+
+```scheme
+(function apply ((g (func (int) int)) (x int)) int
+  (return (g x)))
+
+(:= result (apply double 5))  ; result = 10
+```
+
+### 设计原理
+
+Lambda 使函数成为一等公民：
+
+- 可以赋值给变量
+- 可以作为参数传递给其他函数
+- 可以从函数中返回
+
+当前实现不支持闭包——lambda 只能访问自己的参数，不能引用外部变量。
+
+### 示例
+
+```scheme
+(nya lambda_demo
+  (nyan ((double (func (int) int))
+         (add (func (int int) int))
+         (f (func (int) int))
+         (result int)))
+  (paw
+    (:= double (lambda ((n int)) int (return (* n 2))))
+
+    (function apply ((g (func (int) int)) (x int)) int
+      (return (g x)))
+    (function apply2 ((g (func (int int) int)) (a int) (b int)) int
+      (return (g a b)))
+    (function square ((n int)) int (return (* n n)))
+
+    (:= result (apply double 5))
+    (meow result)
+
+    (:= add (lambda ((a int) (b int)) int (return (+ a b))))
+    (:= result (apply2 add 3 4))
+    (meow result)
+
+    (:= f square)
+    (:= result (apply f 6))
+    (meow result)))
+```
+
+输出：
+
+```
+10
+7
+36
+```
+
+### 与主流语言区别
+
+- 和 Scheme `lambda` 类似：匿名函数定义
+- 和 C 函数指针类似：显式类型声明，不支持闭包
+- 和 Python `lambda` 不同：支持多条语句和显式 return
+
+## 13. 综合示例
 
 ```scheme
 (nya full_walkthrough
@@ -533,7 +639,7 @@ LLVM 生成器在必要时会补一个默认返回值，保证 IR 完整，但�
 - 布尔值和条件分支
 - 输出与返回值相关逻辑
 
-## 13. 使用建议
+## 14. 使用建议
 
 - 教学示例里优先使用个性化命名，体现 NekoLang 的辨识度
 - 条件尽量写成比较表达式或布尔变量，避免依赖数值真值

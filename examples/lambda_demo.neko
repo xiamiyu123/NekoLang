@@ -1,0 +1,33 @@
+; lambda_demo - Lambda expression examples
+(nya lambda_demo
+  (nyan ((double (func (int) int))
+         (add (func (int int) int))
+         (f (func (int) int))
+         (result int)))
+  (paw
+    ; Lambda assigned to a variable
+    (:= double (lambda ((n int)) int (return (* n 2))))
+    (:= result (apply double 5))
+    (meow result)
+
+    ; Lambda with multiple parameters
+    (:= add (lambda ((a int) (b int)) int (return (+ a b))))
+    (:= result (apply2 add 3 4))
+    (meow result)
+
+    ; Named function used as a value
+    (:= f square)
+    (:= result (apply f 6))
+    (meow result)
+
+    ; Higher-order function: takes a (int)->int function
+    (function apply ((g (func (int) int)) (x int)) int
+      (return (g x)))
+
+    ; Higher-order function: takes a (int int)->int function
+    (function apply2 ((g (func (int int) int)) (a int) (b int)) int
+      (return (g a b)))
+
+    ; Named function
+    (function square ((n int)) int
+      (return (* n n)))))

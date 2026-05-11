@@ -18,6 +18,8 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `(print expr)` | `print(expr)` | 输出 |
 | `(print "你好")` | `print("你好")` | 输出字符串字面量 |
 | `(function add ((a int)) int ...)` | 函数定义 | 支持参数和返回值 |
+| `(lambda ((x int)) int ...)` | lambda 表达式 | 匿名函数，可赋值或传递 |
+| `(func (int int) int)` | 函数类型 | 函数指针类型，用于高阶函数 |
 | `(return expr)` | `return expr` | 函数返回 |
 | `(argc)` | `argc` | 用户命令行参数个数 |
 | `(argv-int 0)` | `argv[0]` | 读取并解析第一个命令行参数 |
@@ -126,6 +128,30 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
     (meow solved)))
 ```
 
+```scheme
+; Lambda 与高阶函数示例
+(nya lambda_demo
+  (nyan ((double (func (int) int))
+         (add (func (int int) int))
+         (f (func (int) int))
+         (result int)))
+  (paw
+    (:= double (lambda ((n int)) int (return (* n 2))))
+    (function apply ((g (func (int) int)) (x int)) int
+      (return (g x)))
+    (function apply2 ((g (func (int int) int)) (a int) (b int)) int
+      (return (g a b)))
+    (function square ((n int)) int (return (* n n)))
+    (:= result (apply double 5))
+    (meow result)
+    (:= add (lambda ((a int) (b int)) int (return (+ a b))))
+    (:= result (apply2 add 3 4))
+    (meow result)
+    (:= f square)
+    (:= result (apply f 6))
+    (meow result)))
+```
+
 ## 项目管理 (nekgo)
 
 ```bash
@@ -179,6 +205,9 @@ python neko.py run examples/random_demo.neko
 
 # 猜数字示例：30 太小，50 太大，42 猜中
 python neko.py run examples/guess_number.neko -- 30 50 42
+
+# Lambda 与高阶函数示例
+python neko.py run examples/lambda_demo.neko
 
 # 仅输出 AST
 python neko.py ast examples/demo.neko

@@ -181,6 +181,45 @@ class TestSemanticErrors(unittest.TestCase):
         self.assertGreater(len(analyzer.errors), 0)
         self.assertIn("rand-range", analyzer.errors[0].message)
 
+    def test_lambda_missing_return(self):
+        analyzer = compile_source(
+            "(program t (var ((f (func (int) int)))) "
+            "(begin (:= f (lambda ((x int)) int (print x)))))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("lambda", analyzer.errors[0].message)
+
+    def test_lambda_type_mismatch(self):
+        analyzer = compile_source(
+            "(program t (var ((f (func (int int) int)))) "
+            "(begin (:= f (lambda ((x int)) int (return x)))))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("类型", analyzer.errors[0].message)
+
+    def test_function_as_value_type_check(self):
+        analyzer = compile_source(
+            "(program t (var ((f (func (int) int)))) "
+            "(begin "
+            "(function double ((n int)) int (return (* n 2))) "
+            "(:= f double)))"
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+
+
+class TestLambdaQuadruples(unittest.TestCase):
+    def test_lambda_quadruples(self):
+        analyzer = compile_source(
+            "(program t (var ((f (func (int) int)) (r int))) "
+            "(begin "
+            "(:= f (lambda ((x int)) int (return (* x 2)))) "
+            "(:= r (f 5))))"
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("return", ops)
+        self.assertIn("lambda_ref", ops)
+        self.assertIn("call", ops)
+
 
 class TestAddressNaming(unittest.TestCase):
     def test_variable_addresses(self):

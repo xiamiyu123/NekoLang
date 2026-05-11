@@ -478,7 +478,113 @@ That means it can appear inside larger expressions:
 
 This is close to the expression model in C, Java, and Python.
 
-## 12. Combined Example
+## 12. Lambda Expressions: `lambda`
+
+### Purpose
+
+`lambda` defines an anonymous function. It can be assigned to a variable or passed as an argument.
+
+```scheme
+(lambda ((x int)) int (return (* x 2)))
+```
+
+The structure is similar to `function`, but without a name:
+
+- parameter list
+- return type
+- function body
+
+### Function Type: `(func ...)`
+
+To store a function in a variable, use the `(func ...)` type in a `var` declaration:
+
+```scheme
+(nyan ((double (func (int) int))))
+```
+
+`(func (int) int)` means "a function that takes one `int` and returns `int`".
+`(func (int int) int)` means "a function that takes two `int`s and returns `int`".
+
+### Assignment and Calling
+
+Both lambdas and named functions can be assigned to `(func ...)` variables:
+
+```scheme
+; Lambda assignment
+(:= double (lambda ((n int)) int (return (* n 2))))
+(:= r (double 5))  ; r = 10
+
+; Named function as a value
+(function square ((n int)) int (return (* n n)))
+(:= f square)
+(:= r (f 6))  ; r = 36
+```
+
+### Higher-Order Functions
+
+Function parameters can use `(func ...)` types to implement higher-order functions:
+
+```scheme
+(function apply ((g (func (int) int)) (x int)) int
+  (return (g x)))
+
+(:= result (apply double 5))  ; result = 10
+```
+
+### Design Principle
+
+Lambda makes functions first-class citizens:
+
+- they can be assigned to variables
+- they can be passed as arguments to other functions
+- they can be returned from functions
+
+The current implementation does not support closures — a lambda can only access its own parameters, not outer variables.
+
+### Example
+
+```scheme
+(nya lambda_demo
+  (nyan ((double (func (int) int))
+         (add (func (int int) int))
+         (f (func (int) int))
+         (result int)))
+  (paw
+    (:= double (lambda ((n int)) int (return (* n 2))))
+
+    (function apply ((g (func (int) int)) (x int)) int
+      (return (g x)))
+    (function apply2 ((g (func (int int) int)) (a int) (b int)) int
+      (return (g a b)))
+    (function square ((n int)) int (return (* n n)))
+
+    (:= result (apply double 5))
+    (meow result)
+
+    (:= add (lambda ((a int) (b int)) int (return (+ a b))))
+    (:= result (apply2 add 3 4))
+    (meow result)
+
+    (:= f square)
+    (:= result (apply f 6))
+    (meow result)))
+```
+
+Output:
+
+```
+10
+7
+36
+```
+
+### Difference from Mainstream Languages
+
+- Similar to Scheme `lambda`: anonymous function definition
+- Similar to C function pointers: explicit type declarations, no closure support
+- Unlike Python `lambda`: supports multiple statements and explicit return
+
+## 13. Combined Example
 
 ```scheme
 (nya full_walkthrough
@@ -524,7 +630,7 @@ This example shows:
 - booleans and conditional branching
 - output and return-related logic
 
-## 13. Writing Advice
+## 14. Writing Advice
 
 - Prefer personalized aliases in teaching examples to preserve NekoLang's identity
 - Write conditions as comparisons or boolean variables instead of relying on numeric truthiness

@@ -541,5 +541,76 @@ class TestIntegrationPrograms(unittest.TestCase):
         self.assertEqual(output, "23")
 
 
+class TestLambda(unittest.TestCase):
+    """Test lambda expressions and function pointers."""
+
+    def test_lambda_basic(self):
+        source = """(program t
+          (var ((f (func (int) int)) (r int)))
+          (begin
+            (:= f (lambda ((x int)) int (return (* x 2))))
+            (:= r (f 5))
+            (print r)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "10")
+
+    def test_lambda_two_params(self):
+        source = """(program t
+          (var ((f (func (int int) int)) (r int)))
+          (begin
+            (:= f (lambda ((a int) (b int)) int (return (+ a b))))
+            (:= r (f 3 4))
+            (print r)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "7")
+
+    def test_lambda_as_argument(self):
+        source = """(program t
+          (var ((f (func (int) int)) (r int)))
+          (begin
+            (function apply ((g (func (int) int)) (x int)) int
+              (return (g x)))
+            (:= f (lambda ((n int)) int (return (* n 3))))
+            (:= r (apply f 4))
+            (print r)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "12")
+
+    def test_named_function_as_value(self):
+        source = """(program t
+          (var ((f (func (int) int)) (r int)))
+          (begin
+            (function square ((n int)) int (return (* n n)))
+            (:= f square)
+            (:= r (f 6))
+            (print r)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "36")
+
+    def test_lambda_demo_example(self):
+        source = """(program t
+          (var ((double (func (int) int))
+                (add (func (int int) int))
+                (f (func (int) int))
+                (result int)))
+          (begin
+            (:= double (lambda ((n int)) int (return (* n 2))))
+            (function apply ((g (func (int) int)) (x int)) int
+              (return (g x)))
+            (function apply2 ((g (func (int int) int)) (a int) (b int)) int
+              (return (g a b)))
+            (function square ((n int)) int (return (* n n)))
+            (:= result (apply double 5))
+            (print result)
+            (:= add (lambda ((a int) (b int)) int (return (+ a b))))
+            (:= result (apply2 add 3 4))
+            (print result)
+            (:= f square)
+            (:= result (apply f 6))
+            (print result)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "10\n7\n36")
+
+
 if __name__ == "__main__":
     unittest.main()
