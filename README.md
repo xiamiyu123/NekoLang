@@ -16,11 +16,14 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `(if cond then else)` | `if cond then else` | 条件语句 |
 | `(while cond body)` | `while cond do body` | 循环语句 |
 | `(print expr)` | `print(expr)` | 输出 |
+| `(print "你好")` | `print("你好")` | 输出字符串字面量 |
 | `(function add ((a int)) int ...)` | 函数定义 | 支持参数和返回值 |
 | `(return expr)` | `return expr` | 函数返回 |
 | `(argc)` | `argc` | 用户命令行参数个数 |
 | `(argv-int 0)` | `argv[0]` | 读取并解析第一个命令行参数 |
 | `(input-int)` | 标准输入 | 从标准输入读取一个整数 |
+| `(rand-seed 42)` | 随机数 | 设置伪随机种子 |
+| `(rand-range 1 100)` | 随机数 | 生成闭区间整数随机数 |
 | `(read-int "in.txt")` | 文件输入 | 读取文件中的整数 |
 | `(write-int "out.txt" expr)` | 文件输出 | 将整数写入文件 |
 
@@ -87,6 +90,16 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 ```
 
 ```scheme
+; 随机数示例：固定种子后生成 [1, 100] 的整数
+(nya random_demo
+  (nyan ((value int)))
+  (paw
+    (rand-seed 42)
+    (:= value (rand-range 1 100))
+    (meow value)))
+```
+
+```scheme
 ; 猜数字：从命令行依次读取猜测值
 ; 1 表示太小，2 表示太大，0 表示猜中
 (nya guess_number
@@ -131,6 +144,9 @@ python neko.py run examples/runtime_demo.neko -- 41
 
 # 交互式输入示例：输入 10 20，输出 30
 printf '10 20\n' | python neko.py run examples/input_demo.neko
+
+# 随机数示例：固定种子后输出一个 1 到 100 之间的整数
+python neko.py run examples/random_demo.neko
 
 # 猜数字示例：30 太小，50 太大，42 猜中
 python neko.py run examples/guess_number.neko -- 30 50 42

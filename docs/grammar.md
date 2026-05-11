@@ -25,6 +25,7 @@
                   | <return-stmt>
                   | <array-assign>
                   | <array-print>
+                  | <rand-seed>
                   | <file-write>
 
 <assign-stmt>   ::= "(" ":=" <identifier> <expression> ")"
@@ -45,6 +46,8 @@
 
 <array-print>   ::= "(" "array-print" <identifier> <expression> ")"
 
+<rand-seed>     ::= "(" "rand-seed" <expression> ")"
+
 <file-write>    ::= "(" <write-op> <string> <expression> ")"
 
 <expression>    ::= <identifier>
@@ -55,6 +58,7 @@
                   | <argc-expr>
                   | <argv-expr>
                   | <stdin-input>
+                  | <rand-range>
                   | <file-read>
 
 <binop-expr>    ::= "(" <operator> <expression> <expression> ")"
@@ -66,6 +70,8 @@
 <argv-expr>     ::= "(" <argv-op> <expression> ")"
 
 <stdin-input>   ::= "(" <input-op> ")"
+
+<rand-range>    ::= "(" "rand-range" <expression> <expression> ")"
 
 <file-read>     ::= "(" <read-op> <string> ")"
 
@@ -143,14 +149,16 @@
 | 23 | `input-float` | INPUT_FLOAT | 从标准输入读取浮点数 |
 | 24 | `input-char` | INPUT_CHAR | 从标准输入读取字符 |
 | 25 | `input-bool` | INPUT_BOOL | 从标准输入读取布尔值 |
-| 26 | `read-int` | READ_INT | 读整数文件 |
-| 27 | `read-float` | READ_FLOAT | 读浮点文件 |
-| 28 | `read-char` | READ_CHAR | 读字符文件 |
-| 29 | `read-bool` | READ_BOOL | 读布尔文件 |
-| 30 | `write-int` | WRITE_INT | 写整数文件 |
-| 31 | `write-float` | WRITE_FLOAT | 写浮点文件 |
-| 32 | `write-char` | WRITE_CHAR | 写字符文件 |
-| 33 | `write-bool` | WRITE_BOOL | 写布尔文件 |
+| 26 | `rand-seed` | RAND_SEED | 设置伪随机种子 |
+| 27 | `rand-range` | RAND_RANGE | 生成闭区间整数随机数 |
+| 28 | `read-int` | READ_INT | 读整数文件 |
+| 29 | `read-float` | READ_FLOAT | 读浮点文件 |
+| 30 | `read-char` | READ_CHAR | 读字符文件 |
+| 31 | `read-bool` | READ_BOOL | 读布尔文件 |
+| 32 | `write-int` | WRITE_INT | 写整数文件 |
+| 33 | `write-float` | WRITE_FLOAT | 写浮点文件 |
+| 34 | `write-char` | WRITE_CHAR | 写字符文件 |
+| 35 | `write-bool` | WRITE_BOOL | 写布尔文件 |
 
 ## 四、个性化关键字别名
 
@@ -217,6 +225,8 @@
 | `(argc, _, _, temp)` | 读取用户参数个数 |
 | `(argv-int, idx, _, temp)` | 读取整数参数 |
 | `(input-int, _, _, temp)` | 从标准输入读取整数 |
+| `(rand-seed, seed, _, _)` | 设置伪随机种子 |
+| `(rand-range, low, high, temp)` | 生成闭区间整数随机数 |
 | `(read-int, path, _, temp)` | 从文件读取整数 |
 | `(write-int, path, value, _)` | 将整数写入文件 |
 

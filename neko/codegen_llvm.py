@@ -9,7 +9,7 @@ from .ast_nodes import (
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
-    ArgcNode, ArgvNode, InputNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
 
 
@@ -63,6 +63,7 @@ class LLVMCodegen:
         self.nekoprint_float: ir.Function | None = None
         self.nekoprint_char: ir.Function | None = None
         self.nekoprint_bool: ir.Function | None = None
+        self.nekoprint_string: ir.Function | None = None
         self.neko_argv_int: ir.Function | None = None
         self.neko_argv_float: ir.Function | None = None
         self.neko_argv_char: ir.Function | None = None
@@ -71,6 +72,8 @@ class LLVMCodegen:
         self.neko_input_float: ir.Function | None = None
         self.neko_input_char: ir.Function | None = None
         self.neko_input_bool: ir.Function | None = None
+        self.neko_rand_seed: ir.Function | None = None
+        self.neko_rand_range: ir.Function | None = None
         self.neko_read_int: ir.Function | None = None
         self.neko_read_float: ir.Function | None = None
         self.neko_read_char: ir.Function | None = None
@@ -104,6 +107,9 @@ class LLVMCodegen:
         self.nekoprint_bool = ir.Function(
             self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(1)]), name="nekoprint_bool"
         )
+        self.nekoprint_string = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(8).as_pointer()]), name="nekoprint_string"
+        )
         runtime_arg_types = [ir.IntType(32), ir.IntType(8).as_pointer().as_pointer(), ir.IntType(32)]
         self.neko_argv_int = ir.Function(
             self.module, ir.FunctionType(ir.IntType(32), runtime_arg_types), name="neko_argv_int"
@@ -128,6 +134,12 @@ class LLVMCodegen:
         )
         self.neko_input_bool = ir.Function(
             self.module, ir.FunctionType(ir.IntType(1), []), name="neko_input_bool"
+        )
+        self.neko_rand_seed = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(32)]), name="neko_rand_seed"
+        )
+        self.neko_rand_range = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), [ir.IntType(32), ir.IntType(32)]), name="neko_rand_range"
         )
         char_ptr = ir.IntType(8).as_pointer()
         self.neko_read_int = ir.Function(
@@ -270,6 +282,8 @@ class LLVMCodegen:
             self._gen_array_print(node)
         elif isinstance(node, FileWriteNode):
             self._gen_file_write(node)
+        elif isinstance(node, RandomSeedNode):
+            self._gen_rand_seed(node)
 
     def _gen_assign(self, node: AssignNode):
         val = self._gen_expression(node.value)
@@ -322,9 +336,15 @@ class LLVMCodegen:
     def _gen_print(self, node: PrintNode):
         self._gen_print_value(self._gen_expression(node.value))
 
+    def _gen_rand_seed(self, node: RandomSeedNode):
+        seed = self._coerce_value(self._gen_expression(node.seed), "int")
+        self.builder.call(self.neko_rand_seed, [seed])
+
     def _gen_print_value(self, val: ir.Value):
         if val.type == ir.DoubleType():
             self.builder.call(self.nekoprint_float, [val])
+        elif val.type == ir.IntType(8).as_pointer():
+            self.builder.call(self.nekoprint_string, [val])
         elif isinstance(val.type, ir.IntType) and val.type.width == 1:
             self.builder.call(self.nekoprint_bool, [val])
         elif isinstance(val.type, ir.IntType) and val.type.width == 8:
@@ -399,6 +419,10 @@ class LLVMCodegen:
         if isinstance(node, InputNode):
             reader = self._runtime_input_function(node.value_type)
             return self.builder.call(reader, [], name="inputtmp")
+        if isinstance(node, RandomRangeNode):
+            low = self._coerce_value(self._gen_expression(node.low), "int")
+            high = self._coerce_value(self._gen_expression(node.high), "int")
+            return self.builder.call(self.neko_rand_range, [low, high], name="randtmp")
         if isinstance(node, FileReadNode):
             path = self._coerce_string(self._gen_expression(node.path))
             reader = self._runtime_read_function(node.value_type)

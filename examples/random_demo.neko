@@ -1,0 +1,8 @@
+; NekoLang random demo
+; Seeds the generator and prints a value in [1, 100].
+(nya random_demo
+  (nyan ((value int)))
+  (paw
+    (rand-seed 42)
+    (:= value (rand-range 1 100))
+    (meow value)))

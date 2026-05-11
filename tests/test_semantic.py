@@ -129,6 +129,14 @@ class TestQuadruples(unittest.TestCase):
         self.assertIn("input-int", ops)
         self.assertIn("input-bool", ops)
 
+    def test_random_quadruples(self):
+        analyzer = compile_source(
+            "(program t (var ((x int))) (begin (rand-seed 7) (:= x (rand-range 1 6))))"
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("rand-seed", ops)
+        self.assertIn("rand-range", ops)
+
 
 class TestSemanticErrors(unittest.TestCase):
     def test_undefined_variable(self):
@@ -162,6 +170,16 @@ class TestSemanticErrors(unittest.TestCase):
         analyzer = compile_source("(program t (begin (write-int 1 2)))")
         self.assertGreater(len(analyzer.errors), 0)
         self.assertIn("文件路径", analyzer.errors[0].message)
+
+    def test_rand_seed_requires_int(self):
+        analyzer = compile_source("(program t (begin (rand-seed true)))")
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("rand-seed", analyzer.errors[0].message)
+
+    def test_rand_range_requires_int_bounds(self):
+        analyzer = compile_source("(program t (var ((x int))) (begin (:= x (rand-range 1 false))))")
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("rand-range", analyzer.errors[0].message)
 
 
 class TestAddressNaming(unittest.TestCase):

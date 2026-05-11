@@ -6,7 +6,7 @@ from neko.ast_nodes import (
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
     FuncDefNode, FuncCallNode, ReturnNode,
-    ArgcNode, ArgvNode, InputNode, FileReadNode, FileWriteNode,
+    ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
 )
 from neko.errors import ParseError
 
@@ -124,6 +124,11 @@ class TestParserExpressions(unittest.TestCase):
         self.assertIsInstance(expr, InputNode)
         self.assertEqual(expr.value_type, "int")
 
+    def test_rand_range_expression(self):
+        ast = parse("(program t (var ((x int))) (begin (:= x (rand-range 1 10))))")
+        expr = ast.block.body.statements[0].value
+        self.assertIsInstance(expr, RandomRangeNode)
+
 
 class TestParserIf(unittest.TestCase):
     def test_if_statement(self):
@@ -201,6 +206,11 @@ class TestParserRuntimeIO(unittest.TestCase):
         self.assertIsInstance(stmt, FileWriteNode)
         self.assertEqual(stmt.value_type, "int")
         self.assertIsInstance(stmt.path, StringLiteralNode)
+
+    def test_rand_seed_statement(self):
+        ast = parse("(program t (begin (rand-seed 123)))")
+        stmt = ast.block.body.statements[0]
+        self.assertIsInstance(stmt, RandomSeedNode)
 
 
 class TestParserBeginBlock(unittest.TestCase):

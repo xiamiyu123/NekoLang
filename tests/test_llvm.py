@@ -129,6 +129,11 @@ class TestIRGeneration(unittest.TestCase):
         ir = generate_ir("(program t (var ((x int))) (begin (:= x 42) (print x)))")
         self.assertIn('call void @"nekoprint_int"', ir)
 
+    def test_string_print_call(self):
+        ir = generate_ir('(program t (begin (print "你好")))')
+        self.assertIn('declare void @"nekoprint_string"', ir)
+        self.assertIn('call void @"nekoprint_string"', ir)
+
     def test_printf_declared(self):
         ir = generate_ir("(program t (begin (print 0)))")
         self.assertIn('declare void @"nekoprint_int"', ir)
@@ -161,6 +166,13 @@ class TestIRGeneration(unittest.TestCase):
         ir = generate_ir("(program t (var ((x int))) (begin (:= x (input-int))))")
         self.assertIn('declare i32 @"neko_input_int"', ir)
         self.assertIn('call i32 @"neko_input_int"', ir)
+
+    def test_random_runtime_declarations(self):
+        ir = generate_ir("(program t (var ((x int))) (begin (rand-seed 7) (:= x (rand-range 1 6))))")
+        self.assertIn('declare void @"neko_rand_seed"', ir)
+        self.assertIn('declare i32 @"neko_rand_range"', ir)
+        self.assertIn('call void @"neko_rand_seed"', ir)
+        self.assertIn('call i32 @"neko_rand_range"', ir)
 
 
 class TestBasicExecution(unittest.TestCase):
@@ -299,6 +311,10 @@ class TestBasicExecution(unittest.TestCase):
         )
         self.assertEqual(output, "x")
 
+    def test_print_string_literal(self):
+        output = compile_and_run('(program t (begin (print "猜大了")))')
+        self.assertEqual(output, "猜大了")
+
     def test_multiple_input_tokens(self):
         output = compile_and_run_with_input(
             "(program t (var ((a int) (b int))) (begin (:= a (input-int)) (:= b (input-int)) (print a) (print b)))",
@@ -337,6 +353,36 @@ class TestBasicExecution(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("runtime error: input-float parse failed: bird", result.stderr)
+
+    def test_rand_range_with_seed_is_repeatable(self):
+        source = """(program t (var ((a int) (b int)))
+          (begin
+            (rand-seed 123)
+            (:= a (rand-range 1 10))
+            (rand-seed 123)
+            (:= b (rand-range 1 10))
+            (print a)
+            (print b)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "9\n9")
+
+    def test_rand_range_stays_in_bounds(self):
+        source = """(program t (var ((x int)))
+          (begin
+            (rand-seed 5)
+            (:= x (rand-range 3 7))
+            (print x)))"""
+        output = compile_and_run(source)
+        value = int(output)
+        self.assertGreaterEqual(value, 3)
+        self.assertLessEqual(value, 7)
+
+    def test_rand_range_invalid_bounds(self):
+        result = compile_and_run_process(
+            "(program t (var ((x int))) (begin (:= x (rand-range 5 3)) (print x)))"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("runtime error: rand-range invalid bounds", result.stderr)
 
 
 class TestControlFlow(unittest.TestCase):

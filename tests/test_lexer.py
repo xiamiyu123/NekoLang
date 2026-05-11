@@ -64,6 +64,8 @@ class TestLexerKeywords(unittest.TestCase):
             ("input-float", TokenType.INPUT_FLOAT),
             ("input-char", TokenType.INPUT_CHAR),
             ("input-bool", TokenType.INPUT_BOOL),
+            ("rand-seed", TokenType.RAND_SEED),
+            ("rand-range", TokenType.RAND_RANGE),
             ("read-int", TokenType.READ_INT),
             ("read-float", TokenType.READ_FLOAT),
             ("read-char", TokenType.READ_CHAR),
