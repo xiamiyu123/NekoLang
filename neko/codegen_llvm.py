@@ -16,6 +16,7 @@ from .ast_nodes import (
     CharToIntNode, IntToCharNode, CharToStringNode, IsLetterNode, IsDigitNode,
     CharUpcaseNode, CharDowncaseNode,
 )
+from .name_mangling import mangle_neko_function_name
 
 
 TYPE_MAP = {
@@ -126,6 +127,9 @@ class LLVMCodegen:
         self.argc_value: ir.Value | None = None
         self.argv_value: ir.Value | None = None
         self.current_return_type: str | None = None
+
+    def _function_symbol(self, name: str) -> str:
+        return mangle_neko_function_name(name)
 
     def generate(self, ast: ProgramNode) -> str:
         self._declare_runtime()
@@ -315,7 +319,7 @@ class LLVMCodegen:
             ret_ty = _llvm_type(node.return_type)
             param_tys = [_llvm_type(type_str) for _, type_str in node.params]
             func_ty = ir.FunctionType(ret_ty, param_tys)
-            ir.Function(self.module, func_ty, name=node.name)
+            ir.Function(self.module, func_ty, name=self._function_symbol(node.name))
 
     def _declare_externs(self):
         for node in self.extern_nodes.values():
@@ -331,7 +335,7 @@ class LLVMCodegen:
             self._gen_function(node)
 
     def _gen_function(self, node: FuncDefNode | LambdaDefNode):
-        func = self.module.globals[node.name]
+        func = self.module.globals[self._function_symbol(node.name)]
         entry = func.append_basic_block(name="entry")
         saved_builder = self.builder
         saved_named_values = self.named_values
@@ -534,7 +538,10 @@ class LLVMCodegen:
             return ir.Constant(ir.IntType(8), ord(node.value))
         if isinstance(node, IdentifierNode):
             # Check if it's a function name used as a value
-            if node.name in self.module.globals:
+            if node.name in self.function_nodes:
+                func = self.module.globals[self._function_symbol(node.name)]
+                return self.builder.bitcast(func, ir.IntType(8).as_pointer())
+            if node.name in self.extern_nodes:
                 func = self.module.globals[node.name]
                 return self.builder.bitcast(func, ir.IntType(8).as_pointer())
             alloca = self.named_values.get(node.name)
@@ -544,7 +551,7 @@ class LLVMCodegen:
         if isinstance(node, BinOpNode):
             return self._gen_binop(node)
         if isinstance(node, LambdaDefNode):
-            func = self.module.globals.get(node.name)
+            func = self.module.globals.get(self._function_symbol(node.name))
             if func is None:
                 raise RuntimeError(f"Undefined lambda: {node.name}")
             return self.builder.bitcast(func, ir.IntType(8).as_pointer())
@@ -680,18 +687,18 @@ class LLVMCodegen:
         raise RuntimeError(f"Unknown operator: {node.op}")
 
     def _gen_func_call(self, node: FuncCallNode) -> ir.Value:
-        func = self.module.globals.get(node.name)
-        if func is not None:
-            # Direct call
-            func_node = self.function_nodes.get(node.name)
-            extern_node = self.extern_nodes.get(node.name)
+        func_node = self.function_nodes.get(node.name)
+        extern_node = self.extern_nodes.get(node.name)
+        if func_node is not None or extern_node is not None:
+            if func_node is not None:
+                func = self.module.globals[self._function_symbol(node.name)]
+            else:
+                func = self.module.globals[node.name]
             args = []
             if func_node is not None:
                 param_types = [type_str for _, type_str in func_node.params]
-            elif extern_node is not None:
-                param_types = list(extern_node.param_types)
             else:
-                raise RuntimeError(f"Undefined function signature: {node.name}")
+                param_types = list(extern_node.param_types)
             for arg_value, type_str in zip((self._gen_expression(arg) for arg in node.args), param_types):
                 args.append(self._coerce_value(arg_value, type_str))
             return self.builder.call(func, args, name="calltmp")

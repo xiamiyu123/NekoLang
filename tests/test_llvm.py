@@ -106,8 +106,17 @@ class TestIRGeneration(unittest.TestCase):
         ir = generate_ir(
             "(program t (begin (function add ((a int) (b int)) int (return (+ a b)))))"
         )
-        self.assertIn('define i32 @"add"', ir)
+        self.assertIn('define i32 @"neko_fn_add"', ir)
         self.assertIn("ret i32", ir)
+
+    def test_hyphenated_function_name_ir(self):
+        ir = generate_ir(
+            "(program t (var ((x int))) "
+            "(begin (function double-it ((a int)) int (return (* a 2))) "
+            "(:= x (double-it 7))))"
+        )
+        self.assertIn('define i32 @"neko_fn_double_x002d_it"', ir)
+        self.assertIn('call i32 @"neko_fn_double_x002d_it"', ir)
 
     def test_extern_declaration_ir(self):
         ir = generate_ir('(program t (var ((x int))) (begin (extern atoi (string) int) (:= x (atoi "42"))))')
@@ -188,6 +197,15 @@ class TestBasicExecution(unittest.TestCase):
             (print x)))"""
         output = compile_and_run(source)
         self.assertEqual(output, "9")
+
+    def test_hyphenated_function_call(self):
+        source = """(program t (var ((x int)))
+          (begin
+            (function double-it ((a int)) int (return (* a 2)))
+            (:= x (double-it 7))
+            (print x)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "14")
 
     def test_argc_and_argv(self):
         source = """(program t (var ((count int) (value int)))

@@ -52,6 +52,7 @@ from .ast_nodes import (
     StringToIntNode,
     WhileNode,
 )
+from .name_mangling import mangle_neko_function_name
 
 
 CMP_OPS = {
@@ -236,6 +237,9 @@ class ARM64Codegen:
     def _function_symbol(self, name: str) -> str:
         return f"_{name}"
 
+    def _neko_function_symbol(self, name: str) -> str:
+        return self._function_symbol(mangle_neko_function_name(name))
+
     def _collect_function_nodes(self, node: ASTNode) -> dict[str, FuncDefNode | LambdaDefNode]:
         found: dict[str, FuncDefNode | LambdaDefNode] = {}
 
@@ -382,8 +386,15 @@ class ARM64Codegen:
             call_scratch_base=current - CALL_SCRATCH_SIZE,
         )
 
-    def _emit_function_prologue(self, name: str, frame_size: int, save_main_args: bool):
-        symbol = self._function_symbol(name)
+    def _emit_function_prologue(
+        self,
+        name: str,
+        frame_size: int,
+        save_main_args: bool,
+        *,
+        mangle_name: bool = False,
+    ):
+        symbol = self._neko_function_symbol(name) if mangle_name else self._function_symbol(name)
         self._emit(f".globl\t{symbol}")
         self._emit(".p2align\t2")
         self._emit(f"{symbol}:")
@@ -528,7 +539,7 @@ class ARM64Codegen:
         self.var_slot_kinds = {name: type_str for name, type_str in node.params}
         self.expr_temp_depth = 0
 
-        self._emit_function_prologue(node.name, self.frame_layout.frame_size, save_main_args=False)
+        self._emit_function_prologue(node.name, self.frame_layout.frame_size, save_main_args=False, mangle_name=True)
         for name, type_str in node.params:
             self._emit_var_zero_init(name, type_str)
 
@@ -767,7 +778,7 @@ class ARM64Codegen:
             return
         if isinstance(node, IdentifierNode):
             if node.name in self.function_nodes:
-                symbol = self._function_symbol(node.name)
+                symbol = self._neko_function_symbol(node.name)
                 self._emit(f"\tadrp\tx0, {symbol}@PAGE")
                 self._emit(f"\tadd\tx0, x0, {symbol}@PAGEOFF")
                 return
@@ -789,7 +800,7 @@ class ARM64Codegen:
             self._gen_binop(node)
             return
         if isinstance(node, LambdaDefNode):
-            symbol = self._function_symbol(node.name)
+            symbol = self._neko_function_symbol(node.name)
             self._emit(f"\tadrp\tx0, {symbol}@PAGE")
             self._emit(f"\tadd\tx0, x0, {symbol}@PAGEOFF")
             return
@@ -956,10 +967,12 @@ class ARM64Codegen:
         if func_node is not None or extern_node is not None:
             if func_node is not None:
                 param_types = [type_str for _, type_str in func_node.params]
+                symbol = self._neko_function_symbol(node.name)
             else:
                 param_types = list(extern_node.param_types)
+                symbol = self._function_symbol(node.name)
             self._prepare_call_arguments(node.args, param_types)
-            self._emit(f"\tbl\t{self._function_symbol(node.name)}")
+            self._emit(f"\tbl\t{symbol}")
             return
 
         var_type = self.var_types.get(node.name, "")

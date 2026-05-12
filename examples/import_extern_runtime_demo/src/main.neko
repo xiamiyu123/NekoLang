@@ -4,7 +4,7 @@
 
 (import utils)
 (import libc)
-(import meow_rand)
+(import meow-rand)
 
 (program import_extern_runtime_demo
   (var ((x int) (y int) (z int)))
@@ -28,6 +28,6 @@
     (rand-seed 42)
 
     ; 测试 runtime: 调用内置随机函数
-    (:= x (meow_rand 1 100))
-    (meow "meow_rand(1, 100) = ")
+    (:= x (meow-rand 1 100))
+    (meow "meow-rand(1, 100) = ")
     (meow x)))

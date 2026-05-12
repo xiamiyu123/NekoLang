@@ -72,6 +72,15 @@ class TestARM64AssemblyGeneration(unittest.TestCase):
         )
         self.assertIn("bl\t_atoi", asm)
 
+    def test_hyphenated_function_name_is_mangled(self):
+        asm = generate_asm_text(
+            "(program t (var ((x int))) "
+            "(begin (function double-it ((a int)) int (return (* a 2))) "
+            "(:= x (double-it 7))))"
+        )
+        self.assertIn("_neko_fn_double_x002d_it", asm)
+        self.assertNotIn("_double-it", asm)
+
 
 class Arm64BackendMixin:
     def setUp(self):
