@@ -10,7 +10,7 @@ import tempfile
 from neko.ast_nodes import dump_ast
 from neko.build_utils import (
     CompilationResult,
-    compile_file,
+    compile_file_with_imports,
     compile_to_executable,
     default_output_name,
     ensure_no_semantic_errors,
@@ -22,34 +22,34 @@ from neko.errors import NekoError
 
 
 def command_tokens(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     for tok in result.tokens:
         print(tok)
     return 0
 
 
 def command_ast(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     print(dump_ast(result.ast))
     return 0
 
 
 def command_symbols(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     print_semantic_errors(result.analyzer)
     print(result.analyzer.symbol_table.dump())
     return 1 if result.analyzer.errors else 0
 
 
 def command_quads(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     print_semantic_errors(result.analyzer)
     print(result.analyzer.dump_quadruples())
     return 1 if result.analyzer.errors else 0
 
 
 def command_all(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
 
     print("=" * 50)
     print("词法分析结果 (Tokens)")
@@ -79,7 +79,7 @@ def command_all(args: argparse.Namespace) -> int:
 
 
 def command_check(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     if result.analyzer.errors:
         print_semantic_errors(result.analyzer)
         return 1
@@ -88,21 +88,21 @@ def command_check(args: argparse.Namespace) -> int:
 
 
 def command_llvm_ir(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     print(generate_ir(result.ast))
     return 0
 
 
 def command_asm(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     print(generate_assembly(result.ast))
     return 0
 
 
 def command_build(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     output = args.output or default_output_name(args.file)
     compile_to_executable(result.ast, output, backend=args.backend, verbose=args.verbose)
@@ -111,7 +111,7 @@ def command_build(args: argparse.Namespace) -> int:
 
 
 def command_run(args: argparse.Namespace) -> int:
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
 
     runtime_args = list(args.args or [])
@@ -185,7 +185,7 @@ def run_legacy(argv: list[str]) -> int:
     parser.add_argument("--compile", "-o", metavar="OUTPUT", help="Compile to executable")
     args = parser.parse_args(argv)
 
-    result = compile_file(args.file)
+    result = compile_file_with_imports(args.file)
 
     show_all = args.all
     show_tokens = args.tokens or show_all

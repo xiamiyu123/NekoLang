@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 
-from neko.build_utils import compile_file, compile_to_executable, ensure_no_semantic_errors
+from neko.build_utils import compile_file_with_imports, compile_to_executable, ensure_no_semantic_errors
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def command_build(args: argparse.Namespace) -> int:
 
     output_path = _project_output_path(project_dir, name)
 
-    result = compile_file(entry_path)
+    result = compile_file_with_imports(entry_path)
     ensure_no_semantic_errors(result)
     compile_to_executable(result.ast, output_path, backend=args.backend, verbose=args.verbose)
 
@@ -141,7 +141,7 @@ def command_run(args: argparse.Namespace) -> int:
         print(f"错误: 入口文件 '{entry}' 未找到。")
         return 1
 
-    result = compile_file(entry_path)
+    result = compile_file_with_imports(entry_path)
     ensure_no_semantic_errors(result)
 
     runtime_args = list(args.args or [])

@@ -1,0 +1,9 @@
+; import_with_program.neko — has a program header but also exports functions
+(function multiply ((a int) (b int)) int
+  (return (* a b)))
+
+(program import_with_program
+  (var ((x int)))
+  (begin
+    (:= x 999)
+    (print x)))

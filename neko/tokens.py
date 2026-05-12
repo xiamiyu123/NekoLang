@@ -20,6 +20,7 @@ class TokenType(Enum):
     PRINT = "print"            # print
     FUNCTION = "function"      # function definition
     EXTERN = "extern"          # external function declaration
+    IMPORT = "import"          # import module
     RETURN = "return"          # function return
 
     # Type keywords
@@ -126,6 +127,7 @@ KEYWORDS: dict[str, TokenType] = {
     "function": TokenType.FUNCTION,
     "nyaa-def": TokenType.FUNCTION,
     "extern": TokenType.EXTERN,
+    "import": TokenType.IMPORT,
     "return": TokenType.RETURN,
     "int": TokenType.KW_INT,
     "float": TokenType.KW_FLOAT,

@@ -7,9 +7,17 @@ class ASTNode:
 
 
 @dataclass
+class ImportNode(ASTNode):
+    path: str = ""
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
 class ProgramNode(ASTNode):
     name: str = ""
     block: 'BlockNode' = field(default_factory=lambda: BlockNode())
+    imports: list['ImportNode'] = field(default_factory=list)
     line: int = 0
     column: int = 0
 
@@ -357,8 +365,12 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
     prefix = "  " * indent
     if isinstance(node, ProgramNode):
         result = f"{prefix}Program({node.name})\n"
+        for imp in node.imports:
+            result += dump_ast(imp, indent + 1)
         result += dump_ast(node.block, indent + 1)
         return result
+    elif isinstance(node, ImportNode):
+        return f"{prefix}Import({node.path})\n"
     elif isinstance(node, BlockNode):
         result = f"{prefix}Block\n"
         for decl in node.var_decls:

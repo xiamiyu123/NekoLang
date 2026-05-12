@@ -11,6 +11,7 @@ from .ast_nodes import (
     IntToStringNode, StringToIntNode, ArgvStringNode,
     CharToIntNode, IntToCharNode, CharToStringNode, IsLetterNode, IsDigitNode,
     CharUpcaseNode, CharDowncaseNode,
+    ImportNode,
 )
 from .errors import ParseError
 
@@ -52,14 +53,64 @@ class Parser:
         return False
 
     def parse(self) -> ProgramNode:
+        imports = self._parse_imports()
         self._expect(TokenType.LPAREN)
         self._expect(TokenType.PROGRAM)
         name_tok = self._expect(TokenType.IDENTIFIER)
         block = self._parse_block()
         self._expect(TokenType.RPAREN)
         self._expect(TokenType.EOF)
-        return ProgramNode(name=name_tok.value, block=block,
+        return ProgramNode(name=name_tok.value, block=block, imports=imports,
                            line=name_tok.line, column=name_tok.column)
+
+    def _parse_imports(self) -> list[ImportNode]:
+        imports = []
+        while self._current().type == TokenType.LPAREN:
+            saved = self.pos
+            self._advance()  # consume '('
+            if self._current().type == TokenType.IMPORT:
+                imports.append(self._parse_import())
+            else:
+                self.pos = saved  # put back '('
+                break
+        return imports
+
+    def _parse_import(self) -> ImportNode:
+        tok = self._advance()  # consume 'import'
+        path_tok = self._expect(TokenType.IDENTIFIER)
+        self._expect(TokenType.RPAREN)
+        return ImportNode(path=path_tok.value, line=tok.line, column=tok.column)
+
+    def parse_definition_file(self) -> tuple[list[ImportNode], list[ASTNode]]:
+        """Parse a file, extracting imports and top-level function/extern definitions.
+
+        Handles: (import ...), (function ...), (extern ...), and skips (program ...).
+        Returns (imports, definitions).
+        """
+        imports: list[ImportNode] = []
+        definitions: list[ASTNode] = []
+        while self._current().type != TokenType.EOF:
+            self._expect(TokenType.LPAREN)
+            tok = self._current()
+            if tok.type == TokenType.FUNCTION:
+                definitions.append(self._parse_func_def())
+            elif tok.type == TokenType.EXTERN:
+                definitions.append(self._parse_extern_decl())
+            elif tok.type == TokenType.IMPORT:
+                imports.append(self._parse_import())
+            elif tok.type == TokenType.PROGRAM:
+                self._advance()
+                self._expect(TokenType.IDENTIFIER)
+                self._parse_block()
+                self._expect(TokenType.RPAREN)
+            else:
+                src = self.source_lines[tok.line - 1] if 0 < tok.line <= len(self.source_lines) else ""
+                raise ParseError(
+                    f"顶层只允许 import、function、extern 或 program，但得到 {tok.value!r}",
+                    line=tok.line, column=tok.column,
+                    source_line=src,
+                )
+        return imports, definitions
 
     def _parse_block(self) -> BlockNode:
         var_decls = []

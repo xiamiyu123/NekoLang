@@ -1,0 +1,4 @@
+; import_cycle_b.neko — circular import with import_cycle_a
+(import import_cycle_a)
+(function cycle_b_func () int
+  (return 2))

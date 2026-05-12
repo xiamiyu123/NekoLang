@@ -1,0 +1,4 @@
+; import_chain_a.neko — imports import_utils
+(import import_utils)
+(function triple ((x int)) int
+  (return (* x 3)))

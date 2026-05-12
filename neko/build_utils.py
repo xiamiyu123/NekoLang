@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from typing import Literal
 
-from neko.ast_nodes import ProgramNode
+from neko.ast_nodes import ASTNode, ProgramNode, ImportNode, FuncDefNode, ExternDeclNode
 from neko.codegen_arm64 import ARM64Codegen
 from neko.codegen_llvm import LLVMCodegen
 from neko.lexer import Lexer
@@ -57,6 +57,98 @@ def compile_source(source: str) -> CompilationResult:
 
 def compile_file(path: str) -> CompilationResult:
     return compile_source(read_source(path))
+
+
+def _resolve_import_path(import_path: str, base_dir: str) -> str:
+    """Convert an import path to a filesystem path."""
+    if import_path.startswith("./"):
+        return os.path.join(base_dir, import_path[2:] + ".neko")
+    return os.path.join(base_dir, import_path + ".neko")
+
+
+def _extract_definitions(ast: ProgramNode) -> list[ASTNode]:
+    """Extract function and extern definitions from a ProgramNode."""
+    defs = []
+    for stmt in ast.block.body.statements:
+        if isinstance(stmt, (FuncDefNode, ExternDeclNode)):
+            defs.append(stmt)
+    return defs
+
+
+def _compile_definitions_from_file(path: str) -> list[ASTNode]:
+    """Compile a file and extract its top-level function/extern definitions."""
+    source = read_source(path)
+    lexer = Lexer(source)
+    tokens = lexer.tokenize()
+    parser = Parser(tokens)
+    parser.set_source(source)
+    _, defs = parser.parse_definition_file()
+    return defs
+
+
+def _resolve_imports(
+    imports: list[ImportNode],
+    base_dir: str,
+    visited: set[str],
+    collected: list[ASTNode],
+) -> None:
+    """Recursively resolve imports and collect definitions."""
+    for imp in imports:
+        abs_path = os.path.abspath(_resolve_import_path(imp.path, base_dir))
+        if abs_path in visited:
+            raise SystemExit(f"错误: 检测到循环依赖 '{imp.path}' ({abs_path})")
+        if not os.path.isfile(abs_path):
+            raise SystemExit(f"错误: 导入文件 '{imp.path}' 未找到 ({abs_path})")
+
+        visited.add(abs_path)
+        imp_base = os.path.dirname(abs_path)
+
+        source = read_source(abs_path)
+        lexer = Lexer(source)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        parser.set_source(source)
+
+        nested_imports, defs = parser.parse_definition_file()
+
+        # Recursively resolve nested imports
+        if nested_imports:
+            _resolve_imports(nested_imports, imp_base, visited, collected)
+
+        collected.extend(defs)
+
+
+def compile_file_with_imports(path: str) -> CompilationResult:
+    """Compile a file, recursively resolving and merging all imports."""
+    source = read_source(path)
+    lexer = Lexer(source)
+    tokens = lexer.tokenize()
+    parser = Parser(tokens)
+    parser.set_source(source)
+    ast = parser.parse()
+
+    if not ast.imports:
+        # No imports — run normal compilation
+        analyzer = SemanticAnalyzer()
+        analyzer.set_source(source)
+        analyzer.analyze(ast)
+        return CompilationResult(source=source, tokens=tokens, ast=ast, analyzer=analyzer)
+
+    # Resolve imports
+    base_dir = os.path.dirname(os.path.abspath(path))
+    visited = {os.path.abspath(path)}
+    imported_defs: list[ASTNode] = []
+    _resolve_imports(ast.imports, base_dir, visited, imported_defs)
+
+    # Inject imported definitions at the beginning of the body
+    ast.block.body.statements = imported_defs + ast.block.body.statements
+
+    # Re-run semantic analysis on the merged AST
+    analyzer = SemanticAnalyzer()
+    analyzer.set_source(source)
+    analyzer.analyze(ast)
+
+    return CompilationResult(source=source, tokens=tokens, ast=ast, analyzer=analyzer)
 
 
 def print_semantic_errors(analyzer: SemanticAnalyzer) -> None:

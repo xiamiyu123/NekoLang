@@ -1,0 +1,4 @@
+; import_chain_b.neko — imports import_chain_a (which imports import_utils)
+(import import_chain_a)
+(function quadruple ((x int)) int
+  (return (* x 4)))
