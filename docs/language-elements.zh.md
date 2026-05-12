@@ -593,7 +593,125 @@ Lambda 使函数成为一等公民：
 - 和 C 函数指针类似：显式类型声明，不支持闭包
 - 和 Python `lambda` 不同：支持多条语句和显式 return
 
-## 13. 综合示例
+## 13. 字符串 `string`
+
+### 作用
+
+`string` 是 NekoLang 的字符串类型，用于存储和操作文本。字符串内部以 C 风格 null-terminated 字符串（`i8*`）表示。
+
+声明与赋值：
+
+```scheme
+(nyan ((name string)))
+(:= name "Hello, Neko!")
+```
+
+### 字符串拼接
+
+使用 `+` 运算符拼接两个字符串：
+
+```scheme
+(:= greeting (+ "Hello, " name))
+```
+
+语义分析会检查 `+` 的两侧必须都是 `string` 类型。
+
+### 内置操作
+
+| 语法 | 返回类型 | 说明 |
+|------|---------|------|
+| `"hello"` | `string` | 字符串字面量 |
+| `(+ s1 s2)` | `string` | 拼接 |
+| `(string-length s)` | `int` | 长度 |
+| `(string-at s i)` | `char` | 第 i 个字符 |
+| `(string-sub s start len)` | `string` | 子串 |
+| `(string-cmp a b)` | `int` | 比较（0=相等） |
+| `(string-contains haystack needle)` | `bool` | 是否包含 |
+| `(int-to-string n)` | `string` | 整数转字符串 |
+| `(string-to-int s)` | `int` | 字符串转整数 |
+| `(argv-string i)` | `string` | 读取命令行参数 |
+
+### 设计原理
+
+NekoLang 的字符串是不可变的——每次操作返回新字符串，原字符串不变。运行时函数负责堆内存分配。
+
+字符串拼接复用 `+` 运算符，当编译器检测到两侧都是 `string` 类型时，会自动调用 `neko_string_concat` 运行时函数。
+
+### 示例
+
+```scheme
+(nya string_demo
+  (nyan ((name string) (greeting string) (len int) (n int)))
+  (paw
+    (:= name "Neko")
+    (:= greeting (+ "Hello, " name))
+    (:= len (string-length greeting))
+    (meow greeting)
+    (meow len)
+    (:= n (string-to-int "42"))
+    (meow n)
+    (meow (int-to-string 100))))
+```
+
+### 与主流语言区别
+
+- 和 C 不同：不需要手动管理内存
+- 和 Python 不同：不是动态对象，有静态类型
+- 和 Java 不同：使用 S 表达式语法调用操作
+
+## 14. 字符 `char` 与字符字面量
+
+### 作用
+
+`char` 类型存储单个字符。NekoLang 支持字符字面量语法：
+
+```scheme
+(:= ch 'a')
+(:= tab '\n')
+(:= quote '\'')
+```
+
+支持的转义序列：`\n`（换行）、`\t`（制表符）、`\'`（单引号）、`\\`（反斜杠）。
+
+### 内置操作
+
+| 语法 | 返回类型 | 说明 |
+|------|---------|------|
+| `'a'` | `char` | 字符字面量 |
+| `(char-to-int c)` | `int` | ASCII 值 |
+| `(int-to-char n)` | `char` | ASCII 转字符 |
+| `(char-to-string c)` | `string` | 单字符字符串 |
+| `(is-letter c)` | `bool` | 是否字母 |
+| `(is-digit c)` | `bool` | 是否数字 |
+| `(char-upcase c)` | `char` | 转大写 |
+| `(char-downcase c)` | `char` | 转小写 |
+
+### 设计原理
+
+字符字面量使用单引号，与字符串字面量的双引号区分。`char` 可以隐式转换为 `int`，用于需要整数的上下文。
+
+### 示例
+
+```scheme
+(nya char_demo
+  (nyan ((ch char) (n int) (upper char) (is_a bool)))
+  (paw
+    (:= ch 'a')
+    (:= n (char-to-int ch))
+    (meow n)
+    (:= upper (char-upcase ch))
+    (meow upper)
+    (:= is_a (is-letter ch))
+    (meow is_a)))
+```
+
+### 与主流语言区别
+
+- 和 C 类似：字符是 1 字节整数，可以转为 int
+- 和 Python 不同：有独立的 char 类型，不是单字符字符串
+- 和 Java 类似：使用单引号表示字符字面量
+
+## 15. 综合示例
 
 ```scheme
 (nya full_walkthrough
@@ -639,11 +757,13 @@ Lambda 使函数成为一等公民：
 - 布尔值和条件分支
 - 输出与返回值相关逻辑
 
-## 14. 使用建议
+## 16. 使用建议
 
 - 教学示例里优先使用个性化命名，体现 NekoLang 的辨识度
 - 条件尽量写成比较表达式或布尔变量，避免依赖数值真值
 - 数组示例最好同时展示声明、写入、读取
 - 函数示例要显式写出 `return`
+- 字符串操作使用 `(+ s1 s2)` 拼接，`int-to-string` 做格式化
+- 字符字面量使用单引号 `'a'`，与字符串双引号区分
 
 如果要进一步对照实现细节，可继续阅读 [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) 和 [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)。

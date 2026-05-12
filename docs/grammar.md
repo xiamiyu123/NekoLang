@@ -11,7 +11,7 @@
 
 <var-item>      ::= "(" <identifier> <type> ")"
 
-<type>          ::= "int" | "float" | "char" | "bool"
+<type>          ::= "int" | "float" | "char" | "bool" | "string"
                   | "(" "array" <type> <integer> ")"
                   | "(" "func" "(" { <type> } ")" <type> ")"
 
@@ -23,6 +23,7 @@
                   | <print-stmt>
                   | <begin-block>
                   | <func-def>
+                  | <extern-decl>
                   | <return-stmt>
                   | <array-assign>
                   | <array-print>
@@ -38,6 +39,8 @@
 <print-stmt>    ::= "(" "print" <expression> ")"
 
 <func-def>      ::= "(" "function" <identifier> "(" { <param> } ")" <type> <statement> ")"
+
+<extern-decl>   ::= "(" "extern" <identifier> "(" { <type> } ")" <type> ")"
 
 <lambda-def>    ::= "(" "lambda" "(" { <param> } ")" <type> <statement> ")"
 
@@ -56,6 +59,7 @@
 <expression>    ::= <identifier>
                   | <constant>
                   | <string>
+                  | <char-literal>
                   | <binop-expr>
                   | <func-call>
                   | <lambda-def>
@@ -64,6 +68,8 @@
                   | <stdin-input>
                   | <rand-range>
                   | <file-read>
+                  | <string-expr>
+                  | <char-expr>
 
 <binop-expr>    ::= "(" <operator> <expression> <expression> ")"
 
@@ -79,6 +85,27 @@
 
 <file-read>     ::= "(" <read-op> <string> ")"
 
+<char-literal>  ::= "'" <char> "'" | "'" <escape-char> "'"
+
+<escape-char>   ::= "\" "n" | "\" "t" | "\" "'" | "\" "\"
+
+<string-expr>   ::= "(" "string-length" <expression> ")"
+                  | "(" "string-at" <expression> <expression> ")"
+                  | "(" "string-sub" <expression> <expression> <expression> ")"
+                  | "(" "string-cmp" <expression> <expression> ")"
+                  | "(" "string-contains" <expression> <expression> ")"
+                  | "(" "int-to-string" <expression> ")"
+                  | "(" "string-to-int" <expression> ")"
+                  | "(" "argv-string" <expression> ")"
+
+<char-expr>     ::= "(" "char-to-int" <expression> ")"
+                  | "(" "int-to-char" <expression> ")"
+                  | "(" "char-to-string" <expression> ")"
+                  | "(" "is-letter" <expression> ")"
+                  | "(" "is-digit" <expression> ")"
+                  | "(" "char-upcase" <expression> ")"
+                  | "(" "char-downcase" <expression> ")"
+
 <operator>      ::= "+" | "-" | "*" | "/"
                   | "<" | ">" | "=" | "<=" | ">=" | "!="
 
@@ -90,7 +117,7 @@
 
 <write-op>      ::= "write-int" | "write-float" | "write-char" | "write-bool"
 
-<constant>      ::= <integer> | <real> | <boolean>
+<constant>      ::= <integer> | <real> | <boolean> | <char-literal>
 
 <boolean>       ::= "true" | "false"
 
@@ -136,34 +163,51 @@
 | 6 | `while` | WHILE | 循环语句 |
 | 7 | `print` | PRINT | 输出 |
 | 8 | `function` | FUNCTION | 函数定义 |
-| 9 | `int` | KW_INT | 整型 |
-| 10 | `float` | KW_FLOAT | 浮点型 |
-| 11 | `char` | KW_CHAR | 字符型 |
-| 12 | `bool` | KW_BOOL | 布尔型 |
-| 13 | `array` | ARRAY | 数组类型 |
-| 14 | `array-set` | ARRAY_SET | 数组赋值 |
-| 15 | `array-print` | ARRAY_PRINT | 数组输出 |
-| 16 | `return` | RETURN | 函数返回 |
-| 17 | `argc` | ARGC | 用户命令行参数个数 |
-| 18 | `argv-int` | ARGV_INT | 读取整数参数 |
-| 19 | `argv-float` | ARGV_FLOAT | 读取浮点参数 |
-| 20 | `argv-char` | ARGV_CHAR | 读取字符参数 |
-| 21 | `argv-bool` | ARGV_BOOL | 读取布尔参数 |
-| 22 | `input-int` | INPUT_INT | 从标准输入读取整数 |
-| 23 | `input-float` | INPUT_FLOAT | 从标准输入读取浮点数 |
-| 24 | `input-char` | INPUT_CHAR | 从标准输入读取字符 |
-| 25 | `input-bool` | INPUT_BOOL | 从标准输入读取布尔值 |
-| 26 | `rand-seed` | RAND_SEED | 设置伪随机种子 |
-| 27 | `rand-range` | RAND_RANGE | 生成闭区间整数随机数 |
-| 28 | `read-int` | READ_INT | 读整数文件 |
-| 29 | `read-float` | READ_FLOAT | 读浮点文件 |
-| 30 | `read-char` | READ_CHAR | 读字符文件 |
-| 31 | `read-bool` | READ_BOOL | 读布尔文件 |
-| 32 | `write-int` | WRITE_INT | 写整数文件 |
-| 33 | `write-float` | WRITE_FLOAT | 写浮点文件 |
-| 34 | `write-char` | WRITE_CHAR | 写字符文件 |
-| 35 | `write-bool` | WRITE_BOOL | 写布尔文件 |
-| 36 | `lambda` | LAMBDA | lambda 表达式 |
+| 9 | `extern` | EXTERN | 外部函数声明 |
+| 10 | `int` | KW_INT | 整型 |
+| 11 | `float` | KW_FLOAT | 浮点型 |
+| 12 | `char` | KW_CHAR | 字符型 |
+| 13 | `bool` | KW_BOOL | 布尔型 |
+| 14 | `array` | ARRAY | 数组类型 |
+| 15 | `array-set` | ARRAY_SET | 数组赋值 |
+| 16 | `array-print` | ARRAY_PRINT | 数组输出 |
+| 17 | `return` | RETURN | 函数返回 |
+| 18 | `argc` | ARGC | 用户命令行参数个数 |
+| 19 | `argv-int` | ARGV_INT | 读取整数参数 |
+| 20 | `argv-float` | ARGV_FLOAT | 读取浮点参数 |
+| 21 | `argv-char` | ARGV_CHAR | 读取字符参数 |
+| 22 | `argv-bool` | ARGV_BOOL | 读取布尔参数 |
+| 23 | `input-int` | INPUT_INT | 从标准输入读取整数 |
+| 24 | `input-float` | INPUT_FLOAT | 从标准输入读取浮点数 |
+| 25 | `input-char` | INPUT_CHAR | 从标准输入读取字符 |
+| 26 | `input-bool` | INPUT_BOOL | 从标准输入读取布尔值 |
+| 27 | `rand-seed` | RAND_SEED | 设置伪随机种子 |
+| 28 | `rand-range` | RAND_RANGE | 生成闭区间整数随机数 |
+| 29 | `read-int` | READ_INT | 读整数文件 |
+| 30 | `read-float` | READ_FLOAT | 读浮点文件 |
+| 31 | `read-char` | READ_CHAR | 读字符文件 |
+| 32 | `read-bool` | READ_BOOL | 读布尔文件 |
+| 33 | `write-int` | WRITE_INT | 写整数文件 |
+| 34 | `write-float` | WRITE_FLOAT | 写浮点文件 |
+| 35 | `write-char` | WRITE_CHAR | 写字符文件 |
+| 36 | `write-bool` | WRITE_BOOL | 写布尔文件 |
+| 37 | `lambda` | LAMBDA | lambda 表达式 |
+| 38 | `string` | KW_STRING | 字符串类型 |
+| 39 | `string-length` | STRING_LENGTH | 字符串长度 |
+| 40 | `string-at` | STRING_AT | 字符串取字符 |
+| 41 | `string-sub` | STRING_SUB | 子串 |
+| 42 | `string-cmp` | STRING_CMP | 字符串比较 |
+| 43 | `string-contains` | STRING_CONTAINS | 字符串包含 |
+| 44 | `int-to-string` | INT_TO_STRING | 整数转字符串 |
+| 45 | `string-to-int` | STRING_TO_INT | 字符串转整数 |
+| 46 | `argv-string` | ARGV_STRING | 读取字符串参数 |
+| 47 | `char-to-int` | CHAR_TO_INT | 字符转 ASCII 整数 |
+| 48 | `int-to-char` | INT_TO_CHAR | ASCII 整数转字符 |
+| 49 | `char-to-string` | CHAR_TO_STRING | 字符转单字符字符串 |
+| 50 | `is-letter` | IS_LETTER | 判断是否字母 |
+| 51 | `is-digit` | IS_DIGIT | 判断是否数字 |
+| 52 | `char-upcase` | CHAR_UPCASE | 转大写 |
+| 53 | `char-downcase` | CHAR_DOWNCASE | 转小写 |
 
 ## 四、个性化关键字别名
 
@@ -182,7 +226,7 @@
 | `meow-arr` | ARRAY_SET | `array-set` | 数组赋值 |
 | `purr-arr` | ARRAY_PRINT | `array-print` | 数组输出 |
 
-类型关键字和 `lambda` 没有别名。类型只支持 `int`、`float`、`char`、`bool`，函数类型使用 `(func ...)` 表示。
+类型关键字和 `lambda` 没有别名。类型支持 `int`、`float`、`char`、`bool`、`string`，函数类型使用 `(func ...)` 表示。
 
 ## 五、界符表
 
@@ -207,7 +251,7 @@
 | 字段 | 含义 | 示例 |
 |------|------|------|
 | NAME | 标识符名 | `a`, `b` |
-| TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `(array int 10)`, `(func (int) int)` |
+| TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `string`, `(array int 10)`, `(func (int) int)` |
 | CAT | 类别 | `v`(变量), `c`(常量), `f`(函数/lambda) |
 | ADDR | 地址偏移 | 0, 4, 8 |
 
@@ -235,6 +279,20 @@
 | `(read-int, path, _, temp)` | 从文件读取整数 |
 | `(write-int, path, value, _)` | 将整数写入文件 |
 | `(lambda_ref, name, _, temp)` | 获取 lambda 函数指针 |
+| `(string-length, str, _, temp)` | 字符串长度 |
+| `(string-at, str, idx, temp)` | 取字符串第 idx 个字符 |
+| `(string-cmp, a, b, temp)` | 字符串比较 |
+| `(string-contains, hay, needle, temp)` | 字符串包含检查 |
+| `(int-to-string, n, _, temp)` | 整数转字符串 |
+| `(string-to-int, s, _, temp)` | 字符串转整数 |
+| `(argv-string, idx, _, temp)` | 读取字符串参数 |
+| `(char-to-int, c, _, temp)` | 字符转 ASCII 整数 |
+| `(int-to-char, n, _, temp)` | ASCII 整数转字符 |
+| `(char-to-string, c, _, temp)` | 字符转字符串 |
+| `(is-letter, c, _, temp)` | 判断是否字母 |
+| `(is-digit, c, _, temp)` | 判断是否数字 |
+| `(char-upcase, c, _, temp)` | 转大写 |
+| `(char-downcase, c, _, temp)` | 转小写 |
 
 地址命名：变量=`I{n}`, 常量=`C{n}`, 临时变量=`T{n}`, 标签=`L{n}`
 

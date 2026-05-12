@@ -253,3 +253,129 @@ void neko_write_bool(const char *path, _Bool value) {
     fprintf(fp, "%s\n", value ? "true" : "false");
     fclose(fp);
 }
+
+/* ── String operations ── */
+
+static void runtime_check_string(const char *s, const char *op) {
+    if (!s) {
+        runtime_fail(op, "string is NULL (uninitialized?)");
+    }
+}
+
+char *neko_string_concat(const char *a, const char *b) {
+    runtime_check_string(a, "string concat: left operand is NULL");
+    runtime_check_string(b, "string concat: right operand is NULL");
+    size_t la = strlen(a);
+    size_t lb = strlen(b);
+    char *result = (char *)malloc(la + lb + 1);
+    if (!result) {
+        runtime_fail("string concat: out of memory", NULL);
+    }
+    memcpy(result, a, la);
+    memcpy(result + la, b, lb + 1);
+    return result;
+}
+
+int neko_string_length(const char *s) {
+    runtime_check_string(s, "string-length: string is NULL");
+    return (int)strlen(s);
+}
+
+char neko_string_at(const char *s, int i) {
+    runtime_check_string(s, "string-at: string is NULL");
+    int len = (int)strlen(s);
+    if (i < 0 || i >= len) {
+        runtime_fail("string-at: index out of range", NULL);
+    }
+    return s[i];
+}
+
+char *neko_string_sub(const char *s, int start, int len) {
+    runtime_check_string(s, "string-sub: string is NULL");
+    int slen = (int)strlen(s);
+    if (start < 0 || start > slen) {
+        runtime_fail("string-sub: start out of range", NULL);
+    }
+    if (len < 0 || start + len > slen) {
+        runtime_fail("string-sub: length out of range", NULL);
+    }
+    char *result = (char *)malloc(len + 1);
+    if (!result) {
+        runtime_fail("string-sub: out of memory", NULL);
+    }
+    memcpy(result, s + start, len);
+    result[len] = '\0';
+    return result;
+}
+
+int neko_string_cmp(const char *a, const char *b) {
+    runtime_check_string(a, "string-cmp: left operand is NULL");
+    runtime_check_string(b, "string-cmp: right operand is NULL");
+    return strcmp(a, b);
+}
+
+_Bool neko_string_contains(const char *haystack, const char *needle) {
+    runtime_check_string(haystack, "string-contains: haystack is NULL");
+    runtime_check_string(needle, "string-contains: needle is NULL");
+    return strstr(haystack, needle) != NULL;
+}
+
+char *neko_int_to_string(int n) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", n);
+    char *result = (char *)malloc(strlen(buf) + 1);
+    if (!result) {
+        runtime_fail("int-to-string: out of memory", NULL);
+    }
+    strcpy(result, buf);
+    return result;
+}
+
+int neko_string_to_int(const char *s) {
+    runtime_check_string(s, "string-to-int: string is NULL");
+    char *end = NULL;
+    long value = strtol(s, &end, 10);
+    runtime_expect(end && *end == '\0', "string-to-int: parse failed", s);
+    return (int)value;
+}
+
+char *neko_argv_string(int argc, char **argv, int index) {
+    int actual = runtime_arg_index(argc, index);
+    return argv[actual];
+}
+
+char *neko_char_to_string(char c) {
+    char *result = (char *)malloc(2);
+    if (!result) {
+        runtime_fail("char-to-string: out of memory", NULL);
+    }
+    result[0] = c;
+    result[1] = '\0';
+    return result;
+}
+
+/* ── Char operations ── */
+
+int neko_char_to_int(char c) {
+    return (int)(unsigned char)c;
+}
+
+char neko_int_to_char(int n) {
+    return (char)(n & 0xFF);
+}
+
+_Bool neko_is_letter(char c) {
+    return isalpha((unsigned char)c) != 0;
+}
+
+_Bool neko_is_digit(char c) {
+    return isdigit((unsigned char)c) != 0;
+}
+
+char neko_char_upcase(char c) {
+    return (char)toupper((unsigned char)c);
+}
+
+char neko_char_downcase(char c) {
+    return (char)tolower((unsigned char)c);
+}

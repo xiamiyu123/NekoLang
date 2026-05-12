@@ -19,6 +19,7 @@ class TokenType(Enum):
     WHILE = "while"            # loop
     PRINT = "print"            # print
     FUNCTION = "function"      # function definition
+    EXTERN = "extern"          # external function declaration
     RETURN = "return"          # function return
 
     # Type keywords
@@ -26,6 +27,10 @@ class TokenType(Enum):
     KW_FLOAT = "float"
     KW_CHAR = "char"
     KW_BOOL = "bool"
+    KW_STRING = "string"
+
+    # Char literal
+    CHAR = "CHAR"
 
     # Lambda
     LAMBDA = "lambda"
@@ -55,6 +60,25 @@ class TokenType(Enum):
     WRITE_FLOAT = "write-float"
     WRITE_CHAR = "write-char"
     WRITE_BOOL = "write-bool"
+
+    # String operations
+    STRING_LENGTH = "string-length"
+    STRING_AT = "string-at"
+    STRING_SUB = "string-sub"
+    STRING_CMP = "string-cmp"
+    STRING_CONTAINS = "string-contains"
+    INT_TO_STRING = "int-to-string"
+    STRING_TO_INT = "string-to-int"
+    ARGV_STRING = "argv-string"
+
+    # Char operations
+    CHAR_TO_INT = "char-to-int"
+    INT_TO_CHAR = "int-to-char"
+    CHAR_TO_STRING = "char-to-string"
+    IS_LETTER = "is-letter"
+    IS_DIGIT = "is-digit"
+    CHAR_UPCASE = "char-upcase"
+    CHAR_DOWNCASE = "char-downcase"
 
     # Delimiters / operators
     LPAREN = "("
@@ -101,6 +125,7 @@ KEYWORDS: dict[str, TokenType] = {
     "meow": TokenType.PRINT,
     "function": TokenType.FUNCTION,
     "nyaa-def": TokenType.FUNCTION,
+    "extern": TokenType.EXTERN,
     "return": TokenType.RETURN,
     "int": TokenType.KW_INT,
     "float": TokenType.KW_FLOAT,
@@ -134,6 +159,22 @@ KEYWORDS: dict[str, TokenType] = {
     "write-float": TokenType.WRITE_FLOAT,
     "write-char": TokenType.WRITE_CHAR,
     "write-bool": TokenType.WRITE_BOOL,
+    "string": TokenType.KW_STRING,
+    "string-length": TokenType.STRING_LENGTH,
+    "string-at": TokenType.STRING_AT,
+    "string-sub": TokenType.STRING_SUB,
+    "string-cmp": TokenType.STRING_CMP,
+    "string-contains": TokenType.STRING_CONTAINS,
+    "int-to-string": TokenType.INT_TO_STRING,
+    "string-to-int": TokenType.STRING_TO_INT,
+    "argv-string": TokenType.ARGV_STRING,
+    "char-to-int": TokenType.CHAR_TO_INT,
+    "int-to-char": TokenType.INT_TO_CHAR,
+    "char-to-string": TokenType.CHAR_TO_STRING,
+    "is-letter": TokenType.IS_LETTER,
+    "is-digit": TokenType.IS_DIGIT,
+    "char-upcase": TokenType.CHAR_UPCASE,
+    "char-downcase": TokenType.CHAR_DOWNCASE,
 }
 
 # Delimiter table: single/double char -> TokenType
@@ -159,5 +200,6 @@ TYPE_SIZES: dict[str, int] = {
     "float": 8,
     "char": 1,
     "bool": 1,
+    "string": 8,
     "func": 8,
 }

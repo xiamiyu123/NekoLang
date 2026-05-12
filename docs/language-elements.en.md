@@ -584,7 +584,125 @@ Output:
 - Similar to C function pointers: explicit type declarations, no closure support
 - Unlike Python `lambda`: supports multiple statements and explicit return
 
-## 13. Combined Example
+## 13. Strings: `string`
+
+### Purpose
+
+`string` is NekoLang's string type for storing and manipulating text. Strings are internally represented as null-terminated C strings (`i8*`).
+
+Declaration and assignment:
+
+```scheme
+(nyan ((name string)))
+(:= name "Hello, Neko!")
+```
+
+### String Concatenation
+
+Use the `+` operator to concatenate two strings:
+
+```scheme
+(:= greeting (+ "Hello, " name))
+```
+
+Semantic analysis checks that both sides of `+` are `string` type.
+
+### Built-in Operations
+
+| Syntax | Return Type | Description |
+|--------|------------|-------------|
+| `"hello"` | `string` | String literal |
+| `(+ s1 s2)` | `string` | Concatenation |
+| `(string-length s)` | `int` | Length |
+| `(string-at s i)` | `char` | Character at index i |
+| `(string-sub s start len)` | `string` | Substring |
+| `(string-cmp a b)` | `int` | Compare (0=equal) |
+| `(string-contains haystack needle)` | `bool` | Contains check |
+| `(int-to-string n)` | `string` | Int to string |
+| `(string-to-int s)` | `int` | String to int |
+| `(argv-string i)` | `string` | Command-line argument |
+
+### Design Principle
+
+NekoLang strings are immutable — every operation returns a new string. Runtime functions handle heap memory allocation.
+
+String concatenation reuses the `+` operator. When the compiler detects both sides are `string`, it automatically calls the `neko_string_concat` runtime function.
+
+### Example
+
+```scheme
+(nya string_demo
+  (nyan ((name string) (greeting string) (len int) (n int)))
+  (paw
+    (:= name "Neko")
+    (:= greeting (+ "Hello, " name))
+    (:= len (string-length greeting))
+    (meow greeting)
+    (meow len)
+    (:= n (string-to-int "42"))
+    (meow n)
+    (meow (int-to-string 100))))
+```
+
+### Difference from Mainstream Languages
+
+- Unlike C: no manual memory management
+- Unlike Python: statically typed, not dynamic objects
+- Unlike Java: S-expression syntax for operations
+
+## 14. Characters: `char` and Char Literals
+
+### Purpose
+
+The `char` type stores a single character. NekoLang supports char literal syntax:
+
+```scheme
+(:= ch 'a')
+(:= tab '\n')
+(:= quote '\'')
+```
+
+Supported escape sequences: `\n` (newline), `\t` (tab), `\'` (single quote), `\\` (backslash).
+
+### Built-in Operations
+
+| Syntax | Return Type | Description |
+|--------|------------|-------------|
+| `'a'` | `char` | Char literal |
+| `(char-to-int c)` | `int` | ASCII value |
+| `(int-to-char n)` | `char` | ASCII to char |
+| `(char-to-string c)` | `string` | Single-char string |
+| `(is-letter c)` | `bool` | Is letter? |
+| `(is-digit c)` | `bool` | Is digit? |
+| `(char-upcase c)` | `char` | To uppercase |
+| `(char-downcase c)` | `char` | To lowercase |
+
+### Design Principle
+
+Char literals use single quotes, distinct from string literals with double quotes. `char` can implicitly convert to `int` for contexts requiring integers.
+
+### Example
+
+```scheme
+(nya char_demo
+  (nyan ((ch char) (n int) (upper char) (is_a bool)))
+  (paw
+    (:= ch 'a')
+    (:= n (char-to-int ch))
+    (meow n)
+    (:= upper (char-upcase ch))
+    (meow upper)
+    (:= is_a (is-letter ch))
+    (meow is_a)))
+```
+
+### Difference from Mainstream Languages
+
+- Similar to C: characters are 1-byte integers, convertible to int
+- Unlike Python: has a dedicated char type, not single-character strings
+- Similar to Java: single quotes for char literals
+
+## 15. Combined Example
 
 ```scheme
 (nya full_walkthrough
@@ -630,11 +748,13 @@ This example shows:
 - booleans and conditional branching
 - output and return-related logic
 
-## 14. Writing Advice
+## 16. Writing Advice
 
 - Prefer personalized aliases in teaching examples to preserve NekoLang's identity
 - Write conditions as comparisons or boolean variables instead of relying on numeric truthiness
 - For arrays, show declaration, write, and read together whenever possible
 - In function examples, always write an explicit `return`
+- Use `(+ s1 s2)` for string concatenation, `int-to-string` for formatting
+- Use single quotes `'a'` for char literals, distinct from double-quoted strings
 
 For implementation-oriented details, see [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) and [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md).

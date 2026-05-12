@@ -65,6 +65,72 @@ class Lexer:
             return Token(TokenType.FLOAT, result, start_line, start_col)
         return Token(TokenType.INTEGER, result, start_line, start_col)
 
+    def _read_char(self) -> Token:
+        start_col = self.column
+        start_line = self.line
+        self._advance()  # consume opening quote
+
+        escapes = {
+            "n": "\n",
+            "t": "\t",
+            "'": "'",
+            "\\": "\\",
+        }
+
+        ch = self._current()
+        if ch is None or ch == "'":
+            source_line = self.source_lines[start_line - 1] if start_line <= len(self.source_lines) else ""
+            raise LexError(
+                "字符字面量不能为空",
+                line=start_line,
+                column=start_col,
+                source_line=source_line,
+            )
+
+        if ch is None:
+            source_line = self.source_lines[start_line - 1] if start_line <= len(self.source_lines) else ""
+            raise LexError(
+                "字符字面量缺少结束引号",
+                line=start_line,
+                column=start_col,
+                source_line=source_line,
+            )
+
+        if ch == "\\":
+            self._advance()
+            esc = self._current()
+            if esc is None:
+                source_line = self.source_lines[start_line - 1] if start_line <= len(self.source_lines) else ""
+                raise LexError(
+                    "字符字面量缺少结束引号",
+                    line=start_line,
+                    column=start_col,
+                    source_line=source_line,
+                )
+            if esc not in escapes:
+                source_line = self.source_lines[start_line - 1] if start_line <= len(self.source_lines) else ""
+                raise LexError(
+                    f"未识别的转义序列 '\\{esc}'",
+                    line=start_line,
+                    column=start_col,
+                    source_line=source_line,
+                )
+            char_val = escapes[esc]
+            self._advance()
+        else:
+            char_val = self._advance()
+
+        if self._current() != "'":
+            source_line = self.source_lines[start_line - 1] if start_line <= len(self.source_lines) else ""
+            raise LexError(
+                "字符字面量缺少结束引号",
+                line=start_line,
+                column=start_col,
+                source_line=source_line,
+            )
+        self._advance()  # consume closing quote
+        return Token(TokenType.CHAR, char_val, start_line, start_col)
+
     def _read_string(self) -> Token:
         start_col = self.column
         start_line = self.line
@@ -88,7 +154,15 @@ class Lexer:
                 esc = self._current()
                 if esc is None:
                     break
-                chars.append(escapes.get(esc, esc))
+                if esc not in escapes:
+                    source_line = self.source_lines[start_line - 1] if start_line <= len(self.source_lines) else ""
+                    raise LexError(
+                        f"未识别的转义序列 '\\{esc}'",
+                        line=start_line,
+                        column=start_col,
+                        source_line=source_line,
+                    )
+                chars.append(escapes[esc])
                 self._advance()
                 continue
             chars.append(self._advance())
@@ -122,6 +196,8 @@ class Lexer:
             if ch.isdigit():
                 return self._read_number()
 
+            if ch == "'":
+                return self._read_char()
             if ch == '"':
                 return self._read_string()
 

@@ -56,6 +56,7 @@ class TestNekgo(unittest.TestCase):
             result = self._run_nekgo("run", cwd=proj)
             self.assertEqual(result.returncode, 0)
             self.assertIn("42", result.stdout)
+            self.assertTrue(os.path.isfile(os.path.join(proj, "build", "hello")))
 
     def test_run_with_args(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -73,6 +74,17 @@ class TestNekgo(unittest.TestCase):
             result = self._run_nekgo("run", "--", "99", cwd=proj)
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout.strip(), "1\n99")
+            self.assertTrue(os.path.isfile(os.path.join(proj, "build", "args_test")))
+
+    def test_run_ephemeral_keeps_build_directory_clean(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._run_nekgo("new", "ephemeral_test", cwd=tmpdir)
+            proj = os.path.join(tmpdir, "ephemeral_test")
+
+            result = self._run_nekgo("run", "--ephemeral", cwd=proj)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("42", result.stdout)
+            self.assertFalse(os.path.exists(os.path.join(proj, "build", "ephemeral_test")))
 
     def test_build_fails_without_toml(self):
         with tempfile.TemporaryDirectory() as tmpdir:

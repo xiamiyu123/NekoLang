@@ -21,6 +21,8 @@ NekoLang 是一个编译器项目。
 - 函数定义、函数调用、作用域与返回值检查
 - `bool` 类型与比较表达式
 - lambda 表达式、`(func ...)` 函数类型、函数作为值传递（高阶函数）
+- `string` 类型与字符串操作（拼接、长度、切片、比较、包含、转换）
+- 字符字面量与字符操作（char↔int、分类、大小写转换）
 - 命令行参数读取与基础文件读写
 - LLVM IR 生成
 - 通过 `clang` 与 `runtime/runtime.c` 链接为可执行文件
@@ -38,6 +40,11 @@ NekoLang 包含两个命令行工具：
 
 - **`neko`** — 编译器本身，操作单个源文件：`neko build main.neko`
 - **`nekgo`** — 项目管理工具（类 `cargo`），操作项目目录：`nekgo build`
+
+对 `nekgo` 的交互约定，后续默认优先向 `cargo` 靠拢，除非 NekoLang 有明确的语言级理由偏离：
+
+- `nekgo build` 与 `nekgo run` 默认复用项目内构建目录
+- 若需要一次性、临时性行为，应通过显式参数开启，而不是作为默认值
 
 实现顺序分层推进。
 
@@ -271,12 +278,18 @@ NekoLang 包含两个命令行工具：
 当前所有 C 运行时函数（`nekoprint_int`、`neko_argv_int` 等）硬编码在编译器内部。引入 `extern` 后，用户可在 `.neko` 源码中声明任意 C 函数：
 
 ```scheme
-(extern printf ((string) int))
-(extern sin ((float) float))
-(extern malloc ((int) pointer))
+(extern atoi (string) int)
+(extern atof (string) float)
+(extern getpid () int)
 ```
 
 语义分析阶段将 extern 注册到符号表，代码生成时按 C 调用约定生成调用指令。这使语言可扩展性强得多，也为后续链接用户自定义 C 库打下基础。
+
+首版边界保持收敛：
+
+- 只支持固定参数个数
+- 只支持 `int`、`float`、`char`、`bool`、`string` 和现有 `(func ...)` 类型
+- 暂不支持 `pointer`、可变参数、自定义链接配置，以及数组作为 extern 参数或返回值
 
 ### P3：多文件编译与模块系统
 

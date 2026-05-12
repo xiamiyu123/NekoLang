@@ -44,8 +44,8 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `meow-arr` | `array-set` | 数组赋值 |
 | `purr-arr` | `array-print` | 数组输出 |
 
-类型只保留 `int`、`float`、`char`、`bool`，不再提供类型别名。
-字符串字面量仅用于运行时接口，例如文件路径，不作为可声明变量类型。
+类型只保留 `int`、`float`、`char`、`bool`、`string`，不再提供类型别名。
+`string` 可作为变量类型使用，支持拼接、长度、切片、比较、包含检查以及 `int` 转换。
 
 ## 示例程序
 
@@ -165,6 +165,10 @@ python nekgo.py build
 # 编译并运行
 python nekgo.py run
 
+# 与 cargo run 对齐：默认复用 build/ 目录中的产物
+# 如需旧行为，可用临时产物运行
+python nekgo.py run --ephemeral
+
 # 向程序传参
 python nekgo.py run -- 42
 ```
@@ -180,6 +184,34 @@ hello/
 └── build/
     └── hello       # 编译产物
 ```
+
+`nekgo` 的项目级命令尽量与 `cargo` 的默认习惯对齐：
+
+- `nekgo build` 将产物写入项目内 `build/`
+- `nekgo run` 默认也会更新并运行 `build/<项目名>`
+- 若只想临时编译运行、不保留产物，可使用 `python nekgo.py run --ephemeral`
+
+## 外部函数声明
+
+NekoLang 现在支持固定签名的 `extern` 声明，可直接调用默认可链接的 C 符号：
+
+```scheme
+(program extern_demo
+  (var ((n int) (x float)))
+  (begin
+    (extern atoi (string) int)
+    (extern atof (string) float)
+    (:= n (atoi "42"))
+    (:= x (atof "3.5"))
+    (print n)
+    (print x)))
+```
+
+首版边界：
+
+- 只支持固定参数个数
+- 只支持 `int`、`float`、`char`、`bool`、`string` 和现有 `(func ...)` 类型
+- 暂不支持 `pointer`、可变参数、自定义链接参数，以及数组作为 extern 参数或返回值
 
 ## 使用方法
 

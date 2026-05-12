@@ -41,7 +41,7 @@ class SymbolTable:
             size = 8
         elif type_.startswith("(array"):
             # Parse array type: (array int 10)
-            parts = type_.split()
+            parts = type_.rstrip(")").split()
             elem_type = parts[1] if len(parts) > 1 else "int"
             arr_size = int(parts[2]) if len(parts) > 2 else 1
             size = TYPE_SIZES.get(elem_type, 4) * arr_size

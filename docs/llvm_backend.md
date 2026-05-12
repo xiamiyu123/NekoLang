@@ -28,6 +28,7 @@
 | `float` | `double` | 8 字节 |
 | `char` | `i8` | 1 字节 |
 | `bool` | `i1` | 1 位 |
+| `string` | `i8*` | 8 字节（指针） |
 | `(array int N)` | `[N x i32]` | N*4 字节 |
 | `(array float N)` | `[N x double]` | N*8 字节 |
 | `(func (T...) R)` | `i8*` | 8 字节（函数指针） |

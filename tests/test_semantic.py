@@ -206,6 +206,154 @@ class TestSemanticErrors(unittest.TestCase):
         )
         self.assertEqual(len(analyzer.errors), 0)
 
+    def test_extern_call_before_declaration(self):
+        analyzer = compile_source(
+            '(program t (var ((x int))) (begin (:= x (atoi "42")) (extern atoi (string) int)))'
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_extern_call_after_declaration(self):
+        analyzer = compile_source(
+            '(program t (var ((x int))) (begin (extern atoi (string) int) (:= x (atoi "42"))))'
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_extern_argument_count_mismatch(self):
+        analyzer = compile_source(
+            '(program t (var ((x int))) (begin (extern atoi (string) int) (:= x (atoi "42" "43"))))'
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("期望", analyzer.errors[0].message)
+
+    def test_extern_argument_type_mismatch(self):
+        analyzer = compile_source(
+            "(program t (var ((x int))) (begin (extern atoi (string) int) (:= x (atoi 42))))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("参数", analyzer.errors[0].message)
+
+    def test_extern_duplicate_with_variable(self):
+        analyzer = compile_source(
+            "(program t (var ((atoi int))) (begin (extern atoi (string) int) (print atoi)))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("已经声明", analyzer.errors[0].message)
+
+    def test_extern_array_type_rejected(self):
+        analyzer = compile_source(
+            "(program t (begin (extern fill ((array int 4)) int)))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("暂不支持", analyzer.errors[0].message)
+
+    def test_extern_as_function_value_type_check(self):
+        analyzer = compile_source(
+            "(program t (var ((f (func (string) int)) (x int))) "
+            "(begin (extern atoi (string) int) (:= f atoi) (:= x (f \"42\"))))"
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_extern_as_function_value_mismatch(self):
+        analyzer = compile_source(
+            "(program t (var ((f (func (int) int)))) (begin (extern atoi (string) int) (:= f atoi)))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("无法将", analyzer.errors[0].message)
+
+    def test_string_concat_type_error(self):
+        analyzer = compile_source(
+            '(program t (var ((s string))) (begin (:= s (+ "hello" 5))))'
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("字符串拼接", analyzer.errors[0].message)
+
+    def test_string_concat_ok(self):
+        analyzer = compile_source(
+            '(program t (var ((s string))) (begin (:= s (+ "hello" " world"))))'
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_char_to_int_compatible(self):
+        analyzer = compile_source(
+            "(program t (var ((n int))) (begin (:= n (char-to-int 'a'))))"
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_string_var_declaration(self):
+        analyzer = compile_source(
+            '(program t (var ((s string))) (begin (:= s "hello")))'
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+        entry = analyzer.symbol_table.lookup("s")
+        self.assertEqual(entry.type, "string")
+
+
+    def test_string_comparison_lt_rejected(self):
+        analyzer = compile_source(
+            '(program t (var ((b bool))) (begin (:= b (< "a" "b"))))'
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("string-cmp", analyzer.errors[0].message)
+
+    def test_string_comparison_eq_allowed(self):
+        analyzer = compile_source(
+            '(program t (var ((b bool))) (begin (:= b (= "a" "a"))))'
+        )
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_string_length_type_error(self):
+        analyzer = compile_source(
+            "(program t (var ((n int) (x int))) (begin (:= x 42) (:= n (string-length x))))"
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("string-length", analyzer.errors[0].message)
+
+    def test_char_to_int_type_error(self):
+        analyzer = compile_source(
+            '(program t (var ((n int) (s string))) (begin (:= s "hello") (:= n (char-to-int s))))'
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("char-to-int", analyzer.errors[0].message)
+
+    def test_string_condition_rejected(self):
+        analyzer = compile_source(
+            '(program t (var ((s string))) (begin (:= s "x") (if s (print 1) (print 0))))'
+        )
+        self.assertGreater(len(analyzer.errors), 0)
+        self.assertIn("if", analyzer.errors[0].message)
+
+
+class TestStringCharQuadruples(unittest.TestCase):
+    def test_string_length_quadruple(self):
+        analyzer = compile_source(
+            '(program t (var ((n int))) (begin (:= n (string-length "hello"))))'
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("string-length", ops)
+
+    def test_char_to_int_quadruple(self):
+        analyzer = compile_source(
+            "(program t (var ((n int))) (begin (:= n (char-to-int 'a'))))"
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("char-to-int", ops)
+
+    def test_string_sub_quadruple_has_result_temp(self):
+        analyzer = compile_source(
+            '(program t (var ((s string))) (begin (:= s (string-sub "hello" 1 3))))'
+        )
+        quad = next(q for q in analyzer.quadruples if q.op == "string-sub")
+        self.assertIn(",", quad.ob2)
+        self.assertTrue(quad.t.startswith("T"))
+
+    def test_extern_call_quadruple(self):
+        analyzer = compile_source(
+            '(program t (var ((x int))) (begin (extern atoi (string) int) (:= x (atoi "42"))))'
+        )
+        ops = [q.op for q in analyzer.quadruples]
+        self.assertIn("param", ops)
+        self.assertIn("call", ops)
+
 
 class TestLambdaQuadruples(unittest.TestCase):
     def test_lambda_quadruples(self):
@@ -236,6 +384,312 @@ class TestAddressNaming(unittest.TestCase):
         consts = analyzer.symbol_table.const_table
         self.assertEqual(consts["42"], "C1")
         self.assertEqual(consts["99"], "C2")
+
+
+class TestSemanticEdgeCases(unittest.TestCase):
+    """Edge case tests for semantic analyzer stability."""
+
+    def test_division_by_zero_semantic(self):
+        """Division by zero should be accepted at semantic level (runtime handles it)."""
+        # Semantic analyzer should not reject division by zero
+        # The runtime behavior is undefined in C
+        analyzer = compile_source("(program t (var ((x int))) (begin (:= x (/ 10 0))))")
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_assign_to_undefined_variable(self):
+        """Assigning to undefined variable should be caught as error."""
+        source = """(program t (begin
+            (:= undefined_var 5)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_recursive_function_call(self):
+        """Recursive function call should be accepted."""
+        source = """(program t (begin
+            (function factorial ((n int)) int
+                (if (<= n 1)
+                    (return 1)
+                    (return (* n (factorial (- n 1))))))
+            (print (factorial 5))
+        ))"""
+        analyzer = compile_source(source)
+        # Should not have errors
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_mutual_recursion(self):
+        """Mutual recursion should be accepted."""
+        source = """(program t (begin
+            (function is-even ((n int)) int
+                (if (= n 0)
+                    (return 1)
+                    (return (is-odd (- n 1)))))
+            (function is-odd ((n int)) int
+                (if (= n 0)
+                    (return 0)
+                    (return (is-even (- n 1)))))
+            (print (is-even 4))
+        ))"""
+        analyzer = compile_source(source)
+        # Should not have errors
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_extern_with_string_return(self):
+        """Extern returning string should be accepted."""
+        source = """(program t (var ((s string))) (begin
+            (extern getenv (string) string)
+            (:= s (getenv "PATH"))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_extern_with_bool_return(self):
+        """Extern returning bool should be accepted."""
+        source = """(program t (var ((b bool))) (begin
+            (extern isatty (int) bool)
+            (:= b (isatty 0))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_extern_with_zero_params(self):
+        """Extern with zero parameters should be accepted."""
+        source = """(program t (var ((pid int))) (begin
+            (extern getpid () int)
+            (:= pid (getpid))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_extern_duplicate_declaration(self):
+        """Duplicate extern declaration should be caught as error."""
+        source = """(program t (begin
+            (extern atoi (string) int)
+            (extern atoi (string) int)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_string_comparison_rejected(self):
+        """String comparison with < should be rejected."""
+        source = """(program t (var ((s string))) (begin
+            (:= s "hello")
+            (if (< s "world") (print 1) (print 0))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_string_comparison_gt_rejected(self):
+        """String comparison with > should be rejected."""
+        source = """(program t (var ((s string))) (begin
+            (:= s "hello")
+            (if (> s "world") (print 1) (print 0))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_string_comparison_le_rejected(self):
+        """String comparison with <= should be rejected."""
+        source = """(program t (var ((s string))) (begin
+            (:= s "hello")
+            (if (<= s "world") (print 1) (print 0))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_string_comparison_ge_rejected(self):
+        """String comparison with >= should be rejected."""
+        source = """(program t (var ((s string))) (begin
+            (:= s "hello")
+            (if (>= s "world") (print 1) (print 0))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_float_arithmetic_type_widening(self):
+        """Int + float should produce float type."""
+        source = """(program t (var ((x float))) (begin
+            (:= x (+ 1 2.5))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_float_arithmetic_both_float(self):
+        """Float + float should produce float type."""
+        source = """(program t (var ((x float))) (begin
+            (:= x (+ 1.5 2.5))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_nested_function_definitions(self):
+        """Functions defined inside if/while should be collected."""
+        source = """(program t (var ((x int))) (begin
+            (if (> x 0)
+                (begin
+                    (function inner ((a int)) int (return a))
+                    (print (inner 1)))
+                (print 0))
+        ))"""
+        analyzer = compile_source(source)
+        # Should not have errors
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_undefined_variable_error(self):
+        """Undefined variable should be caught as error."""
+        source = """(program t (begin
+            (:= x 5)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_duplicate_variable_declaration(self):
+        """Duplicate variable declaration should be caught as error."""
+        source = """(program t (var ((x int) (x float))) (begin
+            (:= x 5)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_missing_return_in_function(self):
+        """Missing return in non-void function should be caught as error."""
+        source = """(program t (begin
+            (function bad () int (begin (print 0)))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_argument_count_mismatch(self):
+        """Argument count mismatch should be caught as error."""
+        source = """(program t (begin
+            (function add ((a int) (b int)) int (return (+ a b)))
+            (print (add 1))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_argument_type_mismatch(self):
+        """Argument type mismatch should be caught as error."""
+        source = """(program t (begin
+            (function add ((a int) (b int)) int (return (+ a b)))
+            (print (add 1 2.5))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_lambda_missing_return(self):
+        """Lambda missing return should be caught as error."""
+        source = """(program t (var ((f (func (int) int)))) (begin
+            (:= f (lambda ((x int)) int (print x)))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_lambda_type_mismatch(self):
+        """Lambda type mismatch should be caught as error."""
+        source = """(program t (var ((f (func (int) int)))) (begin
+            (:= f (lambda ((x int)) float (return 1.5)))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_array_element_type_check(self):
+        """Array element type should be checked."""
+        source = """(program t (var ((arr (array int 5)))) (begin
+            (array-set arr 0 42)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_string_concat_type_check(self):
+        """String concat with non-string should be caught as error."""
+        source = """(program t (var ((s string))) (begin
+            (:= s (+ "hello" 42))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_string_length_type_check(self):
+        """String length on non-string should be caught as error."""
+        source = """(program t (var ((x int))) (begin
+            (:= x (string-length 42))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_char_to_int_type_check(self):
+        """Char-to-int on non-char should be caught as error."""
+        source = """(program t (var ((x int))) (begin
+            (:= x (char-to-int 42))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_rand_seed_type_check(self):
+        """Rand-seed with non-int should be caught as error."""
+        source = """(program t (begin
+            (rand-seed 3.14)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_rand_range_type_check(self):
+        """Rand-range with non-int should be caught as error."""
+        source = """(program t (var ((x int))) (begin
+            (:= x (rand-range 1.0 100))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_file_path_type_check(self):
+        """File path should be string type."""
+        source = """(program t (var ((x int))) (begin
+            (:= x (read-int 42))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_extern_array_param_rejected(self):
+        """Extern with array parameter should be rejected."""
+        source = """(program t (begin
+            (extern bad (int (array int 5)) int)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_comparison_returns_bool(self):
+        """Comparison expressions should return bool type."""
+        source = """(program t (var ((b bool))) (begin
+            (:= b (> 5 3))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_comparison_with_arithmetic(self):
+        """Comparison with arithmetic expressions should work."""
+        source = """(program t (var ((b bool))) (begin
+            (:= b (> (+ 1 2) (- 5 3)))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_function_as_value(self):
+        """Function as value should be accepted."""
+        source = """(program t (var ((f (func (int) int)))) (begin
+            (function id ((x int)) int (return x))
+            (:= f id)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_multiple_lambdas(self):
+        """Multiple lambdas should be accepted."""
+        source = """(program t (var ((f (func (int) int)) (g (func (int) int)))) (begin
+            (:= f (lambda ((x int)) int (return (* x 2))))
+            (:= g (lambda ((x int)) int (return (+ x 1))))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
 
 
 if __name__ == "__main__":

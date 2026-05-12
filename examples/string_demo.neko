@@ -1,0 +1,79 @@
+; String and Char operations demo
+
+(program string_demo
+  (var ((name string)
+        (greeting string)
+        (len int)
+        (ch char)
+        (n int)
+        (upper char)
+        (is_alpha bool)
+        (num_str string)
+        (cmp int)
+        (has bool)))
+  (begin
+    ; String variable assignment
+    (:= name "Neko")
+    (print name)
+
+    ; String concatenation
+    (:= greeting (+ "Hello, " name))
+    (print greeting)
+
+    ; String length
+    (:= len (string-length greeting))
+    (print len)
+
+    ; String character access
+    (:= ch (string-at greeting 0))
+    (print ch)
+
+    ; Substring
+    (:= name (string-sub greeting 7 4))
+    (print name)
+
+    ; String comparison
+    (:= cmp (string-cmp "abc" "abc"))
+    (print cmp)
+
+    ; String contains
+    (:= has (string-contains greeting "Neko"))
+    (print has)
+
+    ; int-to-string and concatenation
+    (:= n 42)
+    (:= num_str (int-to-string n))
+    (:= greeting (+ "value=" num_str))
+    (print greeting)
+
+    ; string-to-int
+    (:= n (string-to-int "123"))
+    (print n)
+
+    ; Char literal
+    (:= ch 'A')
+    (print ch)
+
+    ; Char to int (ASCII value)
+    (:= n (char-to-int 'A'))
+    (print n)
+
+    ; Int to char
+    (:= ch (int-to-char 97))
+    (print ch)
+
+    ; Char to string
+    (:= name (char-to-string 'X'))
+    (print name)
+
+    ; Character classification
+    (:= is_alpha (is-letter 'a'))
+    (print is_alpha)
+    (:= is_alpha (is-digit '5'))
+    (print is_alpha)
+
+    ; Case conversion
+    (:= upper (char-upcase 'h'))
+    (print upper)
+    (:= ch (char-downcase 'H'))
+    (print ch)))

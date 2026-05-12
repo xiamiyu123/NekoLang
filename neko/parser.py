@@ -3,9 +3,14 @@ from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
-    FuncDefNode, LambdaDefNode, FuncCallNode, ReturnNode,
+    CharLiteralNode,
+    FuncDefNode, ExternDeclNode, LambdaDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
     ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
+    StringLengthNode, StringAtNode, StringSubNode, StringCmpNode, StringContainsNode,
+    IntToStringNode, StringToIntNode, ArgvStringNode,
+    CharToIntNode, IntToCharNode, CharToStringNode, IsLetterNode, IsDigitNode,
+    CharUpcaseNode, CharDowncaseNode,
 )
 from .errors import ParseError
 
@@ -52,6 +57,7 @@ class Parser:
         name_tok = self._expect(TokenType.IDENTIFIER)
         block = self._parse_block()
         self._expect(TokenType.RPAREN)
+        self._expect(TokenType.EOF)
         return ProgramNode(name=name_tok.value, block=block,
                            line=name_tok.line, column=name_tok.column)
 
@@ -151,6 +157,8 @@ class Parser:
             return self._parse_begin_block(paren_consumed=True)
         elif tok.type == TokenType.FUNCTION:
             return self._parse_func_def()
+        elif tok.type == TokenType.EXTERN:
+            return self._parse_extern_decl()
         elif tok.type == TokenType.ARRAY_SET:
             return self._parse_array_assign()
         elif tok.type == TokenType.ARRAY_PRINT:
@@ -221,6 +229,24 @@ class Parser:
         return FuncDefNode(name=name_tok.value, params=params,
                            return_type=return_type, body=body,
                            line=tok.line, column=tok.column)
+
+    def _parse_extern_decl(self) -> ExternDeclNode:
+        tok = self._advance()  # consume 'extern'
+        name_tok = self._expect(TokenType.IDENTIFIER)
+        self._expect(TokenType.LPAREN)
+        param_types = []
+        while self._current().type != TokenType.RPAREN:
+            param_types.append(self._parse_type())
+        self._expect(TokenType.RPAREN)
+        return_type = self._parse_type()
+        self._expect(TokenType.RPAREN)
+        return ExternDeclNode(
+            name=name_tok.value,
+            param_types=param_types,
+            return_type=return_type,
+            line=tok.line,
+            column=tok.column,
+        )
 
     def _parse_return(self) -> ReturnNode:
         tok = self._advance()  # consume 'return'
@@ -347,6 +373,88 @@ class Parser:
                     line=op_tok.line,
                     column=op_tok.column,
                 )
+            # String built-in operations
+            if op_tok.type == TokenType.STRING_LENGTH:
+                self._advance()
+                string_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return StringLengthNode(string_expr=string_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.STRING_AT:
+                self._advance()
+                string_expr = self._parse_expression()
+                index = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return StringAtNode(string_expr=string_expr, index=index, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.STRING_SUB:
+                self._advance()
+                string_expr = self._parse_expression()
+                start = self._parse_expression()
+                length = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return StringSubNode(string_expr=string_expr, start=start, length=length, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.STRING_CMP:
+                self._advance()
+                left = self._parse_expression()
+                right = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return StringCmpNode(left=left, right=right, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.STRING_CONTAINS:
+                self._advance()
+                haystack = self._parse_expression()
+                needle = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return StringContainsNode(haystack=haystack, needle=needle, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.INT_TO_STRING:
+                self._advance()
+                int_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return IntToStringNode(int_expr=int_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.STRING_TO_INT:
+                self._advance()
+                string_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return StringToIntNode(string_expr=string_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.ARGV_STRING:
+                self._advance()
+                index = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return ArgvStringNode(index=index, line=op_tok.line, column=op_tok.column)
+            # Char built-in operations
+            if op_tok.type == TokenType.CHAR_TO_INT:
+                self._advance()
+                char_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return CharToIntNode(char_expr=char_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.INT_TO_CHAR:
+                self._advance()
+                int_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return IntToCharNode(int_expr=int_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.CHAR_TO_STRING:
+                self._advance()
+                char_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return CharToStringNode(char_expr=char_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.IS_LETTER:
+                self._advance()
+                char_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return IsLetterNode(char_expr=char_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.IS_DIGIT:
+                self._advance()
+                char_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return IsDigitNode(char_expr=char_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.CHAR_UPCASE:
+                self._advance()
+                char_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return CharUpcaseNode(char_expr=char_expr, line=op_tok.line, column=op_tok.column)
+            if op_tok.type == TokenType.CHAR_DOWNCASE:
+                self._advance()
+                char_expr = self._parse_expression()
+                self._expect(TokenType.RPAREN)
+                return CharDowncaseNode(char_expr=char_expr, line=op_tok.line, column=op_tok.column)
             # Check if it's a function call: (func_name arg1 arg2 ...)
             if op_tok.type == TokenType.IDENTIFIER:
                 self._advance()
@@ -375,6 +483,9 @@ class Parser:
         elif tok.type == TokenType.BOOLEAN:
             self._advance()
             return BoolLiteralNode(value=(tok.value == "true"), line=tok.line, column=tok.column)
+        elif tok.type == TokenType.CHAR:
+            self._advance()
+            return CharLiteralNode(value=tok.value, line=tok.line, column=tok.column)
         elif tok.type == TokenType.STRING:
             self._advance()
             return StringLiteralNode(value=tok.value, line=tok.line, column=tok.column)

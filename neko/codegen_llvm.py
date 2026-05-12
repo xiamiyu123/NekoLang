@@ -7,9 +7,14 @@ from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
-    FuncDefNode, LambdaDefNode, FuncCallNode, ReturnNode,
+    CharLiteralNode,
+    FuncDefNode, ExternDeclNode, LambdaDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
     ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
+    StringLengthNode, StringAtNode, StringSubNode, StringCmpNode, StringContainsNode,
+    IntToStringNode, StringToIntNode, ArgvStringNode,
+    CharToIntNode, IntToCharNode, CharToStringNode, IsLetterNode, IsDigitNode,
+    CharUpcaseNode, CharDowncaseNode,
 )
 
 
@@ -18,6 +23,7 @@ TYPE_MAP = {
     "float": ir.DoubleType(),
     "char": ir.IntType(8),
     "bool": ir.IntType(1),
+    "string": ir.IntType(8).as_pointer(),
 }
 
 CMP_OPS = {
@@ -27,6 +33,11 @@ CMP_OPS = {
     "<=": ("<=", "ole"),
     ">=": (">=", "oge"),
     "!=": ("!=", "one"),
+}
+
+CMP_STR_OPS = {
+    "=": "==",
+    "!=": "!=",
 }
 
 ARITH_OPS = {
@@ -70,7 +81,8 @@ class LLVMCodegen:
         self.builder: ir.IRBuilder | None = None
         self.named_values: dict[str, ir.NamedValue] = {}
         self.var_types: dict[str, str] = {}
-        self.function_nodes: dict[str, FuncDefNode] = {}
+        self.function_nodes: dict[str, FuncDefNode | LambdaDefNode] = {}
+        self.extern_nodes: dict[str, ExternDeclNode] = {}
         self.global_strings: dict[str, ir.GlobalVariable] = {}
         self.nekoprint_int: ir.Function | None = None
         self.nekoprint_float: ir.Function | None = None
@@ -95,6 +107,22 @@ class LLVMCodegen:
         self.neko_write_float: ir.Function | None = None
         self.neko_write_char: ir.Function | None = None
         self.neko_write_bool: ir.Function | None = None
+        self.neko_string_concat: ir.Function | None = None
+        self.neko_string_length: ir.Function | None = None
+        self.neko_string_at: ir.Function | None = None
+        self.neko_string_sub: ir.Function | None = None
+        self.neko_string_cmp: ir.Function | None = None
+        self.neko_string_contains: ir.Function | None = None
+        self.neko_int_to_string: ir.Function | None = None
+        self.neko_string_to_int: ir.Function | None = None
+        self.neko_argv_string: ir.Function | None = None
+        self.neko_char_to_int: ir.Function | None = None
+        self.neko_int_to_char: ir.Function | None = None
+        self.neko_char_to_string: ir.Function | None = None
+        self.neko_is_letter: ir.Function | None = None
+        self.neko_is_digit: ir.Function | None = None
+        self.neko_char_upcase: ir.Function | None = None
+        self.neko_char_downcase: ir.Function | None = None
         self.argc_value: ir.Value | None = None
         self.argv_value: ir.Value | None = None
         self.current_return_type: str | None = None
@@ -102,7 +130,9 @@ class LLVMCodegen:
     def generate(self, ast: ProgramNode) -> str:
         self._declare_runtime()
         self.function_nodes = self._collect_function_nodes(ast.block.body)
+        self.extern_nodes = self._collect_extern_nodes(ast.block.body)
         self._declare_functions()
+        self._declare_externs()
         self._gen_functions()
         self._gen_program(ast)
         return str(self.module)
@@ -179,9 +209,59 @@ class LLVMCodegen:
         self.neko_write_bool = ir.Function(
             self.module, ir.FunctionType(ir.VoidType(), [char_ptr, ir.IntType(1)]), name="neko_write_bool"
         )
+        # String operations
+        self.neko_string_concat = ir.Function(
+            self.module, ir.FunctionType(char_ptr, [char_ptr, char_ptr]), name="neko_string_concat"
+        )
+        self.neko_string_length = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), [char_ptr]), name="neko_string_length"
+        )
+        self.neko_string_at = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(8), [char_ptr, ir.IntType(32)]), name="neko_string_at"
+        )
+        self.neko_string_sub = ir.Function(
+            self.module, ir.FunctionType(char_ptr, [char_ptr, ir.IntType(32), ir.IntType(32)]), name="neko_string_sub"
+        )
+        self.neko_string_cmp = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), [char_ptr, char_ptr]), name="neko_string_cmp"
+        )
+        self.neko_string_contains = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(1), [char_ptr, char_ptr]), name="neko_string_contains"
+        )
+        self.neko_int_to_string = ir.Function(
+            self.module, ir.FunctionType(char_ptr, [ir.IntType(32)]), name="neko_int_to_string"
+        )
+        self.neko_string_to_int = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), [char_ptr]), name="neko_string_to_int"
+        )
+        self.neko_argv_string = ir.Function(
+            self.module, ir.FunctionType(char_ptr, runtime_arg_types), name="neko_argv_string"
+        )
+        # Char operations
+        self.neko_char_to_int = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(32), [ir.IntType(8)]), name="neko_char_to_int"
+        )
+        self.neko_int_to_char = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(8), [ir.IntType(32)]), name="neko_int_to_char"
+        )
+        self.neko_char_to_string = ir.Function(
+            self.module, ir.FunctionType(char_ptr, [ir.IntType(8)]), name="neko_char_to_string"
+        )
+        self.neko_is_letter = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(1), [ir.IntType(8)]), name="neko_is_letter"
+        )
+        self.neko_is_digit = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(1), [ir.IntType(8)]), name="neko_is_digit"
+        )
+        self.neko_char_upcase = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(8), [ir.IntType(8)]), name="neko_char_upcase"
+        )
+        self.neko_char_downcase = ir.Function(
+            self.module, ir.FunctionType(ir.IntType(8), [ir.IntType(8)]), name="neko_char_downcase"
+        )
 
     def _collect_function_nodes(self, node: ASTNode) -> dict[str, FuncDefNode]:
-        found: dict[str, FuncDefNode] = {}
+        found: dict[str, FuncDefNode | LambdaDefNode] = {}
 
         def walk(stmt: ASTNode):
             if isinstance(stmt, FuncDefNode):
@@ -189,6 +269,32 @@ class LLVMCodegen:
                 walk(stmt.body)
             elif isinstance(stmt, LambdaDefNode):
                 found.setdefault(stmt.name, stmt)
+                walk(stmt.body)
+            elif isinstance(stmt, ExternDeclNode):
+                return
+            elif isinstance(stmt, AssignNode):
+                walk(stmt.value)
+            elif isinstance(stmt, BeginBlockNode):
+                for inner in stmt.statements:
+                    walk(inner)
+            elif isinstance(stmt, IfNode):
+                walk(stmt.then_branch)
+                walk(stmt.else_branch)
+            elif isinstance(stmt, WhileNode):
+                walk(stmt.body)
+
+        walk(node)
+        return found
+
+    def _collect_extern_nodes(self, node: ASTNode) -> dict[str, ExternDeclNode]:
+        found: dict[str, ExternDeclNode] = {}
+
+        def walk(stmt: ASTNode):
+            if isinstance(stmt, ExternDeclNode):
+                found.setdefault(stmt.name, stmt)
+            elif isinstance(stmt, FuncDefNode):
+                walk(stmt.body)
+            elif isinstance(stmt, LambdaDefNode):
                 walk(stmt.body)
             elif isinstance(stmt, AssignNode):
                 walk(stmt.value)
@@ -208,6 +314,15 @@ class LLVMCodegen:
         for node in self.function_nodes.values():
             ret_ty = _llvm_type(node.return_type)
             param_tys = [_llvm_type(type_str) for _, type_str in node.params]
+            func_ty = ir.FunctionType(ret_ty, param_tys)
+            ir.Function(self.module, func_ty, name=node.name)
+
+    def _declare_externs(self):
+        for node in self.extern_nodes.values():
+            if node.name in self.module.globals:
+                continue
+            ret_ty = _llvm_type(node.return_type)
+            param_tys = [_llvm_type(type_str) for type_str in node.param_types]
             func_ty = ir.FunctionType(ret_ty, param_tys)
             ir.Function(self.module, func_ty, name=node.name)
 
@@ -290,6 +405,8 @@ class LLVMCodegen:
             self._gen_print(node)
         elif isinstance(node, BeginBlockNode):
             self._gen_begin_block(node)
+        elif isinstance(node, ExternDeclNode):
+            return
         elif isinstance(node, (FuncDefNode, LambdaDefNode)):
             return
         elif isinstance(node, ReturnNode):
@@ -413,6 +530,8 @@ class LLVMCodegen:
             return ir.Constant(ir.IntType(1), int(node.value))
         if isinstance(node, StringLiteralNode):
             return self._string_constant(node.value)
+        if isinstance(node, CharLiteralNode):
+            return ir.Constant(ir.IntType(8), ord(node.value))
         if isinstance(node, IdentifierNode):
             # Check if it's a function name used as a value
             if node.name in self.module.globals:
@@ -454,11 +573,83 @@ class LLVMCodegen:
             path = self._coerce_string(self._gen_expression(node.path))
             reader = self._runtime_read_function(node.value_type)
             return self.builder.call(reader, [path], name="readtmp")
+        # String built-in operations
+        if isinstance(node, StringLengthNode):
+            s = self._coerce_string(self._gen_expression(node.string_expr))
+            return self.builder.call(self.neko_string_length, [s], name="strlen.tmp")
+        if isinstance(node, StringAtNode):
+            s = self._coerce_string(self._gen_expression(node.string_expr))
+            idx = self._coerce_value(self._gen_expression(node.index), "int")
+            return self.builder.call(self.neko_string_at, [s, idx], name="strat.tmp")
+        if isinstance(node, StringSubNode):
+            s = self._coerce_string(self._gen_expression(node.string_expr))
+            start = self._coerce_value(self._gen_expression(node.start), "int")
+            length = self._coerce_value(self._gen_expression(node.length), "int")
+            return self.builder.call(self.neko_string_sub, [s, start, length], name="strsub.tmp")
+        if isinstance(node, StringCmpNode):
+            left = self._coerce_string(self._gen_expression(node.left))
+            right = self._coerce_string(self._gen_expression(node.right))
+            return self.builder.call(self.neko_string_cmp, [left, right], name="strcmp.tmp")
+        if isinstance(node, StringContainsNode):
+            hay = self._coerce_string(self._gen_expression(node.haystack))
+            needle = self._coerce_string(self._gen_expression(node.needle))
+            return self.builder.call(self.neko_string_contains, [hay, needle], name="strcon.tmp")
+        if isinstance(node, IntToStringNode):
+            n = self._coerce_value(self._gen_expression(node.int_expr), "int")
+            return self.builder.call(self.neko_int_to_string, [n], name="itos.tmp")
+        if isinstance(node, StringToIntNode):
+            s = self._coerce_string(self._gen_expression(node.string_expr))
+            return self.builder.call(self.neko_string_to_int, [s], name="stoi.tmp")
+        if isinstance(node, ArgvStringNode):
+            if self.argc_value is None or self.argv_value is None:
+                raise RuntimeError("argv is not available in this context")
+            index = self._coerce_value(self._gen_expression(node.index), "int")
+            return self.builder.call(self.neko_argv_string, [self.argc_value, self.argv_value, index], name="argvstr.tmp")
+        # Char built-in operations
+        if isinstance(node, CharToIntNode):
+            c = self._coerce_value(self._gen_expression(node.char_expr), "char")
+            return self.builder.call(self.neko_char_to_int, [c], name="c2i.tmp")
+        if isinstance(node, IntToCharNode):
+            n = self._coerce_value(self._gen_expression(node.int_expr), "int")
+            return self.builder.call(self.neko_int_to_char, [n], name="i2c.tmp")
+        if isinstance(node, CharToStringNode):
+            c = self._coerce_value(self._gen_expression(node.char_expr), "char")
+            return self.builder.call(self.neko_char_to_string, [c], name="c2s.tmp")
+        if isinstance(node, IsLetterNode):
+            c = self._coerce_value(self._gen_expression(node.char_expr), "char")
+            return self.builder.call(self.neko_is_letter, [c], name="isletter.tmp")
+        if isinstance(node, IsDigitNode):
+            c = self._coerce_value(self._gen_expression(node.char_expr), "char")
+            return self.builder.call(self.neko_is_digit, [c], name="isdigit.tmp")
+        if isinstance(node, CharUpcaseNode):
+            c = self._coerce_value(self._gen_expression(node.char_expr), "char")
+            return self.builder.call(self.neko_char_upcase, [c], name="upcase.tmp")
+        if isinstance(node, CharDowncaseNode):
+            c = self._coerce_value(self._gen_expression(node.char_expr), "char")
+            return self.builder.call(self.neko_char_downcase, [c], name="downcase.tmp")
         raise RuntimeError(f"Unknown expression type: {type(node).__name__}")
 
     def _gen_binop(self, node: BinOpNode) -> ir.Value:
         left = self._gen_expression(node.left)
         right = self._gen_expression(node.right)
+        char_ptr = ir.IntType(8).as_pointer()
+
+        # String operations
+        left_is_str = left.type == char_ptr
+        right_is_str = right.type == char_ptr
+
+        if left_is_str or right_is_str:
+            if node.op == "+":
+                if left_is_str and right_is_str:
+                    return self.builder.call(self.neko_string_concat, [left, right], name="strcat.tmp")
+                raise RuntimeError("字符串拼接要求两侧都是 string 类型")
+            if node.op in CMP_STR_OPS:
+                if not (left_is_str and right_is_str):
+                    raise RuntimeError("字符串比较要求两侧都是 string 类型")
+                cmp_result = self.builder.call(self.neko_string_cmp, [left, right], name="strcmp.tmp")
+                zero = ir.Constant(ir.IntType(32), 0)
+                return self.builder.icmp_signed(CMP_STR_OPS[node.op], cmp_result, zero, name="cmp")
+            raise RuntimeError(f"字符串不支持 {node.op} 运算，请使用 string-cmp")
 
         is_float = left.type == ir.DoubleType() or right.type == ir.DoubleType()
         if is_float:
@@ -493,8 +684,15 @@ class LLVMCodegen:
         if func is not None:
             # Direct call
             func_node = self.function_nodes.get(node.name)
+            extern_node = self.extern_nodes.get(node.name)
             args = []
-            for arg_value, (_, type_str) in zip((self._gen_expression(arg) for arg in node.args), func_node.params):
+            if func_node is not None:
+                param_types = [type_str for _, type_str in func_node.params]
+            elif extern_node is not None:
+                param_types = list(extern_node.param_types)
+            else:
+                raise RuntimeError(f"Undefined function signature: {node.name}")
+            for arg_value, type_str in zip((self._gen_expression(arg) for arg in node.args), param_types):
                 args.append(self._coerce_value(arg_value, type_str))
             return self.builder.call(func, args, name="calltmp")
 

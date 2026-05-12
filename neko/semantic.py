@@ -4,9 +4,14 @@ from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
     AssignNode, IfNode, WhileNode, PrintNode, BinOpNode,
     IdentifierNode, IntLiteralNode, FloatLiteralNode, BoolLiteralNode, StringLiteralNode,
-    FuncDefNode, LambdaDefNode, FuncCallNode, ReturnNode,
+    CharLiteralNode,
+    FuncDefNode, ExternDeclNode, LambdaDefNode, FuncCallNode, ReturnNode,
     ArrayAccessNode, ArrayAssignNode, ArrayPrintNode,
     ArgcNode, ArgvNode, InputNode, RandomSeedNode, RandomRangeNode, FileReadNode, FileWriteNode,
+    StringLengthNode, StringAtNode, StringSubNode, StringCmpNode, StringContainsNode,
+    IntToStringNode, StringToIntNode, ArgvStringNode,
+    CharToIntNode, IntToCharNode, CharToStringNode, IsLetterNode, IsDigitNode,
+    CharUpcaseNode, CharDowncaseNode,
 )
 from .symbol_table import SymbolTable
 from .errors import SemanticError
@@ -98,6 +103,18 @@ class SemanticAnalyzer:
             self._collect_function_definitions(node.body)
             return
 
+        if isinstance(node, ExternDeclNode):
+            if self.symbol_table.lookup_current(node.name):
+                self._error(node, f"函数 '{node.name}' 已经声明过了", "duplicate_var")
+            else:
+                self.symbol_table.enter(node.name, node.return_type, "f")
+                self.function_signatures[node.name] = FunctionSignature(
+                    param_types=list(node.param_types),
+                    return_type=node.return_type,
+                )
+                self._validate_extern_signature(node)
+            return
+
         if isinstance(node, LambdaDefNode):
             self.lambda_counter += 1
             node.name = f"__lambda_{self.lambda_counter}"
@@ -150,6 +167,8 @@ class SemanticAnalyzer:
             self._analyze_begin_block(node)
         elif isinstance(node, FuncDefNode):
             self._analyze_func_def(node)
+        elif isinstance(node, ExternDeclNode):
+            return
         elif isinstance(node, ReturnNode):
             self._analyze_return(node)
         elif isinstance(node, ArrayAssignNode):
@@ -381,6 +400,33 @@ class SemanticAnalyzer:
         value_addr = self._analyze_expression(node.value)
         self._emit(f"write-{node.value_type}", path_addr, value_addr, "_")
 
+    def _validate_extern_signature(self, node: ExternDeclNode):
+        for index, type_name in enumerate(node.param_types, start=1):
+            if not self._is_supported_extern_type(type_name):
+                self._error(
+                    node,
+                    f"extern '{node.name}' 的第 {index} 个参数类型 '{type_name}' 暂不支持",
+                    "type_mismatch",
+                )
+        if not self._is_supported_extern_type(node.return_type):
+            self._error(
+                node,
+                f"extern '{node.name}' 的返回类型 '{node.return_type}' 暂不支持",
+                "type_mismatch",
+            )
+
+    def _is_supported_extern_type(self, type_name: str) -> bool:
+        if type_name in {"int", "float", "char", "bool", "string"}:
+            return True
+        if type_name.startswith("(func"):
+            signature = self._parse_func_type(type_name)
+            if signature is None:
+                return False
+            return all(self._is_supported_extern_type(param) for param in signature.param_types) and (
+                self._is_supported_extern_type(signature.return_type)
+            )
+        return False
+
     def _analyze_expression(self, node: ASTNode) -> str:
         if isinstance(node, IntLiteralNode):
             return self.symbol_table.get_const_addr(node.value)
@@ -390,6 +436,8 @@ class SemanticAnalyzer:
             return self.symbol_table.get_const_addr(str(node.value).lower())
         if isinstance(node, StringLiteralNode):
             return self.symbol_table.get_const_addr(f'"{node.value}"')
+        if isinstance(node, CharLiteralNode):
+            return self.symbol_table.get_const_addr(f"'{node.value}'")
         if isinstance(node, IdentifierNode):
             entry = self.symbol_table.lookup(node.name)
             if not entry:
@@ -502,6 +550,108 @@ class SemanticAnalyzer:
             temp = self.symbol_table.alloc_temp()
             self._emit(f"read-{node.value_type}", path_addr, "_", temp)
             return temp
+        # String built-in operations
+        if isinstance(node, StringLengthNode):
+            self._check_expr_type(node, node.string_expr, "string", "string-length")
+            str_addr = self._analyze_expression(node.string_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("string-length", str_addr, "_", temp)
+            return temp
+        if isinstance(node, StringAtNode):
+            self._check_expr_type(node, node.string_expr, "string", "string-at")
+            self._check_expr_type(node, node.index, "int", "string-at")
+            str_addr = self._analyze_expression(node.string_expr)
+            idx_addr = self._analyze_expression(node.index)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("string-at", str_addr, idx_addr, temp)
+            return temp
+        if isinstance(node, StringSubNode):
+            self._check_expr_type(node, node.string_expr, "string", "string-sub")
+            self._check_expr_type(node, node.start, "int", "string-sub")
+            self._check_expr_type(node, node.length, "int", "string-sub")
+            str_addr = self._analyze_expression(node.string_expr)
+            start_addr = self._analyze_expression(node.start)
+            len_addr = self._analyze_expression(node.length)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("string-sub", str_addr, f"{start_addr},{len_addr}", temp)
+            return temp
+        if isinstance(node, StringCmpNode):
+            self._check_expr_type(node, node.left, "string", "string-cmp")
+            self._check_expr_type(node, node.right, "string", "string-cmp")
+            left_addr = self._analyze_expression(node.left)
+            right_addr = self._analyze_expression(node.right)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("string-cmp", left_addr, right_addr, temp)
+            return temp
+        if isinstance(node, StringContainsNode):
+            self._check_expr_type(node, node.haystack, "string", "string-contains")
+            self._check_expr_type(node, node.needle, "string", "string-contains")
+            hay_addr = self._analyze_expression(node.haystack)
+            needle_addr = self._analyze_expression(node.needle)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("string-contains", hay_addr, needle_addr, temp)
+            return temp
+        if isinstance(node, IntToStringNode):
+            self._check_expr_type(node, node.int_expr, "int", "int-to-string")
+            int_addr = self._analyze_expression(node.int_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("int-to-string", int_addr, "_", temp)
+            return temp
+        if isinstance(node, StringToIntNode):
+            self._check_expr_type(node, node.string_expr, "string", "string-to-int")
+            str_addr = self._analyze_expression(node.string_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("string-to-int", str_addr, "_", temp)
+            return temp
+        if isinstance(node, ArgvStringNode):
+            self._check_expr_type(node, node.index, "int", "argv-string")
+            index_addr = self._analyze_expression(node.index)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("argv-string", index_addr, "_", temp)
+            return temp
+        # Char built-in operations
+        if isinstance(node, CharToIntNode):
+            self._check_expr_type(node, node.char_expr, "char", "char-to-int")
+            char_addr = self._analyze_expression(node.char_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("char-to-int", char_addr, "_", temp)
+            return temp
+        if isinstance(node, IntToCharNode):
+            self._check_expr_type(node, node.int_expr, "int", "int-to-char")
+            int_addr = self._analyze_expression(node.int_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("int-to-char", int_addr, "_", temp)
+            return temp
+        if isinstance(node, CharToStringNode):
+            self._check_expr_type(node, node.char_expr, "char", "char-to-string")
+            char_addr = self._analyze_expression(node.char_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("char-to-string", char_addr, "_", temp)
+            return temp
+        if isinstance(node, IsLetterNode):
+            self._check_expr_type(node, node.char_expr, "char", "is-letter")
+            char_addr = self._analyze_expression(node.char_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("is-letter", char_addr, "_", temp)
+            return temp
+        if isinstance(node, IsDigitNode):
+            self._check_expr_type(node, node.char_expr, "char", "is-digit")
+            char_addr = self._analyze_expression(node.char_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("is-digit", char_addr, "_", temp)
+            return temp
+        if isinstance(node, CharUpcaseNode):
+            self._check_expr_type(node, node.char_expr, "char", "char-upcase")
+            char_addr = self._analyze_expression(node.char_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("char-upcase", char_addr, "_", temp)
+            return temp
+        if isinstance(node, CharDowncaseNode):
+            self._check_expr_type(node, node.char_expr, "char", "char-downcase")
+            char_addr = self._analyze_expression(node.char_expr)
+            temp = self.symbol_table.alloc_temp()
+            self._emit("char-downcase", char_addr, "_", temp)
+            return temp
         return "_"
 
     def _infer_expression_type(self, node: ASTNode) -> str | None:
@@ -513,6 +663,8 @@ class SemanticAnalyzer:
             return "bool"
         if isinstance(node, StringLiteralNode):
             return "string"
+        if isinstance(node, CharLiteralNode):
+            return "char"
         if isinstance(node, IdentifierNode):
             entry = self.symbol_table.lookup(node.name)
             if entry:
@@ -549,6 +701,36 @@ class SemanticAnalyzer:
             return "int"
         if isinstance(node, FileReadNode):
             return node.value_type
+        if isinstance(node, StringLengthNode):
+            return "int"
+        if isinstance(node, StringAtNode):
+            return "char"
+        if isinstance(node, StringSubNode):
+            return "string"
+        if isinstance(node, StringCmpNode):
+            return "int"
+        if isinstance(node, StringContainsNode):
+            return "bool"
+        if isinstance(node, IntToStringNode):
+            return "string"
+        if isinstance(node, StringToIntNode):
+            return "int"
+        if isinstance(node, ArgvStringNode):
+            return "string"
+        if isinstance(node, CharToIntNode):
+            return "int"
+        if isinstance(node, IntToCharNode):
+            return "char"
+        if isinstance(node, CharToStringNode):
+            return "string"
+        if isinstance(node, IsLetterNode):
+            return "bool"
+        if isinstance(node, IsDigitNode):
+            return "bool"
+        if isinstance(node, CharUpcaseNode):
+            return "char"
+        if isinstance(node, CharDowncaseNode):
+            return "char"
         if isinstance(node, BinOpNode):
             left_type = self._infer_expression_type(node.left)
             right_type = self._infer_expression_type(node.right)
@@ -556,12 +738,23 @@ class SemanticAnalyzer:
                 return None
 
             if node.op in {"<", ">", "=", "<=", ">=", "!="}:
+                if left_type == "string" or right_type == "string":
+                    if node.op not in {"=", "!="}:
+                        self._error(node, f"字符串只能用 = 和 != 比较，不能用 {node.op}，请使用 string-cmp", "type_mismatch")
+                    elif left_type != "string" or right_type != "string":
+                        self._error(node, f"无法比较 {left_type} 与 {right_type}", "type_mismatch")
+                    return "bool"
                 if self._types_compatible(left_type, right_type) or self._types_compatible(right_type, left_type):
                     return "bool"
                 self._error(node, f"无法比较 {left_type} 与 {right_type}", "type_mismatch")
                 return "bool"
 
             if node.op in {"+", "-", "*", "/"}:
+                if node.op == "+" and (left_type == "string" or right_type == "string"):
+                    if left_type == "string" and right_type == "string":
+                        return "string"
+                    self._error(node, f"字符串拼接要求两侧都是 string，但得到 {left_type} 与 {right_type}", "type_mismatch")
+                    return "string"
                 if left_type == "float" or right_type == "float":
                     return "float"
                 if left_type == "int" and right_type == "int":
@@ -574,10 +767,24 @@ class SemanticAnalyzer:
     def _types_compatible(self, expected: str, actual: str) -> bool:
         if expected == actual:
             return True
-        return expected == "float" and actual == "int"
+        if expected == "float" and actual in ("int", "char"):
+            return True
+        if expected == "int" and actual == "char":
+            return True
+        return False
 
     def _is_condition_type(self, type_name: str) -> bool:
-        return type_name in {"bool", "int", "float"}
+        if type_name.startswith("(func") or type_name.startswith("(array") or type_name == "string":
+            return False
+        return type_name in {"bool", "int", "float", "char"}
+
+    def _check_expr_type(self, node: ASTNode, expr: ASTNode, expected: str, op_name: str) -> bool:
+        """Check that expr has the expected type. Returns True if OK."""
+        actual = self._infer_expression_type(expr)
+        if actual and not self._types_compatible(expected, actual):
+            self._error(expr, f"{op_name} 需要 {expected} 类型，但得到 {actual}", "type_mismatch")
+            return False
+        return True
 
     def _array_element_type(self, type_name: str) -> str:
         parts = type_name.rstrip(")").split()

@@ -113,11 +113,27 @@ class StringLiteralNode(ASTNode):
 
 
 @dataclass
+class CharLiteralNode(ASTNode):
+    value: str = ""
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
 class FuncDefNode(ASTNode):
     name: str = ""
     params: list[tuple[str, str]] = field(default_factory=list)
     return_type: str = ""
     body: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class ExternDeclNode(ASTNode):
+    name: str = ""
+    param_types: list[str] = field(default_factory=list)
+    return_type: str = ""
     line: int = 0
     column: int = 0
 
@@ -225,6 +241,118 @@ class FileWriteNode(ASTNode):
     column: int = 0
 
 
+# String built-in operation nodes
+@dataclass
+class StringLengthNode(ASTNode):
+    string_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class StringAtNode(ASTNode):
+    string_expr: ASTNode = field(default_factory=ASTNode)
+    index: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class StringSubNode(ASTNode):
+    string_expr: ASTNode = field(default_factory=ASTNode)
+    start: ASTNode = field(default_factory=ASTNode)
+    length: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class StringCmpNode(ASTNode):
+    left: ASTNode = field(default_factory=ASTNode)
+    right: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class StringContainsNode(ASTNode):
+    haystack: ASTNode = field(default_factory=ASTNode)
+    needle: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class IntToStringNode(ASTNode):
+    int_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class StringToIntNode(ASTNode):
+    string_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class ArgvStringNode(ASTNode):
+    index: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+# Char built-in operation nodes
+@dataclass
+class CharToIntNode(ASTNode):
+    char_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class IntToCharNode(ASTNode):
+    int_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class CharToStringNode(ASTNode):
+    char_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class IsLetterNode(ASTNode):
+    char_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class IsDigitNode(ASTNode):
+    char_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class CharUpcaseNode(ASTNode):
+    char_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
+@dataclass
+class CharDowncaseNode(ASTNode):
+    char_expr: ASTNode = field(default_factory=ASTNode)
+    line: int = 0
+    column: int = 0
+
+
 def dump_ast(node: ASTNode, indent: int = 0) -> str:
     prefix = "  " * indent
     if isinstance(node, ProgramNode):
@@ -284,11 +412,16 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
         return f"{prefix}Bool({node.value})\n"
     elif isinstance(node, StringLiteralNode):
         return f'{prefix}String("{node.value}")\n'
+    elif isinstance(node, CharLiteralNode):
+        return f"{prefix}Char('{node.value}')\n"
     elif isinstance(node, FuncDefNode):
         params_str = ", ".join(f"({n}:{t})" for n, t in node.params)
         result = f"{prefix}FuncDef({node.name}, [{params_str}], {node.return_type})\n"
         result += dump_ast(node.body, indent + 1)
         return result
+    elif isinstance(node, ExternDeclNode):
+        params_str = ", ".join(node.param_types)
+        return f"{prefix}ExternDecl({node.name}, [{params_str}], {node.return_type})\n"
     elif isinstance(node, LambdaDefNode):
         params_str = ", ".join(f"({n}:{t})" for n, t in node.params)
         result = f"{prefix}Lambda({node.name}, [{params_str}], {node.return_type})\n"
@@ -341,6 +474,71 @@ def dump_ast(node: ASTNode, indent: int = 0) -> str:
         result = f"{prefix}FileWrite({node.value_type})\n"
         result += dump_ast(node.path, indent + 1)
         result += dump_ast(node.value, indent + 1)
+        return result
+    elif isinstance(node, StringLengthNode):
+        result = f"{prefix}StringLength\n"
+        result += dump_ast(node.string_expr, indent + 1)
+        return result
+    elif isinstance(node, StringAtNode):
+        result = f"{prefix}StringAt\n"
+        result += dump_ast(node.string_expr, indent + 1)
+        result += dump_ast(node.index, indent + 1)
+        return result
+    elif isinstance(node, StringSubNode):
+        result = f"{prefix}StringSub\n"
+        result += dump_ast(node.string_expr, indent + 1)
+        result += dump_ast(node.start, indent + 1)
+        result += dump_ast(node.length, indent + 1)
+        return result
+    elif isinstance(node, StringCmpNode):
+        result = f"{prefix}StringCmp\n"
+        result += dump_ast(node.left, indent + 1)
+        result += dump_ast(node.right, indent + 1)
+        return result
+    elif isinstance(node, StringContainsNode):
+        result = f"{prefix}StringContains\n"
+        result += dump_ast(node.haystack, indent + 1)
+        result += dump_ast(node.needle, indent + 1)
+        return result
+    elif isinstance(node, IntToStringNode):
+        result = f"{prefix}IntToString\n"
+        result += dump_ast(node.int_expr, indent + 1)
+        return result
+    elif isinstance(node, StringToIntNode):
+        result = f"{prefix}StringToInt\n"
+        result += dump_ast(node.string_expr, indent + 1)
+        return result
+    elif isinstance(node, ArgvStringNode):
+        result = f"{prefix}ArgvString\n"
+        result += dump_ast(node.index, indent + 1)
+        return result
+    elif isinstance(node, CharToIntNode):
+        result = f"{prefix}CharToInt\n"
+        result += dump_ast(node.char_expr, indent + 1)
+        return result
+    elif isinstance(node, IntToCharNode):
+        result = f"{prefix}IntToChar\n"
+        result += dump_ast(node.int_expr, indent + 1)
+        return result
+    elif isinstance(node, CharToStringNode):
+        result = f"{prefix}CharToString\n"
+        result += dump_ast(node.char_expr, indent + 1)
+        return result
+    elif isinstance(node, IsLetterNode):
+        result = f"{prefix}IsLetter\n"
+        result += dump_ast(node.char_expr, indent + 1)
+        return result
+    elif isinstance(node, IsDigitNode):
+        result = f"{prefix}IsDigit\n"
+        result += dump_ast(node.char_expr, indent + 1)
+        return result
+    elif isinstance(node, CharUpcaseNode):
+        result = f"{prefix}CharUpcase\n"
+        result += dump_ast(node.char_expr, indent + 1)
+        return result
+    elif isinstance(node, CharDowncaseNode):
+        result = f"{prefix}CharDowncase\n"
+        result += dump_ast(node.char_expr, indent + 1)
         return result
     else:
         return f"{prefix}Unknown({type(node).__name__})\n"

@@ -66,6 +66,12 @@ def _load_project_config(project_dir: str) -> dict:
 # Commands
 # ---------------------------------------------------------------------------
 
+def _project_output_path(project_dir: str, name: str) -> str:
+    build_dir = os.path.join(project_dir, "build")
+    os.makedirs(build_dir, exist_ok=True)
+    return os.path.join(build_dir, name)
+
+
 def command_new(args: argparse.Namespace) -> int:
     """Create a new NekoLang project."""
     name = args.name
@@ -112,14 +118,11 @@ def command_build(args: argparse.Namespace) -> int:
         print(f"错误: 入口文件 '{entry}' 未找到。")
         return 1
 
-    build_dir = os.path.join(project_dir, "build")
-    os.makedirs(build_dir, exist_ok=True)
-
-    output_path = os.path.join(build_dir, name)
+    output_path = _project_output_path(project_dir, name)
 
     result = compile_file(entry_path)
     ensure_no_semantic_errors(result)
-    compile_to_executable(result.ast, output_path, verbose=args.verbose)
+    compile_to_executable(result.ast, output_path, backend=args.backend, verbose=args.verbose)
 
     print(f"编译成功: build/{name}")
     return 0
@@ -145,11 +148,17 @@ def command_run(args: argparse.Namespace) -> int:
     if runtime_args and runtime_args[0] == "--":
         runtime_args = runtime_args[1:]
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        output_path = os.path.join(tmpdir, name)
-        compile_to_executable(result.ast, output_path, verbose=args.verbose)
-        proc = subprocess.run([output_path, *runtime_args])
-        return proc.returncode
+    if args.ephemeral:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = os.path.join(tmpdir, name)
+            compile_to_executable(result.ast, output_path, backend=args.backend, verbose=args.verbose)
+            proc = subprocess.run([output_path, *runtime_args])
+            return proc.returncode
+
+    output_path = _project_output_path(project_dir, name)
+    compile_to_executable(result.ast, output_path, backend=args.backend, verbose=args.verbose)
+    proc = subprocess.run([output_path, *runtime_args])
+    return proc.returncode
 
 
 # ---------------------------------------------------------------------------
@@ -166,10 +175,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_build = sub.add_parser("build", help="编译当前项目")
     p_build.add_argument("--verbose", action="store_true", help="打印 LLVM IR 和 clang 命令")
+    p_build.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
     p_build.set_defaults(func=command_build)
 
     p_run = sub.add_parser("run", help="编译并运行当前项目")
     p_run.add_argument("--verbose", action="store_true", help="打印 LLVM IR 和 clang 命令")
+    p_run.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
+    p_run.add_argument("--ephemeral", action="store_true", help="使用临时构建产物运行，不写入 build/ 目录")
     p_run.add_argument("args", nargs=argparse.REMAINDER, help="传递给程序的参数")
     p_run.set_defaults(func=command_run)
 
