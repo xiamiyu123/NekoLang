@@ -174,7 +174,7 @@ NekoLang 包含两个命令行工具：
 任务：
 
 - 提供统一 CLI 体验，例如 `check`、`build`
-- 将现有 `neko.py` 演进为稳定的命令入口
+- 将现有 CLI 演进为稳定的命令入口（`neko` / `nekgo`）
 - 去掉写死的目标平台配置，改为合理推导或配置
 - 完善依赖检查和错误提示
 - 提供若干完整 demo
@@ -223,7 +223,7 @@ NekoLang 包含两个命令行工具：
 - 实现控制流（if/else、while → 条件跳转标签）
 - 实现函数调用（遵守 AAPCS64 调用约定、参数传递、返回值）
 - 实现运行时函数调用（通过 `bl _printf` 等调用 C 标准库）
-- 改造 `neko.py` 中的 `compile_to_executable`，加入平台判断与 gcc 链接
+- 改造 `compile_to_executable`，加入平台判断与 gcc 链接
 - 补充 ARM64 后端的端到端测试
 
 完成标准：

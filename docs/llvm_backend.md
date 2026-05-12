@@ -208,17 +208,17 @@ void nekoprint_char(char val) { printf("%c\n", val); }
 
 ```bash
 # 查看 LLVM IR
-python neko.py examples/demo.neko --llvm-ir
+uv run neko llvm-ir examples/demo.neko
 
 # 编译为可执行文件
-python neko.py examples/demo.neko --compile demo
+uv run neko build examples/demo.neko -o demo
 
 # 运行
 ./demo
 # 输出: 12
 
 # 编译 fibonacci
-python neko.py examples/fibonacci.neko --compile fib
+uv run neko build examples/fibonacci.neko -o fib
 ./fib
 # 输出: 0 1 1 2 3 5 8 13 21 34 55 89
 ```

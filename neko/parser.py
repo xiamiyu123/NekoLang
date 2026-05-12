@@ -1,3 +1,5 @@
+import sys
+
 from .tokens import Token, TokenType
 from .ast_nodes import (
     ASTNode, ProgramNode, BlockNode, VarDeclNode, BeginBlockNode,
@@ -99,6 +101,7 @@ class Parser:
             elif tok.type == TokenType.IMPORT:
                 imports.append(self._parse_import())
             elif tok.type == TokenType.PROGRAM:
+                print(f"警告: 导入文件中的 (program ...) 块被跳过 (行 {tok.line})", file=sys.stderr)
                 self._advance()
                 self._expect(TokenType.IDENTIFIER)
                 self._parse_block()

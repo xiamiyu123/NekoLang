@@ -12,7 +12,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 class TestNekgo(unittest.TestCase):
     def _run_nekgo(self, *args, cwd=None):
         return subprocess.run(
-            [sys.executable, os.path.join(REPO_ROOT, "nekgo.py"), *args],
+            [sys.executable, "-m", "neko.nekgo_cli", *args],
             capture_output=True,
             text=True,
             cwd=cwd or REPO_ROOT,

@@ -212,7 +212,7 @@ class TestCLI(unittest.TestCase):
     def _run_cli(self, *args):
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         return subprocess.run(
-            [sys.executable, os.path.join(repo_root, "neko.py"), *args],
+            [sys.executable, "-m", "neko.cli", *args],
             capture_output=True,
             text=True,
             cwd=repo_root,

@@ -156,21 +156,21 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 
 ```bash
 # 创建新项目
-uv run python nekgo.py new hello
+uv run nekgo new hello
 cd hello
 
 # 编译项目
-uv run python nekgo.py build
+uv run nekgo build
 
 # 编译并运行
-uv run python nekgo.py run
+uv run nekgo run
 
 # 与 cargo run 对齐：默认复用 build/ 目录中的产物
 # 如需旧行为，可用临时产物运行
-uv run python nekgo.py run --ephemeral
+uv run nekgo run --ephemeral
 
 # 向程序传参
-uv run python nekgo.py run -- 42
+uv run nekgo run -- 42
 ```
 
 项目结构：
@@ -189,7 +189,7 @@ hello/
 
 - `nekgo build` 将产物写入项目内 `build/`
 - `nekgo run` 默认也会更新并运行 `build/<项目名>`
-- 若只想临时编译运行、不保留产物，可使用 `python nekgo.py run --ephemeral`
+- 若只想临时编译运行、不保留产物，可使用 `uv run nekgo run --ephemeral`
 
 ## 外部函数声明
 
@@ -231,38 +231,38 @@ uv sync
 
 ```bash
 # 语义检查
-uv run python neko.py check examples/demo.neko
+uv run neko check examples/demo.neko
 
 # 输出 LLVM IR
-uv run python neko.py llvm-ir examples/demo.neko
+uv run neko llvm-ir examples/demo.neko
 
 # 编译为可执行文件
-uv run python neko.py build examples/demo.neko -o demo
+uv run neko build examples/demo.neko -o demo
 ./demo
 
 # 编译并运行，向程序传参
-uv run python neko.py run examples/runtime_demo.neko -- 41
+uv run neko run examples/runtime_demo.neko -- 41
 
 # 交互式输入示例：输入 10 20，输出 30
-printf '10 20\n' | uv run python neko.py run examples/input_demo.neko
+printf '10 20\n' | uv run neko run examples/input_demo.neko
 
 # 随机数示例：固定种子后输出一个 1 到 100 之间的整数
-uv run python neko.py run examples/random_demo.neko
+uv run neko run examples/random_demo.neko
 
 # 猜数字示例：30 太小，50 太大，42 猜中
-uv run python neko.py run examples/guess_number.neko -- 30 50 42
+uv run neko run examples/guess_number.neko -- 30 50 42
 
 # Lambda 与高阶函数示例
-uv run python neko.py run examples/lambda_demo.neko
+uv run neko run examples/lambda_demo.neko
 
 # 仅输出 AST
-uv run python neko.py ast examples/demo.neko
+uv run neko ast examples/demo.neko
 
 # 仅输出词法单元
-uv run python neko.py tokens examples/demo.neko
+uv run neko tokens examples/demo.neko
 
 # 兼容旧用法
-uv run python neko.py examples/demo.neko --all
+uv run neko examples/demo.neko --all
 ```
 
 ## 运行测试
@@ -292,8 +292,8 @@ uv run pytest tests/ -v
 ## 项目结构
 
 ```text
-neko.py               # 编译器 CLI
-nekgo.py              # 项目管理工具
+neko/cli.py           # 编译器 CLI
+neko/nekgo_cli.py     # 项目管理工具
 
 neko/
 ├── tokens.py         # Token 类型、关键字表、界符表

@@ -49,6 +49,8 @@ def _load_project_config(project_dir: str) -> dict:
         with open(toml_path, "rb") as f:
             config = tomllib.load(f)
     except ImportError:
+        import warnings
+        warnings.warn("Python < 3.11: 使用简化 TOML 解析器，复杂配置可能无法正确解析")
         config = _parse_toml_simple(toml_path)
 
     project = config.get("project", {})
@@ -151,12 +153,12 @@ def command_run(args: argparse.Namespace) -> int:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, name)
             compile_to_executable(result.ast, output_path, backend=args.backend, verbose=args.verbose)
-            proc = subprocess.run([output_path, *runtime_args])
+            proc = subprocess.run([output_path, *runtime_args], text=True)
             return proc.returncode
 
     output_path = _project_output_path(project_dir, name)
     compile_to_executable(result.ast, output_path, backend=args.backend, verbose=args.verbose)
-    proc = subprocess.run([output_path, *runtime_args])
+    proc = subprocess.run([output_path, *runtime_args], text=True)
     return proc.returncode
 
 

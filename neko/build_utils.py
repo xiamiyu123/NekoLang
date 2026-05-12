@@ -1,4 +1,4 @@
-"""Shared build utilities for neko.py and nekgo.py."""
+"""Shared build utilities for neko CLI and nekgo CLI."""
 
 import os
 import platform
@@ -66,26 +66,6 @@ def _resolve_import_path(import_path: str, base_dir: str) -> str:
     return os.path.join(base_dir, import_path + ".neko")
 
 
-def _extract_definitions(ast: ProgramNode) -> list[ASTNode]:
-    """Extract function and extern definitions from a ProgramNode."""
-    defs = []
-    for stmt in ast.block.body.statements:
-        if isinstance(stmt, (FuncDefNode, ExternDeclNode)):
-            defs.append(stmt)
-    return defs
-
-
-def _compile_definitions_from_file(path: str) -> list[ASTNode]:
-    """Compile a file and extract its top-level function/extern definitions."""
-    source = read_source(path)
-    lexer = Lexer(source)
-    tokens = lexer.tokenize()
-    parser = Parser(tokens)
-    parser.set_source(source)
-    _, defs = parser.parse_definition_file()
-    return defs
-
-
 def _resolve_imports(
     imports: list[ImportNode],
     base_dir: str,
@@ -111,7 +91,7 @@ def _resolve_imports(
 
         nested_imports, defs = parser.parse_definition_file()
 
-        # Recursively resolve nested imports
+        # Recursively resolve nested imports first (DFS: dependencies before dependents)
         if nested_imports:
             _resolve_imports(nested_imports, imp_base, visited, collected)
 
@@ -136,7 +116,7 @@ def compile_file_with_imports(path: str) -> CompilationResult:
 
     # Resolve imports
     base_dir = os.path.dirname(os.path.abspath(path))
-    visited = {os.path.abspath(path)}
+    visited = {os.path.abspath(path)}  # prevent the main file from importing itself
     imported_defs: list[ASTNode] = []
     _resolve_imports(ast.imports, base_dir, visited, imported_defs)
 
