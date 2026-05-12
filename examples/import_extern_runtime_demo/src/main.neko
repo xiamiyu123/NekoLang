@@ -1,0 +1,33 @@
+; import_extern_runtime_demo — 测试 import + extern + runtime 共存
+; 1. import 测试: 导入 utils.neko 中的函数
+; 2. extern 测试: 在 libc.neko 中声明外部 C 函数
+
+(import utils)
+(import libc)
+(import meow_rand)
+
+(program import_extern_runtime_demo
+  (var ((x int) (y int) (z int)))
+  (begin
+    ; 测试 import: 调用导入的 NekoLang 函数
+    (:= x (add 10 20))
+    (meow "add(10, 20) = ")
+    (meow x)
+
+    ; 测试 import: 另一个函数
+    (:= y (double x))
+    (meow "double(add(10, 20)) = ")
+    (meow y)
+
+    ; 测试 extern: 调用外部 C 函数
+    (:= z (abs (- 0 42)))
+    (meow "abs(-42) = ")
+    (meow z)
+
+    ; 初始化随机种子
+    (rand-seed 42)
+
+    ; 测试 runtime: 调用内置随机函数
+    (:= x (meow_rand 1 100))
+    (meow "meow_rand(1, 100) = ")
+    (meow x)))

@@ -1,0 +1,11 @@
+; utils.neko — 纯 NekoLang 函数库 (测试 import)
+; 被导入的模块,不依赖 extern
+
+(function double ((x int)) int
+  (return (* x 2)))
+
+(function add ((a int) (b int)) int
+  (return (+ a b)))
+
+(function square ((x int)) int
+  (return (* x x)))

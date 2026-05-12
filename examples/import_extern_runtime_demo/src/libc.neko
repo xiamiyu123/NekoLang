@@ -1,0 +1,4 @@
+; libc.neko — 声明外部 C 函数 (测试 extern)
+
+; C 标准库函数, 链接时由系统 libc 提供
+(extern abs (int) int)
