@@ -126,3 +126,33 @@ class TestARM64CharOperations(Arm64BackendMixin, llvm_tests.TestCharOperations):
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
 class TestARM64Lambda(Arm64BackendMixin, llvm_tests.TestLambda):
     pass
+
+
+@unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+class TestARM64ArrayEdgeCases(Arm64BackendMixin, llvm_tests.TestArrayEdgeCases):
+    pass
+
+
+@unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+class TestARM64FileIOEdgeCases(Arm64BackendMixin, llvm_tests.TestFileIOEdgeCases):
+    pass
+
+
+@unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+class TestARM64ArgvEdgeCases(Arm64BackendMixin, llvm_tests.TestArgvEdgeCases):
+    pass
+
+
+@unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+class TestARM64InputEdgeCases(Arm64BackendMixin, llvm_tests.TestInputEdgeCases):
+    pass
+
+
+@unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+class TestARM64RandEdgeCases(Arm64BackendMixin, llvm_tests.TestRandEdgeCases):
+    pass
+
+
+@unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+class TestARM64CodegenEdgeCases(Arm64BackendMixin, llvm_tests.TestCodegenEdgeCases):
+    pass

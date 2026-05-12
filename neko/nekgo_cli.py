@@ -2,11 +2,18 @@
 
 import argparse
 import os
+import platform
 import subprocess
 import sys
 import tempfile
 
 from neko.build_utils import compile_file_with_imports, compile_to_executable, ensure_no_semantic_errors
+
+
+def _resolve_backend(requested: str) -> str:
+    if requested == "auto":
+        return "arm64" if platform.system() == "Darwin" and platform.machine() == "arm64" else "llvm"
+    return requested
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +127,8 @@ def command_build(args: argparse.Namespace) -> int:
         return 1
 
     output_path = _project_output_path(project_dir, name)
+    resolved = _resolve_backend(args.backend)
+    print(f"Backend: {resolved}", file=sys.stderr)
 
     result = compile_file_with_imports(entry_path)
     ensure_no_semantic_errors(result)
@@ -142,6 +151,7 @@ def command_run(args: argparse.Namespace) -> int:
         print(f"错误: 入口文件 '{entry}' 未找到。")
         return 1
 
+    print(f"Backend: {_resolve_backend(args.backend)}", file=sys.stderr)
     result = compile_file_with_imports(entry_path)
     ensure_no_semantic_errors(result)
 
