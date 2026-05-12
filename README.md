@@ -156,21 +156,21 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 
 ```bash
 # 创建新项目
-python nekgo.py new hello
+uv run python nekgo.py new hello
 cd hello
 
 # 编译项目
-python nekgo.py build
+uv run python nekgo.py build
 
 # 编译并运行
-python nekgo.py run
+uv run python nekgo.py run
 
 # 与 cargo run 对齐：默认复用 build/ 目录中的产物
 # 如需旧行为，可用临时产物运行
-python nekgo.py run --ephemeral
+uv run python nekgo.py run --ephemeral
 
 # 向程序传参
-python nekgo.py run -- 42
+uv run python nekgo.py run -- 42
 ```
 
 项目结构：
@@ -213,48 +213,62 @@ NekoLang 现在支持固定签名的 `extern` 声明，可直接调用默认可�
 - 只支持 `int`、`float`、`char`、`bool`、`string` 和现有 `(func ...)` 类型
 - 暂不支持 `pointer`、可变参数、自定义链接参数，以及数组作为 extern 参数或返回值
 
+## 环境准备
+
+本项目使用 [UV](https://docs.astral.sh/uv/) 管理 Python 环境和依赖。
+
+```bash
+# 安装 UV (macOS/Linux)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 克隆后同步依赖
+uv sync
+```
+
+所有命令通过 `uv run` 在项目虚拟环境中执行，无需手动激活 venv。
+
 ## 使用方法
 
 ```bash
 # 语义检查
-python neko.py check examples/demo.neko
+uv run python neko.py check examples/demo.neko
 
 # 输出 LLVM IR
-python neko.py llvm-ir examples/demo.neko
+uv run python neko.py llvm-ir examples/demo.neko
 
 # 编译为可执行文件
-python neko.py build examples/demo.neko -o demo
+uv run python neko.py build examples/demo.neko -o demo
 ./demo
 
 # 编译并运行，向程序传参
-python neko.py run examples/runtime_demo.neko -- 41
+uv run python neko.py run examples/runtime_demo.neko -- 41
 
 # 交互式输入示例：输入 10 20，输出 30
-printf '10 20\n' | python neko.py run examples/input_demo.neko
+printf '10 20\n' | uv run python neko.py run examples/input_demo.neko
 
 # 随机数示例：固定种子后输出一个 1 到 100 之间的整数
-python neko.py run examples/random_demo.neko
+uv run python neko.py run examples/random_demo.neko
 
 # 猜数字示例：30 太小，50 太大，42 猜中
-python neko.py run examples/guess_number.neko -- 30 50 42
+uv run python neko.py run examples/guess_number.neko -- 30 50 42
 
 # Lambda 与高阶函数示例
-python neko.py run examples/lambda_demo.neko
+uv run python neko.py run examples/lambda_demo.neko
 
 # 仅输出 AST
-python neko.py ast examples/demo.neko
+uv run python neko.py ast examples/demo.neko
 
 # 仅输出词法单元
-python neko.py tokens examples/demo.neko
+uv run python neko.py tokens examples/demo.neko
 
 # 兼容旧用法
-python neko.py examples/demo.neko --all
+uv run python neko.py examples/demo.neko --all
 ```
 
 ## 运行测试
 
 ```bash
-python -m unittest discover tests/ -v
+uv run pytest tests/ -v
 ```
 
 ## 相关文档
