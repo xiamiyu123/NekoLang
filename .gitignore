@@ -14,3 +14,5 @@ env/
 .pytest_cache/
 .mypy_cache/
 *.neko~
+.claude
+.gitignore

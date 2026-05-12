@@ -11,10 +11,9 @@ authors = [
     {name = "Xiami Yu"},
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8",
-]
+[project.scripts]
+neko = "neko.cli:main"
+nekgo = "neko.nekgo_cli:main"
 
 [build-system]
 requires = ["hatchling"]
