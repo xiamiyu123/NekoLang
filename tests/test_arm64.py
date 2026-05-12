@@ -72,6 +72,12 @@ class TestARM64AssemblyGeneration(unittest.TestCase):
         )
         self.assertIn("bl\t_atoi", asm)
 
+    def test_extern_pointer_call(self):
+        asm = generate_asm_text(
+            '(program t (var ((p pointer))) (begin (extern malloc (int) pointer) (:= p (malloc 8))))'
+        )
+        self.assertIn("bl\t_malloc", asm)
+
     def test_hyphenated_function_name_is_mangled(self):
         asm = generate_asm_text(
             "(program t (var ((x int))) "

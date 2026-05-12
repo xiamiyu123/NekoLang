@@ -29,6 +29,7 @@ class TokenType(Enum):
     KW_CHAR = "char"
     KW_BOOL = "bool"
     KW_STRING = "string"
+    KW_POINTER = "pointer"
 
     # Char literal
     CHAR = "CHAR"
@@ -133,6 +134,7 @@ KEYWORDS: dict[str, TokenType] = {
     "float": TokenType.KW_FLOAT,
     "char": TokenType.KW_CHAR,
     "bool": TokenType.KW_BOOL,
+    "pointer": TokenType.KW_POINTER,
     "true": TokenType.BOOLEAN,
     "false": TokenType.BOOLEAN,
     "lambda": TokenType.LAMBDA,
@@ -203,5 +205,6 @@ TYPE_SIZES: dict[str, int] = {
     "char": 1,
     "bool": 1,
     "string": 8,
+    "pointer": 8,
     "func": 8,
 }

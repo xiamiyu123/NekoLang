@@ -101,6 +101,8 @@ def _type_size(type_str: str) -> int:
         return 1
     if type_str == "string":
         return 8
+    if type_str == "pointer":
+        return 8
     if type_str.startswith("(func"):
         return 8
     if type_str.startswith("(array"):
@@ -162,7 +164,7 @@ def _is_int_type(type_str: str) -> bool:
 
 
 def _is_pointer_type(type_str: str) -> bool:
-    return type_str == "string" or type_str.startswith("(func")
+    return type_str in {"string", "pointer"} or type_str.startswith("(func")
 
 
 def _asm_escape_string(value: str) -> str:
@@ -946,6 +948,18 @@ class ARM64Codegen:
             self._emit(f"\tcset\tw0, {CMP_OPS[node.op]}")
             return
 
+        if left_type == "pointer" or right_type == "pointer":
+            if left_type != "pointer" or right_type != "pointer":
+                raise RuntimeError(f"Cannot compare {left_type} and {right_type}")
+            self._gen_expression(node.left)
+            slot = self._push_expr_temp("pointer")
+            self._gen_expression(node.right)
+            self._load_expr_temp(slot, "pointer", target_reg="x1")
+            self._pop_expr_temp()
+            self._emit("\tcmp\tx1, x0")
+            self._emit(f"\tcset\tw0, {CMP_OPS[node.op]}")
+            return
+
         self._gen_expression(node.left)
         self._coerce_value(left_type, "int")
         slot = self._push_expr_temp("int")
@@ -1161,6 +1175,11 @@ class ARM64Codegen:
             return
         if target_type == "string" and actual_type == "string":
             return
+        if target_type == "pointer" and actual_type == "pointer":
+            return
+        if target_type == "pointer" and actual_type == "int":
+            self._emit("\tuxtw\tx0, w0")
+            return
         if target_type.startswith("(func") and actual_type.startswith("(func"):
             return
         raise RuntimeError(f"Cannot coerce {actual_type} to {target_type}")
@@ -1284,6 +1303,8 @@ class ARM64Codegen:
             return "nekoprint_float"
         if type_str == "string":
             return "nekoprint_string"
+        if type_str == "pointer":
+            return "nekoprint_int"
         if type_str == "bool":
             return "nekoprint_bool"
         if type_str == "char":

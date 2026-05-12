@@ -193,6 +193,13 @@ class TestParserFunctions(unittest.TestCase):
         self.assertIsInstance(stmt, ExternDeclNode)
         self.assertEqual(stmt.param_types, [])
 
+    def test_extern_pointer_signature(self):
+        ast = parse("(program t (begin (extern malloc (int) pointer)))")
+        stmt = ast.block.body.statements[0]
+        self.assertIsInstance(stmt, ExternDeclNode)
+        self.assertEqual(stmt.param_types, ["int"])
+        self.assertEqual(stmt.return_type, "pointer")
+
     def test_extern_inside_begin_with_other_statements(self):
         ast = parse(
             "(program t (var ((x int))) (begin (extern atoi (string) int) (:= x (atoi \"42\"))))"

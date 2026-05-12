@@ -39,6 +39,8 @@ class SymbolTable:
         size = TYPE_SIZES.get(type_, 4)
         if type_.startswith("(func"):
             size = 8
+        elif type_ == "pointer":
+            size = 8
         elif type_.startswith("(array"):
             # Parse array type: (array int 10)
             parts = type_.rstrip(")").split()

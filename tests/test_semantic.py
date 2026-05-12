@@ -461,6 +461,39 @@ class TestSemanticEdgeCases(unittest.TestCase):
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
 
+    def test_extern_with_pointer_return(self):
+        source = """(program t (var ((p pointer))) (begin
+            (extern malloc (int) pointer)
+            (:= p (malloc 16))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_pointer_compares_with_pointer(self):
+        source = """(program t (var ((p pointer) (q pointer) (same bool))) (begin
+            (extern malloc (int) pointer)
+            (:= p (malloc 8))
+            (:= q p)
+            (:= same (= p q))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_pointer_accepts_zero_literal(self):
+        source = """(program t (var ((p pointer) (is-null bool))) (begin
+            (:= p 0)
+            (:= is-null (= p 0))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertEqual(len(analyzer.errors), 0)
+
+    def test_pointer_rejects_string_assignment(self):
+        source = """(program t (var ((p pointer))) (begin
+            (:= p "hello")
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
     def test_extern_duplicate_declaration(self):
         """Duplicate extern declaration should be caught as error."""
         source = """(program t (begin

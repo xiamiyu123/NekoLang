@@ -416,7 +416,7 @@ class SemanticAnalyzer:
             )
 
     def _is_supported_extern_type(self, type_name: str) -> bool:
-        if type_name in {"int", "float", "char", "bool", "string"}:
+        if type_name in {"int", "float", "char", "bool", "string", "pointer"}:
             return True
         if type_name.startswith("(func"):
             signature = self._parse_func_type(type_name)
@@ -738,6 +738,12 @@ class SemanticAnalyzer:
                 return None
 
             if node.op in {"<", ">", "=", "<=", ">=", "!="}:
+                if left_type == "pointer" or right_type == "pointer":
+                    if {left_type, right_type} == {"pointer", "int"}:
+                        return "bool"
+                    if left_type != "pointer" or right_type != "pointer":
+                        self._error(node, f"无法比较 {left_type} 与 {right_type}", "type_mismatch")
+                    return "bool"
                 if left_type == "string" or right_type == "string":
                     if node.op not in {"=", "!="}:
                         self._error(node, f"字符串只能用 = 和 != 比较，不能用 {node.op}，请使用 string-cmp", "type_mismatch")
@@ -767,6 +773,8 @@ class SemanticAnalyzer:
     def _types_compatible(self, expected: str, actual: str) -> bool:
         if expected == actual:
             return True
+        if expected == "pointer" and actual == "int":
+            return True
         if expected == "float" and actual in ("int", "char"):
             return True
         if expected == "int" and actual == "char":
@@ -774,7 +782,11 @@ class SemanticAnalyzer:
         return False
 
     def _is_condition_type(self, type_name: str) -> bool:
-        if type_name.startswith("(func") or type_name.startswith("(array") or type_name == "string":
+        if (
+            type_name.startswith("(func")
+            or type_name.startswith("(array")
+            or type_name in {"string", "pointer"}
+        ):
             return False
         return type_name in {"bool", "int", "float", "char"}
 

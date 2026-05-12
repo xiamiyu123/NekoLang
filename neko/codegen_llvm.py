@@ -25,6 +25,7 @@ TYPE_MAP = {
     "char": ir.IntType(8),
     "bool": ir.IntType(1),
     "string": ir.IntType(8).as_pointer(),
+    "pointer": ir.IntType(8).as_pointer(),
 }
 
 CMP_OPS = {
@@ -71,6 +72,11 @@ def _parse_func_type_str(type_str: str) -> tuple[list[str], str]:
     param_types = param_str.split() if param_str else []
     ret_type = inner[paren_end + 1:].strip()
     return param_types, ret_type
+
+
+def _func_type_from_node(node: FuncDefNode | LambdaDefNode) -> str:
+    params = " ".join(type_str for _, type_str in node.params)
+    return f"(func ({params}) {node.return_type})"
 
 
 class LLVMCodegen:
@@ -473,17 +479,21 @@ class LLVMCodegen:
         self.builder.position_at_start(end_bb)
 
     def _gen_print(self, node: PrintNode):
-        self._gen_print_value(self._gen_expression(node.value))
+        self._gen_print_value(self._gen_expression(node.value), self._infer_expression_type(node.value))
 
     def _gen_rand_seed(self, node: RandomSeedNode):
         seed = self._coerce_value(self._gen_expression(node.seed), "int")
         self.builder.call(self.neko_rand_seed, [seed])
 
-    def _gen_print_value(self, val: ir.Value):
+    def _gen_print_value(self, val: ir.Value, value_type: str | None = None):
         if val.type == ir.DoubleType():
             self.builder.call(self.nekoprint_float, [val])
         elif val.type == ir.IntType(8).as_pointer():
-            self.builder.call(self.nekoprint_string, [val])
+            if value_type == "pointer":
+                ptr_as_int = self.builder.ptrtoint(val, ir.IntType(64), name="ptr.print")
+                self.builder.call(self.nekoprint_int, [self.builder.trunc(ptr_as_int, ir.IntType(32))])
+            else:
+                self.builder.call(self.nekoprint_string, [val])
         elif isinstance(val.type, ir.IntType) and val.type.width == 1:
             self.builder.call(self.nekoprint_bool, [val])
         elif isinstance(val.type, ir.IntType) and val.type.width == 8:
@@ -517,7 +527,7 @@ class LLVMCodegen:
         idx = self._coerce_value(self._gen_expression(node.index), "int")
         zero = ir.Constant(ir.IntType(32), 0)
         ptr = self.builder.gep(alloca, [zero, idx], name=f"{node.name}.ptr")
-        self._gen_print_value(self.builder.load(ptr, name=f"{node.name}.val"))
+        self._gen_print_value(self.builder.load(ptr, name=f"{node.name}.val"), self._array_element_type(self.var_types.get(node.name, "(array int 1)")))
 
     def _gen_file_write(self, node: FileWriteNode):
         path = self._coerce_string(self._gen_expression(node.path))
@@ -637,13 +647,17 @@ class LLVMCodegen:
         raise RuntimeError(f"Unknown expression type: {type(node).__name__}")
 
     def _gen_binop(self, node: BinOpNode) -> ir.Value:
+        left_type_name = self._infer_expression_type(node.left)
+        right_type_name = self._infer_expression_type(node.right)
         left = self._gen_expression(node.left)
         right = self._gen_expression(node.right)
         char_ptr = ir.IntType(8).as_pointer()
 
         # String operations
-        left_is_str = left.type == char_ptr
-        right_is_str = right.type == char_ptr
+        left_is_str = left_type_name == "string"
+        right_is_str = right_type_name == "string"
+        left_is_ptr = left_type_name == "pointer"
+        right_is_ptr = right_type_name == "pointer"
 
         if left_is_str or right_is_str:
             if node.op == "+":
@@ -657,6 +671,16 @@ class LLVMCodegen:
                 zero = ir.Constant(ir.IntType(32), 0)
                 return self.builder.icmp_signed(CMP_STR_OPS[node.op], cmp_result, zero, name="cmp")
             raise RuntimeError(f"字符串不支持 {node.op} 运算，请使用 string-cmp")
+
+        if left_is_ptr or right_is_ptr:
+            if node.op not in CMP_OPS:
+                raise RuntimeError("pointer 仅支持比较运算")
+            if left.type != char_ptr:
+                left = self._coerce_value(left, "pointer")
+            if right.type != char_ptr:
+                right = self._coerce_value(right, "pointer")
+            int_pred, _ = CMP_OPS[node.op]
+            return self.builder.icmp_unsigned(int_pred, left, right, name="ptrcmp")
 
         is_float = left.type == ir.DoubleType() or right.type == ir.DoubleType()
         if is_float:
@@ -741,6 +765,17 @@ class LLVMCodegen:
             if isinstance(value.type, ir.IntType):
                 return self.builder.sitofp(value, ir.DoubleType())
 
+        if isinstance(target_type, ir.PointerType) and isinstance(value.type, ir.IntType):
+            widened = value
+            if value.type.width < 64:
+                widened = self.builder.zext(value, ir.IntType(64))
+            elif value.type.width > 64:
+                widened = self.builder.trunc(value, ir.IntType(64))
+            return self.builder.inttoptr(widened, target_type)
+
+        if isinstance(target_type, ir.PointerType) and isinstance(value.type, ir.PointerType):
+            return self.builder.bitcast(value, target_type)
+
         if isinstance(target_type, ir.IntType) and isinstance(value.type, ir.IntType):
             if target_type.width > value.type.width:
                 return self.builder.zext(value, target_type)
@@ -766,6 +801,97 @@ class LLVMCodegen:
             zero = ir.Constant(value.type, 0)
             return self.builder.icmp_signed("!=", value, zero, name="cond")
         raise RuntimeError(f"Cannot use {value.type} as condition")
+
+    def _infer_expression_type(self, node: ASTNode) -> str | None:
+        if isinstance(node, IntLiteralNode):
+            return "int"
+        if isinstance(node, FloatLiteralNode):
+            return "float"
+        if isinstance(node, BoolLiteralNode):
+            return "bool"
+        if isinstance(node, StringLiteralNode):
+            return "string"
+        if isinstance(node, CharLiteralNode):
+            return "char"
+        if isinstance(node, IdentifierNode):
+            if node.name in self.function_nodes:
+                return _func_type_from_node(self.function_nodes[node.name])
+            if node.name in self.extern_nodes:
+                extern = self.extern_nodes[node.name]
+                return f"(func ({' '.join(extern.param_types)}) {extern.return_type})"
+            return self.var_types.get(node.name)
+        if isinstance(node, LambdaDefNode):
+            return _func_type_from_node(node)
+        if isinstance(node, FuncCallNode):
+            func = self.function_nodes.get(node.name)
+            if func is not None:
+                return func.return_type
+            extern = self.extern_nodes.get(node.name)
+            if extern is not None:
+                return extern.return_type
+            entry_type = self.var_types.get(node.name)
+            if entry_type and entry_type.startswith("(func"):
+                _, ret_type = _parse_func_type_str(entry_type)
+                return ret_type
+            return None
+        if isinstance(node, ArrayAccessNode):
+            entry_type = self.var_types.get(node.name)
+            if entry_type and entry_type.startswith("(array"):
+                return self._array_element_type(entry_type)
+            return None
+        if isinstance(node, ArgcNode):
+            return "int"
+        if isinstance(node, ArgvNode):
+            return node.value_type
+        if isinstance(node, InputNode):
+            return node.value_type
+        if isinstance(node, RandomRangeNode):
+            return "int"
+        if isinstance(node, FileReadNode):
+            return node.value_type
+        if isinstance(node, StringLengthNode):
+            return "int"
+        if isinstance(node, StringAtNode):
+            return "char"
+        if isinstance(node, StringSubNode):
+            return "string"
+        if isinstance(node, StringCmpNode):
+            return "int"
+        if isinstance(node, StringContainsNode):
+            return "bool"
+        if isinstance(node, IntToStringNode):
+            return "string"
+        if isinstance(node, StringToIntNode):
+            return "int"
+        if isinstance(node, ArgvStringNode):
+            return "string"
+        if isinstance(node, CharToIntNode):
+            return "int"
+        if isinstance(node, IntToCharNode):
+            return "char"
+        if isinstance(node, CharToStringNode):
+            return "string"
+        if isinstance(node, IsLetterNode):
+            return "bool"
+        if isinstance(node, IsDigitNode):
+            return "bool"
+        if isinstance(node, CharUpcaseNode):
+            return "char"
+        if isinstance(node, CharDowncaseNode):
+            return "char"
+        if isinstance(node, BinOpNode):
+            left_type = self._infer_expression_type(node.left)
+            right_type = self._infer_expression_type(node.right)
+            if left_type is None or right_type is None:
+                return None
+            if node.op in {"<", ">", "=", "<=", ">=", "!="}:
+                return "bool"
+            if node.op == "+" and left_type == "string" and right_type == "string":
+                return "string"
+            if left_type == "float" or right_type == "float":
+                return "float"
+            return "int"
+        return None
 
     def _default_value(self, type_str: str) -> ir.Constant:
         llvm_type = _llvm_type(type_str)

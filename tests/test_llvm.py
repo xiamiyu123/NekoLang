@@ -123,6 +123,12 @@ class TestIRGeneration(unittest.TestCase):
         self.assertIn('declare i32 @"atoi"', ir)
         self.assertNotIn('define i32 @"atoi"', ir)
 
+    def test_extern_pointer_declaration_ir(self):
+        ir = generate_ir(
+            '(program t (var ((p pointer))) (begin (extern malloc (int) pointer) (:= p (malloc 8))))'
+        )
+        self.assertIn('declare i8* @"malloc"(i32', ir)
+
     def test_runtime_declarations(self):
         ir = generate_ir(
             '(program t (var ((x int))) (begin (:= x (argc)) (:= x (read-int "a.txt"))))'
@@ -241,6 +247,17 @@ class TestBasicExecution(unittest.TestCase):
             '(begin (extern atoi (string) int) (:= f atoi) (:= x (f "42")) (print x)))'
         )
         self.assertEqual(output, "42")
+
+    def test_extern_pointer_round_trip(self):
+        output = compile_and_run(
+            '(program t (var ((p pointer) (same bool))) '
+            '(begin '
+            '(extern malloc (int) pointer) '
+            '(:= p (malloc 8)) '
+            '(:= same (!= p 0)) '
+            '(print same)))'
+        )
+        self.assertEqual(output, "true")
 
     def test_file_read_and_write(self):
         with tempfile.TemporaryDirectory() as tmpdir:
