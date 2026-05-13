@@ -132,13 +132,16 @@ button {
   grid-template-columns: minmax(420px, 43vw) minmax(520px, 1fr);
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .source-workbench,
 .teaching-workbench {
+  min-width: 0;
   min-height: 0;
   border-right: 1px solid var(--line);
   background: var(--panel);
+  overflow: hidden;
 }
 
 .source-workbench {
@@ -202,8 +205,16 @@ button {
 }
 
 .editor-shell {
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
   border-bottom: 1px solid var(--line);
+}
+
+.editor-shell .monaco-editor,
+.editor-shell .monaco-editor-background,
+.editor-shell .overflow-guard {
+  max-width: 100%;
 }
 
 .example-strip {

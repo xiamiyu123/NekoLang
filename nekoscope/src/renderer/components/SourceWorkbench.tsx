@@ -1,4 +1,5 @@
-import Editor from "@monaco-editor/react";
+import { useCallback, useEffect, useRef } from "react";
+import Editor, { type OnMount } from "@monaco-editor/react";
 import { BookOpen, Play, RotateCcw } from "lucide-react";
 import type { Example } from "../types/compiler";
 
@@ -23,6 +24,42 @@ export function SourceWorkbench({
   onCompileNow,
   onReset,
 }: Props) {
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const layoutFrameRef = useRef<number | null>(null);
+
+  const layoutEditor = useCallback(() => {
+    if (layoutFrameRef.current != null) {
+      cancelAnimationFrame(layoutFrameRef.current);
+    }
+    layoutFrameRef.current = requestAnimationFrame(() => {
+      layoutFrameRef.current = null;
+      editorRef.current?.layout();
+    });
+  }, []);
+
+  const handleEditorMount: OnMount = useCallback((editor) => {
+    editorRef.current = editor;
+    layoutEditor();
+  }, [layoutEditor]);
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return undefined;
+
+    const observer = new ResizeObserver(layoutEditor);
+    observer.observe(shell);
+    window.addEventListener("resize", layoutEditor);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", layoutEditor);
+      if (layoutFrameRef.current != null) {
+        cancelAnimationFrame(layoutFrameRef.current);
+      }
+    };
+  }, [layoutEditor]);
+
   return (
     <section className="source-workbench">
       <header className="panel-heading">
@@ -40,14 +77,16 @@ export function SourceWorkbench({
         </div>
       </header>
 
-      <div className="editor-shell">
+      <div className="editor-shell" ref={shellRef}>
         <Editor
           height="100%"
           defaultLanguage="scheme"
           value={source}
           onChange={(value) => onSourceChange(value ?? "")}
+          onMount={handleEditorMount}
           theme="vs-dark"
           options={{
+            automaticLayout: true,
             minimap: { enabled: false },
             fontSize: 14,
             fontLigatures: true,
