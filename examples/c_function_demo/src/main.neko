@@ -1,0 +1,11 @@
+; c_function_demo - Neko 主程序调用项目内 C 函数
+(import native)
+
+(nya c_function_demo
+  (nyan ((seed int) (delta int) (total int)))
+  (paw
+    (:= seed 12)
+    (:= delta 30)
+    (:= total (neko_add_bonus seed delta))
+    (meow total)
+    (meow (neko_magic_number))))

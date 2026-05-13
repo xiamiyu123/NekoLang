@@ -1,0 +1,10 @@
+[project]
+name = "c_function_demo"
+entry = "src/main.neko"
+
+[c]
+auto_discover = true
+sources = []
+include_dirs = []
+library_dirs = []
+libraries = []

@@ -1,0 +1,2 @@
+(extern neko_add_bonus (int int) int)
+(extern neko_magic_number () int)

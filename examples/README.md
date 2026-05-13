@@ -20,6 +20,29 @@
 
 ## 多文件与 extern 示例
 
+### `c_function_demo`
+
+这个示例展示：
+
+- 使用 `nekgo new` 风格的标准项目骨架
+- 将用户自己写的 C 函数放进项目内 `csrc/`
+- 在 `src/native.neko` 里用 `extern` 暴露 C 符号
+- 由 Neko 主程序调用这些 C 函数
+
+运行：
+
+```bash
+cd examples/c_function_demo
+uv run nekgo run
+```
+
+预期输出：
+
+```text
+47
+17
+```
+
 ### `import_extern_runtime_demo`
 
 这个示例展示：

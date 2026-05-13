@@ -279,6 +279,13 @@ demo/
 
 完整示例项目见 [examples/socket_adapter_demo](/Users/xiami/Learning/NekoLang/examples/socket_adapter_demo)。
 
+如果想看一个更小的“用户自己写 C 函数，Neko 主程序直接调用”的项目，可运行 [examples/c_function_demo](/Users/xiami/Learning/NekoLang/examples/c_function_demo)：
+
+```bash
+cd examples/c_function_demo
+uv run nekgo run
+```
+
 一个可直接验证的本地 loopback echo 流程：
 
 ```bash
@@ -472,6 +479,7 @@ runtime/
 └── runtime.c         # C 运行时 (输出、参数解析、标准输入、基础文件读写)
 
 examples/
+├── c_function_demo/            # 项目内 C 自定义函数示例
 ├── import_extern_runtime_demo/ # 多文件导入与 extern 示例
 └── socket_adapter_demo/        # 项目内 C socket 适配层示例
 ```

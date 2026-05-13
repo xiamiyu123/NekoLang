@@ -501,6 +501,14 @@ class TestNekgo(unittest.TestCase):
             self.assertIn("1 通过", result.stdout)
 
     @pytest.mark.slow
+    def test_run_c_function_demo_example(self):
+        example_dir = os.path.join(REPO_ROOT, "examples", "c_function_demo")
+
+        result = self._run_nekgo("run", cwd=example_dir)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "47\n17")
+
+    @pytest.mark.slow
     def test_run_socket_adapter_project(self):
         class EchoHandler(socketserver.StreamRequestHandler):
             def handle(self):
