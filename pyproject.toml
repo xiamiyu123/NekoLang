@@ -5,6 +5,7 @@ description = "A Scheme-like teaching language with S-expressions and LLVM backe
 requires-python = ">=3.10"
 dependencies = [
     "llvmlite>=0.40",
+    "fastapi>=0.100",
 ]
 license = {text = "MIT"}
 authors = [
@@ -33,4 +34,6 @@ markers = [
 dev = [
     "pytest>=8",
     "pytest-xdist>=3",
+    "httpx>=0.24",
+    "uvicorn>=0.30",
 ]
