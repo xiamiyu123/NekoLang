@@ -527,6 +527,9 @@ def serialize_compilation_result(
         "source": result.source,
         "tokens": serialize_tokens(result.tokens),
         "ast": serialize_ast(result.ast),
+        "symbols": serialize_symbol_table(result.analyzer.symbol_table),
+        "quadruples": serialize_quadruples(result.analyzer.quadruples),
         "assembly": assembly,
         "errors": serialize_errors(result.analyzer.errors),
+        "backend": backend,
     }

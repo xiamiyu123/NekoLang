@@ -5,8 +5,11 @@ const mockCompileResponse = {
   source: "(nya t (paw (meow 0)))",
   tokens: [{ type: "program", value: "nya", line: 1, column: 2 }],
   ast: { nodeType: "Program", line: 1, column: 1, name: "t" },
+  symbols: { entries: [{ name: "t", type: "program", category: "v", address: 0 }], constants: {} },
+  quadruples: [{ op: "program", ob1: "I0", ob2: "_", t: "_" }],
   assembly: "define i32 @main() { ret i32 0 }",
   errors: [],
+  backend: "llvm",
 };
 
 const mockExamplesResponse = {
@@ -30,6 +33,8 @@ describe("API client", () => {
     const result = await compile("(nya t (paw (meow 0)))");
     expect(result.tokens).toHaveLength(1);
     expect(result.ast.nodeType).toBe("Program");
+    expect(result.symbols.entries).toHaveLength(1);
+    expect(result.quadruples).toHaveLength(1);
     expect(result.errors).toHaveLength(0);
     expect(result.assembly).toContain("define");
   });

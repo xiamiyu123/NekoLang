@@ -23,10 +23,15 @@ class TestCompileEndpoint(unittest.TestCase):
         data = resp.json()
         self.assertIn("tokens", data)
         self.assertIn("ast", data)
+        self.assertIn("symbols", data)
+        self.assertIn("quadruples", data)
         self.assertIn("assembly", data)
         self.assertIn("errors", data)
+        self.assertEqual(data["backend"], "llvm")
         self.assertGreater(len(data["tokens"]), 0)
         self.assertEqual(data["ast"]["nodeType"], "Program")
+        self.assertGreater(len(data["symbols"]["entries"]), 0)
+        self.assertGreater(len(data["quadruples"]), 0)
 
     def test_compile_with_errors(self):
         client = _get_client()
