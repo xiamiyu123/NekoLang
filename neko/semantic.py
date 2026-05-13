@@ -78,6 +78,9 @@ class SemanticAnalyzer:
             )
         )
 
+    def _is_null_pointer_literal(self, node: ASTNode) -> bool:
+        return isinstance(node, IntLiteralNode) and node.value == 0
+
     def analyze(self, node: ASTNode) -> list[Quadruple]:
         if isinstance(node, ProgramNode):
             self._analyze_program(node)
@@ -187,7 +190,7 @@ class SemanticAnalyzer:
             return
 
         expr_type = self._infer_expression_type(node.value)
-        if expr_type and not self._types_compatible(entry.type, expr_type):
+        if expr_type and not self._assignment_compatible(entry.type, node.value, expr_type):
             self._error(
                 node,
                 f"无法将 {expr_type} 赋给 {entry.type} 类型的变量 '{node.target}'",
@@ -311,7 +314,7 @@ class SemanticAnalyzer:
             return
 
         value_type = self._infer_expression_type(node.value)
-        if value_type and not self._types_compatible(self.current_function_return_type, value_type):
+        if value_type and not self._assignment_compatible(self.current_function_return_type, node.value, value_type):
             self._error(
                 node,
                 f"函数 '{self.current_function_name}' 应返回 {self.current_function_return_type}，"
@@ -339,7 +342,7 @@ class SemanticAnalyzer:
 
         elem_type = self._array_element_type(entry.type)
         value_type = self._infer_expression_type(node.value)
-        if value_type and not self._types_compatible(elem_type, value_type):
+        if value_type and not self._assignment_compatible(elem_type, node.value, value_type):
             self._error(
                 node.value,
                 f"无法将 {value_type} 赋给 {elem_type} 类型的数组元素",
@@ -388,7 +391,7 @@ class SemanticAnalyzer:
             return
 
         value_type = self._infer_expression_type(node.value)
-        if value_type and not self._types_compatible(node.value_type, value_type):
+        if value_type and not self._assignment_compatible(node.value_type, node.value, value_type):
             self._error(
                 node.value,
                 f"write-{node.value_type} 需要 {node.value_type} 类型的值，但得到 {value_type}",
@@ -480,7 +483,7 @@ class SemanticAnalyzer:
 
             for index, (arg, expected_type) in enumerate(zip(node.args, signature.param_types), start=1):
                 actual_type = self._infer_expression_type(arg)
-                if actual_type and not self._types_compatible(expected_type, actual_type):
+                if actual_type and not self._assignment_compatible(expected_type, arg, actual_type):
                     self._error(
                         arg,
                         f"函数 '{node.name}' 的第 {index} 个参数应为 {expected_type}，"
@@ -739,10 +742,13 @@ class SemanticAnalyzer:
 
             if node.op in {"<", ">", "=", "<=", ">=", "!="}:
                 if left_type == "pointer" or right_type == "pointer":
-                    if {left_type, right_type} == {"pointer", "int"}:
+                    if left_type == "pointer" and right_type == "pointer":
                         return "bool"
-                    if left_type != "pointer" or right_type != "pointer":
-                        self._error(node, f"无法比较 {left_type} 与 {right_type}", "type_mismatch")
+                    if left_type == "pointer" and right_type == "int" and self._is_null_pointer_literal(node.right):
+                        return "bool"
+                    if right_type == "pointer" and left_type == "int" and self._is_null_pointer_literal(node.left):
+                        return "bool"
+                    self._error(node, f"pointer 只能与 pointer 或字面量 0 比较，但得到 {left_type} 与 {right_type}", "type_mismatch")
                     return "bool"
                 if left_type == "string" or right_type == "string":
                     if node.op not in {"=", "!="}:
@@ -773,13 +779,16 @@ class SemanticAnalyzer:
     def _types_compatible(self, expected: str, actual: str) -> bool:
         if expected == actual:
             return True
-        if expected == "pointer" and actual == "int":
-            return True
         if expected == "float" and actual in ("int", "char"):
             return True
         if expected == "int" and actual == "char":
             return True
         return False
+
+    def _assignment_compatible(self, expected: str, node: ASTNode, actual: str) -> bool:
+        if expected == "pointer" and actual == "int":
+            return self._is_null_pointer_literal(node)
+        return self._types_compatible(expected, actual)
 
     def _is_condition_type(self, type_name: str) -> bool:
         if (

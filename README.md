@@ -220,8 +220,9 @@ NekoLang 现在支持固定签名的 `extern` 声明，可直接调用默认可�
 首版边界：
 
 - 只支持固定参数个数
-- 只支持 `int`、`float`、`char`、`bool`、`string` 和现有 `(func ...)` 类型
-- 暂不支持 `pointer`、可变参数、自定义链接参数，以及数组作为 extern 参数或返回值
+- 只支持 `int`、`float`、`char`、`bool`、`string`、`pointer` 和现有 `(func ...)` 类型
+- `pointer` 当前是 opaque pointer：可在 extern 间传递、可与另一 pointer 或字面量 `0` 比较，也可用字面量 `0` 赋值表示空指针
+- 暂不支持 `void`、可变参数、自定义链接参数，以及数组作为 extern 参数或返回值
 
 ## 环境准备
 

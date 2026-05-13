@@ -6,6 +6,9 @@ import subprocess
 import tempfile
 import unittest
 
+from neko.codegen_llvm import LLVMCodegen
+from neko.lexer import Lexer
+from neko.parser import Parser
 from tests._codegen_support import (
     compile_and_run as _compile_and_run,
     compile_and_run_process as _compile_and_run_process,
@@ -258,6 +261,32 @@ class TestBasicExecution(unittest.TestCase):
             '(print same)))'
         )
         self.assertEqual(output, "true")
+
+    def test_pointer_zero_round_trip(self):
+        output = compile_and_run(
+            '(program t (var ((p pointer) (same bool))) '
+            '(begin '
+            '(:= p 0) '
+            '(:= same (= p 0)) '
+            '(print same)))'
+        )
+        self.assertEqual(output, "true")
+
+    def test_pointer_print_uses_pointer_runtime(self):
+        ir = generate_ir('(program t (var ((p pointer))) (begin (:= p 0) (print p)))')
+        self.assertIn('declare void @"nekoprint_pointer"', ir)
+        self.assertIn('call void @"nekoprint_pointer"', ir)
+
+    def test_pointer_rejects_nonzero_int_comparison_at_codegen(self):
+        source = (
+            '(program t (var ((p pointer))) '
+            '(begin (extern malloc (int) pointer) (:= p (malloc 8)) (print (!= p 7))))'
+        )
+        parser = Parser(Lexer(source).tokenize())
+        parser.set_source(source)
+        ast = parser.parse()
+        with self.assertRaisesRegex(RuntimeError, "pointer 仅支持从字面量 0 转换"):
+            LLVMCodegen().generate(ast)
 
     def test_file_read_and_write(self):
         with tempfile.TemporaryDirectory() as tmpdir:

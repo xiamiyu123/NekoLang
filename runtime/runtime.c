@@ -28,6 +28,10 @@ void nekoprint_string(const char *val) {
     printf("%s\n", val);
 }
 
+void nekoprint_pointer(const void *val) {
+    printf("%p\n", val);
+}
+
 static void runtime_fail(const char *message, const char *detail) {
     if (detail) {
         fprintf(stderr, "runtime error: %s: %s\n", message, detail);

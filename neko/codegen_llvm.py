@@ -96,6 +96,7 @@ class LLVMCodegen:
         self.nekoprint_char: ir.Function | None = None
         self.nekoprint_bool: ir.Function | None = None
         self.nekoprint_string: ir.Function | None = None
+        self.nekoprint_pointer: ir.Function | None = None
         self.neko_argv_int: ir.Function | None = None
         self.neko_argv_float: ir.Function | None = None
         self.neko_argv_char: ir.Function | None = None
@@ -162,6 +163,9 @@ class LLVMCodegen:
         )
         self.nekoprint_string = ir.Function(
             self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(8).as_pointer()]), name="nekoprint_string"
+        )
+        self.nekoprint_pointer = ir.Function(
+            self.module, ir.FunctionType(ir.VoidType(), [ir.IntType(8).as_pointer()]), name="nekoprint_pointer"
         )
         runtime_arg_types = [ir.IntType(32), ir.IntType(8).as_pointer().as_pointer(), ir.IntType(32)]
         self.neko_argv_int = ir.Function(
@@ -490,8 +494,7 @@ class LLVMCodegen:
             self.builder.call(self.nekoprint_float, [val])
         elif val.type == ir.IntType(8).as_pointer():
             if value_type == "pointer":
-                ptr_as_int = self.builder.ptrtoint(val, ir.IntType(64), name="ptr.print")
-                self.builder.call(self.nekoprint_int, [self.builder.trunc(ptr_as_int, ir.IntType(32))])
+                self.builder.call(self.nekoprint_pointer, [val])
             else:
                 self.builder.call(self.nekoprint_string, [val])
         elif isinstance(val.type, ir.IntType) and val.type.width == 1:
@@ -766,6 +769,11 @@ class LLVMCodegen:
                 return self.builder.sitofp(value, ir.DoubleType())
 
         if isinstance(target_type, ir.PointerType) and isinstance(value.type, ir.IntType):
+            if target_type == ir.IntType(8).as_pointer():
+                if value.type.width != 32:
+                    raise RuntimeError(f"Cannot coerce {value.type} to {target_type}")
+                if not isinstance(value, ir.Constant) or value.constant != 0:
+                    raise RuntimeError("pointer 仅支持从字面量 0 转换")
             widened = value
             if value.type.width < 64:
                 widened = self.builder.zext(value, ir.IntType(64))

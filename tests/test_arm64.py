@@ -78,6 +78,17 @@ class TestARM64AssemblyGeneration(unittest.TestCase):
         )
         self.assertIn("bl\t_malloc", asm)
 
+    def test_pointer_zero_compare(self):
+        asm = generate_asm_text(
+            '(program t (var ((p pointer) (same bool))) (begin (:= p 0) (:= same (= p 0)) (print same)))'
+        )
+        self.assertIn("cmp\tx1, x0", asm)
+        self.assertIn("bl\t_nekoprint_bool", asm)
+
+    def test_pointer_print_call(self):
+        asm = generate_asm_text('(program t (var ((p pointer))) (begin (:= p 0) (print p)))')
+        self.assertIn("bl\t_nekoprint_pointer", asm)
+
     def test_hyphenated_function_name_is_mangled(self):
         asm = generate_asm_text(
             "(program t (var ((x int))) "

@@ -275,7 +275,7 @@ NekoLang 包含两个命令行工具：
 
 依赖：无，可与 P0/P1 并行。
 
-当前所有 C 运行时函数（`nekoprint_int`、`neko_argv_int` 等）硬编码在编译器内部。引入 `extern` 后，用户可在 `.neko` 源码中声明任意 C 函数：
+当前所有 C 运行时函数（`nekoprint_int`、`neko_argv_int` 等）硬编码在编译器内部。引入 `extern` 后，用户可在 `.neko` 源码中声明固定签名且默认可链接的 C 函数：
 
 ```scheme
 (extern atoi (string) int)
@@ -288,8 +288,9 @@ NekoLang 包含两个命令行工具：
 首版边界保持收敛：
 
 - 只支持固定参数个数
-- 只支持 `int`、`float`、`char`、`bool`、`string` 和现有 `(func ...)` 类型
-- 暂不支持 `pointer`、可变参数、自定义链接配置，以及数组作为 extern 参数或返回值
+- 只支持 `int`、`float`、`char`、`bool`、`string`、`pointer` 和现有 `(func ...)` 类型
+- `pointer` 当前按 opaque pointer 处理：只支持透传、与 pointer 比较，以及与字面量 `0` 的空指针用法
+- 暂不支持 `void`、可变参数、自定义链接配置，以及数组作为 extern 参数或返回值
 
 ### P3：多文件编译与模块系统
 

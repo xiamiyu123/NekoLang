@@ -167,6 +167,10 @@ def _is_pointer_type(type_str: str) -> bool:
     return type_str in {"string", "pointer"} or type_str.startswith("(func")
 
 
+def _is_null_pointer_literal(node: ASTNode) -> bool:
+    return isinstance(node, IntLiteralNode) and node.value == 0
+
+
 def _asm_escape_string(value: str) -> str:
     chunks: list[str] = []
     for b in value.encode("utf-8"):
@@ -674,7 +678,7 @@ class ARM64Codegen:
         target_type = self.var_types.get(node.target, "int")
         expr_type = self._infer_expression_type(node.value)
         self._gen_expression(node.value)
-        self._coerce_value(expr_type, target_type)
+        self._coerce_value(expr_type, target_type, node.value)
         self._materialize_var_address(node.target, "x9")
         self._emit_store_by_type("x9", target_type)
 
@@ -729,7 +733,7 @@ class ARM64Codegen:
             raise RuntimeError("return used outside of function")
         value_type = self._infer_expression_type(node.value)
         self._gen_expression(node.value)
-        self._coerce_value(value_type, self.current_return_type)
+        self._coerce_value(value_type, self.current_return_type, node.value)
         self._emit(f"\tb\t{self.current_epilogue_label}")
 
     def _gen_array_assign(self, node: ArrayAssignNode):
@@ -740,7 +744,7 @@ class ARM64Codegen:
         self._emit_store_scratch(0, "string")
         value_type = self._infer_expression_type(node.value)
         self._gen_expression(node.value)
-        self._coerce_value(value_type, elem_type)
+        self._coerce_value(value_type, elem_type, node.value)
         self._emit_load_scratch(0, "string", target_reg="x9")
         self._emit_store_by_type("x9", elem_type)
 
@@ -949,12 +953,23 @@ class ARM64Codegen:
             return
 
         if left_type == "pointer" or right_type == "pointer":
-            if left_type != "pointer" or right_type != "pointer":
-                raise RuntimeError(f"Cannot compare {left_type} and {right_type}")
+            if left_type == "pointer" and right_type == "pointer":
+                left_storage_type = "pointer"
+                right_storage_type = "pointer"
+            elif left_type == "pointer" and right_type == "int" and _is_null_pointer_literal(node.right):
+                left_storage_type = "pointer"
+                right_storage_type = "pointer"
+            elif right_type == "pointer" and left_type == "int" and _is_null_pointer_literal(node.left):
+                left_storage_type = "pointer"
+                right_storage_type = "pointer"
+            else:
+                raise RuntimeError(f"pointer 只能与 pointer 或字面量 0 比较，但得到 {left_type} 与 {right_type}")
             self._gen_expression(node.left)
-            slot = self._push_expr_temp("pointer")
+            self._coerce_value(left_type, "pointer", node.left)
+            slot = self._push_expr_temp(left_storage_type)
             self._gen_expression(node.right)
-            self._load_expr_temp(slot, "pointer", target_reg="x1")
+            self._coerce_value(right_type, "pointer", node.right)
+            self._load_expr_temp(slot, right_storage_type, target_reg="x1")
             self._pop_expr_temp()
             self._emit("\tcmp\tx1, x0")
             self._emit(f"\tcset\tw0, {CMP_OPS[node.op]}")
@@ -1027,7 +1042,7 @@ class ARM64Codegen:
         for index, (arg_node, expected_type) in enumerate(zip(args, param_types)):
             actual_type = self._infer_expression_type(arg_node)
             self._gen_expression(arg_node)
-            self._coerce_value(actual_type, expected_type)
+            self._coerce_value(actual_type, expected_type, arg_node)
             self._emit_store_scratch(index, expected_type)
 
         int_index = 0
@@ -1147,7 +1162,7 @@ class ARM64Codegen:
         else:
             self._emit("\tmov\tw0, #0")
 
-    def _coerce_value(self, actual_type: str | None, target_type: str):
+    def _coerce_value(self, actual_type: str | None, target_type: str, node: ASTNode | None = None):
         if actual_type is None or actual_type == target_type:
             return
 
@@ -1178,6 +1193,8 @@ class ARM64Codegen:
         if target_type == "pointer" and actual_type == "pointer":
             return
         if target_type == "pointer" and actual_type == "int":
+            if node is None or not _is_null_pointer_literal(node):
+                raise RuntimeError("pointer 仅支持从字面量 0 转换")
             self._emit("\tuxtw\tx0, w0")
             return
         if target_type.startswith("(func") and actual_type.startswith("(func"):
@@ -1304,7 +1321,7 @@ class ARM64Codegen:
         if type_str == "string":
             return "nekoprint_string"
         if type_str == "pointer":
-            return "nekoprint_int"
+            return "nekoprint_pointer"
         if type_str == "bool":
             return "nekoprint_bool"
         if type_str == "char":

@@ -50,7 +50,7 @@ class TestImportParsing(unittest.TestCase):
     def test_parse_definition_file(self):
         source = """(function add ((a int) (b int)) int
   (return (+ a b)))
-(extern printf (int) void)
+(extern malloc (int) pointer)
 (function mul ((a int) (b int)) int
   (return (* a b)))"""
         lexer = Lexer(source)
@@ -60,7 +60,7 @@ class TestImportParsing(unittest.TestCase):
         _, defs = parser.parse_definition_file()
         self.assertEqual(len(defs), 3)
         self.assertEqual(defs[0].name, "add")
-        self.assertEqual(defs[1].name, "printf")
+        self.assertEqual(defs[1].name, "malloc")
         self.assertEqual(defs[2].name, "mul")
 
 

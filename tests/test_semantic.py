@@ -487,6 +487,21 @@ class TestSemanticEdgeCases(unittest.TestCase):
         analyzer = compile_source(source)
         self.assertEqual(len(analyzer.errors), 0)
 
+    def test_pointer_rejects_nonzero_int_assignment(self):
+        source = """(program t (var ((p pointer))) (begin
+            (:= p 42)
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
+    def test_pointer_rejects_nonzero_int_comparison(self):
+        source = """(program t (var ((p pointer) (flag bool))) (begin
+            (:= p 0)
+            (:= flag (!= p 7))
+        ))"""
+        analyzer = compile_source(source)
+        self.assertGreater(len(analyzer.errors), 0)
+
     def test_pointer_rejects_string_assignment(self):
         source = """(program t (var ((p pointer))) (begin
             (:= p "hello")

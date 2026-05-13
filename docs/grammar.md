@@ -40,7 +40,7 @@
 
 <func-def>      ::= "(" "function" <identifier> "(" { <param> } ")" <type> <statement> ")"
 
-<extern-decl>   ::= "(" "extern" <identifier> "(" { <type> } ")" <type> ")"
+<extern-decl>   ::= "(" "extern" <identifier> "(" { <type> } ")" <type> ")"  ; 语法上接受任意 <type>，语义阶段目前只支持固定签名的 int/float/char/bool/string/pointer/(func ...)
 
 <lambda-def>    ::= "(" "lambda" "(" { <param> } ")" <type> <statement> ")"
 
