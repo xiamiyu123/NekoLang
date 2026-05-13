@@ -90,3 +90,46 @@ jobs:
 
       - name: Run self ARM64 backend tests
         run: uv run pytest tests/test_arm64.py -q
+
+  nekoscope-cross-platform:
+    name: NekoScope compatibility (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-14
+          - windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: nekoscope/package-lock.json
+
+      - name: Install NekoScope dependencies
+        working-directory: nekoscope
+        run: npm ci
+
+      - name: Show Node runtime
+        working-directory: nekoscope
+        run: node -e "console.log(process.platform, process.arch)"
+
+      - name: Validate NekoScope dev script
+        working-directory: nekoscope
+        run: node ./scripts/dev.mjs --help
+
+      - name: Run NekoScope tests
+        working-directory: nekoscope
+        run: npm test
+
+      - name: Build NekoScope
+        working-directory: nekoscope
+        run: npm run build

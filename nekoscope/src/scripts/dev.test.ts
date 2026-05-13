@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDevEnv, createElectronViteArgs, resolveElectronViteBin } from "../../scripts/dev.mjs";
 
@@ -34,6 +34,8 @@ describe("dev script", () => {
   });
 
   it("resolves the local electron-vite bin script", () => {
-    expect(resolveElectronViteBin()).toContain("node_modules/electron-vite/bin/electron-vite.js");
+    expect(normalize(resolveElectronViteBin())).toContain(
+      join("node_modules", "electron-vite", "bin", "electron-vite.js")
+    );
   });
 });
