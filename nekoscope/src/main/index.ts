@@ -1,13 +1,12 @@
 import { app, BrowserWindow } from "electron";
 import { spawn, ChildProcess } from "child_process";
-import * as path from "path";
+import { join } from "path";
 
 const API_PORT = 8000;
-const API_URL = `http://localhost:${API_PORT}`;
 let apiProcess: ChildProcess | null = null;
 
 function startFastAPI(): void {
-  const projectRoot = path.resolve(__dirname, "../..");
+  const projectRoot = join(__dirname, "../../..");
   apiProcess = spawn("uv", ["run", "uvicorn", "neko.viz_api:app", "--port", String(API_PORT)], {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
@@ -39,23 +38,22 @@ async function createWindow(): Promise<void> {
     width: 1400,
     height: 900,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  if (process.env.NODE_ENV === "development" || !app.isPackaged) {
+  if (!app.isPackaged) {
     await win.loadURL("http://localhost:5173");
     win.webContents.openDevTools();
   } else {
-    await win.loadFile(path.join(__dirname, "../dist/index.html"));
+    await win.loadFile(join(__dirname, "../renderer/index.html"));
   }
 }
 
 app.whenReady().then(async () => {
   startFastAPI();
-  // Give FastAPI a moment to start
   await new Promise((resolve) => setTimeout(resolve, 1500));
   await createWindow();
 

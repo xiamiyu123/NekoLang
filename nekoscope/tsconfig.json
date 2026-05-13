@@ -11,8 +11,10 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "outDir": "./dist"
+    "noEmit": true
   },
+  "references": [
+    { "path": "./tsconfig.node.json" }
+  ],
   "include": ["src"]
 }
