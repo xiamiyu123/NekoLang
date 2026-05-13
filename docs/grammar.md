@@ -3,7 +3,13 @@
 ## 一、BNF 文法定义
 
 ```bnf
+<source-file>   ::= { <import-decl> } <program>
+
+<definition-file> ::= { <import-decl> | <func-def> | <extern-decl> | <program> }
+
 <program>       ::= "(" "program" <identifier> <block> ")"
+
+<import-decl>   ::= "(" "import" <identifier> ")"
 
 <block>         ::= { <var-decl> } <begin-block>
 
@@ -11,7 +17,7 @@
 
 <var-item>      ::= "(" <identifier> <type> ")"
 
-<type>          ::= "int" | "float" | "char" | "bool" | "string"
+<type>          ::= "int" | "float" | "char" | "bool" | "string" | "pointer"
                   | "(" "array" <type> <integer> ")"
                   | "(" "func" "(" { <type> } ")" <type> ")"
 
@@ -40,7 +46,7 @@
 
 <func-def>      ::= "(" "function" <identifier> "(" { <param> } ")" <type> <statement> ")"
 
-<extern-decl>   ::= "(" "extern" <identifier> "(" { <type> } ")" <type> ")"  ; 语法上接受任意 <type>，语义阶段目前只支持固定签名的 int/float/char/bool/string/pointer/(func ...)
+<extern-decl>   ::= "(" "extern" <identifier> "(" { <type> } ")" <type> ")"  ; 语义阶段目前只支持固定签名，不支持 void、可变参数、数组 extern
 
 <lambda-def>    ::= "(" "lambda" "(" { <param> } ")" <type> <statement> ")"
 
@@ -151,6 +157,12 @@
 | `TERM -> TERM * FACTOR \| ...` | `<binop-expr>` | 运算符前置 `(+ a b)` |
 | `FACTOR -> id \| cons \| ( EXPRESSION )` | `<expression>` | 原子表达式 |
 
+补充说明：
+
+- `<source-file>` 表示普通可编译入口文件，允许在 `(program ...)` 之前写若干 `(import ...)`
+- `<definition-file>` 表示被导入的定义文件，顶层允许 `import`、`function`、`extern`，其中的 `program` 会在导入阶段被跳过
+- `import` 解析的是 `.neko` 源文件，不是运行时动态加载
+
 ## 三、关键字表
 
 | 编号 | 关键字 | Token 类型 | 说明 |
@@ -164,50 +176,52 @@
 | 7 | `print` | PRINT | 输出 |
 | 8 | `function` | FUNCTION | 函数定义 |
 | 9 | `extern` | EXTERN | 外部函数声明 |
-| 10 | `int` | KW_INT | 整型 |
-| 11 | `float` | KW_FLOAT | 浮点型 |
-| 12 | `char` | KW_CHAR | 字符型 |
-| 13 | `bool` | KW_BOOL | 布尔型 |
-| 14 | `array` | ARRAY | 数组类型 |
-| 15 | `array-set` | ARRAY_SET | 数组赋值 |
-| 16 | `array-print` | ARRAY_PRINT | 数组输出 |
-| 17 | `return` | RETURN | 函数返回 |
-| 18 | `argc` | ARGC | 用户命令行参数个数 |
-| 19 | `argv-int` | ARGV_INT | 读取整数参数 |
-| 20 | `argv-float` | ARGV_FLOAT | 读取浮点参数 |
-| 21 | `argv-char` | ARGV_CHAR | 读取字符参数 |
-| 22 | `argv-bool` | ARGV_BOOL | 读取布尔参数 |
-| 23 | `input-int` | INPUT_INT | 从标准输入读取整数 |
-| 24 | `input-float` | INPUT_FLOAT | 从标准输入读取浮点数 |
-| 25 | `input-char` | INPUT_CHAR | 从标准输入读取字符 |
-| 26 | `input-bool` | INPUT_BOOL | 从标准输入读取布尔值 |
-| 27 | `rand-seed` | RAND_SEED | 设置伪随机种子 |
-| 28 | `rand-range` | RAND_RANGE | 生成闭区间整数随机数 |
-| 29 | `read-int` | READ_INT | 读整数文件 |
-| 30 | `read-float` | READ_FLOAT | 读浮点文件 |
-| 31 | `read-char` | READ_CHAR | 读字符文件 |
-| 32 | `read-bool` | READ_BOOL | 读布尔文件 |
-| 33 | `write-int` | WRITE_INT | 写整数文件 |
-| 34 | `write-float` | WRITE_FLOAT | 写浮点文件 |
-| 35 | `write-char` | WRITE_CHAR | 写字符文件 |
-| 36 | `write-bool` | WRITE_BOOL | 写布尔文件 |
-| 37 | `lambda` | LAMBDA | lambda 表达式 |
-| 38 | `string` | KW_STRING | 字符串类型 |
-| 39 | `string-length` | STRING_LENGTH | 字符串长度 |
-| 40 | `string-at` | STRING_AT | 字符串取字符 |
-| 41 | `string-sub` | STRING_SUB | 子串 |
-| 42 | `string-cmp` | STRING_CMP | 字符串比较 |
-| 43 | `string-contains` | STRING_CONTAINS | 字符串包含 |
-| 44 | `int-to-string` | INT_TO_STRING | 整数转字符串 |
-| 45 | `string-to-int` | STRING_TO_INT | 字符串转整数 |
-| 46 | `argv-string` | ARGV_STRING | 读取字符串参数 |
-| 47 | `char-to-int` | CHAR_TO_INT | 字符转 ASCII 整数 |
-| 48 | `int-to-char` | INT_TO_CHAR | ASCII 整数转字符 |
-| 49 | `char-to-string` | CHAR_TO_STRING | 字符转单字符字符串 |
-| 50 | `is-letter` | IS_LETTER | 判断是否字母 |
-| 51 | `is-digit` | IS_DIGIT | 判断是否数字 |
-| 52 | `char-upcase` | CHAR_UPCASE | 转大写 |
-| 53 | `char-downcase` | CHAR_DOWNCASE | 转小写 |
+| 10 | `import` | IMPORT | 导入定义文件 |
+| 11 | `int` | KW_INT | 整型 |
+| 12 | `float` | KW_FLOAT | 浮点型 |
+| 13 | `char` | KW_CHAR | 字符型 |
+| 14 | `bool` | KW_BOOL | 布尔型 |
+| 15 | `string` | KW_STRING | 字符串类型 |
+| 16 | `pointer` | KW_POINTER | C opaque pointer |
+| 17 | `array` | ARRAY | 数组类型 |
+| 18 | `array-set` | ARRAY_SET | 数组赋值 |
+| 19 | `array-print` | ARRAY_PRINT | 数组输出 |
+| 20 | `return` | RETURN | 函数返回 |
+| 21 | `argc` | ARGC | 用户命令行参数个数 |
+| 22 | `argv-int` | ARGV_INT | 读取整数参数 |
+| 23 | `argv-float` | ARGV_FLOAT | 读取浮点参数 |
+| 24 | `argv-char` | ARGV_CHAR | 读取字符参数 |
+| 25 | `argv-bool` | ARGV_BOOL | 读取布尔参数 |
+| 26 | `input-int` | INPUT_INT | 从标准输入读取整数 |
+| 27 | `input-float` | INPUT_FLOAT | 从标准输入读取浮点数 |
+| 28 | `input-char` | INPUT_CHAR | 从标准输入读取字符 |
+| 29 | `input-bool` | INPUT_BOOL | 从标准输入读取布尔值 |
+| 30 | `rand-seed` | RAND_SEED | 设置伪随机种子 |
+| 31 | `rand-range` | RAND_RANGE | 生成闭区间整数随机数 |
+| 32 | `read-int` | READ_INT | 读整数文件 |
+| 33 | `read-float` | READ_FLOAT | 读浮点文件 |
+| 34 | `read-char` | READ_CHAR | 读字符文件 |
+| 35 | `read-bool` | READ_BOOL | 读布尔文件 |
+| 36 | `write-int` | WRITE_INT | 写整数文件 |
+| 37 | `write-float` | WRITE_FLOAT | 写浮点文件 |
+| 38 | `write-char` | WRITE_CHAR | 写字符文件 |
+| 39 | `write-bool` | WRITE_BOOL | 写布尔文件 |
+| 40 | `lambda` | LAMBDA | lambda 表达式 |
+| 41 | `string-length` | STRING_LENGTH | 字符串长度 |
+| 42 | `string-at` | STRING_AT | 字符串取字符 |
+| 43 | `string-sub` | STRING_SUB | 子串 |
+| 44 | `string-cmp` | STRING_CMP | 字符串比较 |
+| 45 | `string-contains` | STRING_CONTAINS | 字符串包含 |
+| 46 | `int-to-string` | INT_TO_STRING | 整数转字符串 |
+| 47 | `string-to-int` | STRING_TO_INT | 字符串转整数 |
+| 48 | `argv-string` | ARGV_STRING | 读取字符串参数 |
+| 49 | `char-to-int` | CHAR_TO_INT | 字符转 ASCII 整数 |
+| 50 | `int-to-char` | INT_TO_CHAR | ASCII 整数转字符 |
+| 51 | `char-to-string` | CHAR_TO_STRING | 字符转单字符字符串 |
+| 52 | `is-letter` | IS_LETTER | 判断是否字母 |
+| 53 | `is-digit` | IS_DIGIT | 判断是否数字 |
+| 54 | `char-upcase` | CHAR_UPCASE | 转大写 |
+| 55 | `char-downcase` | CHAR_DOWNCASE | 转小写 |
 
 ## 四、个性化关键字别名
 
@@ -226,7 +240,7 @@
 | `meow-arr` | ARRAY_SET | `array-set` | 数组赋值 |
 | `purr-arr` | ARRAY_PRINT | `array-print` | 数组输出 |
 
-类型关键字和 `lambda` 没有别名。类型支持 `int`、`float`、`char`、`bool`、`string`，函数类型使用 `(func ...)` 表示。
+类型关键字、`import`、`extern` 和 `lambda` 没有别名。类型支持 `int`、`float`、`char`、`bool`、`string`、`pointer`，函数类型使用 `(func ...)` 表示。
 
 ## 五、界符表
 
@@ -251,8 +265,8 @@
 | 字段 | 含义 | 示例 |
 |------|------|------|
 | NAME | 标识符名 | `a`, `b` |
-| TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `string`, `(array int 10)`, `(func (int) int)` |
-| CAT | 类别 | `v`(变量), `c`(常量), `f`(函数/lambda) |
+| TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `string`, `pointer`, `(array int 10)`, `(func (int) int)` |
+| CAT | 类别 | `v`(变量), `c`(常量), `f`(函数/lambda/extern) |
 | ADDR | 地址偏移 | 0, 4, 8 |
 
 ## 七、四元式格式

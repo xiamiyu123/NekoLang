@@ -1,0 +1,7 @@
+; pointer_null_demo — opaque pointer 空值语义示例
+(nya pointer_null_demo
+  (nyan ((handle pointer) (missing bool)))
+  (paw
+    (:= handle 0)
+    (:= missing (= handle 0))
+    (meow missing)))

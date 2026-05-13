@@ -3,22 +3,26 @@
 ## 一、架构
 
 ```
-源代码 (.neko)
+源代码 (.neko) + import 定义文件
     │
     ▼
   Lexer → Parser → AST
+    │
+    ▼
+  Import Resolver (合并 function / extern 定义)
     │
     ▼
   SemanticAnalyzer (语义验证)
     │
     ▼
   LLVMCodegen → LLVM IR 文本
+  或 ARM64Codegen → Apple Silicon ARM64 汇编
     │
     ▼
-  clang 链接 runtime.c → 可执行文件
+  clang 链接 runtime.c + 项目内 C 源码 → 可执行文件
 ```
 
-代码生成器直接遍历 AST，使用 `llvmlite.ir` 构建 LLVM IR 模块。
+LLVM 后端直接遍历 AST，使用 `llvmlite.ir` 构建 LLVM IR 模块。ARM64 后端生成面向 Apple Silicon macOS 的汇编文本，再交给 `clang` 链接。
 
 ## 二、类型映射
 
@@ -29,6 +33,7 @@
 | `char` | `i8` | 1 字节 |
 | `bool` | `i1` | 1 位 |
 | `string` | `i8*` | 8 字节（指针） |
+| `pointer` | `i8*` | 8 字节（opaque pointer） |
 | `(array int N)` | `[N x i32]` | N*4 字节 |
 | `(array float N)` | `[N x double]` | N*8 字节 |
 | `(func (T...) R)` | `i8*` | 8 字节（函数指针） |
@@ -127,8 +132,54 @@ while.end:
 - 浮点：`call void @nekoprint_float(double %val)`
 - 字符：`call void @nekoprint_char(i8 %val)`
 - 布尔：`call void @nekoprint_bool(i1 %val)`
+- 字符串：`call void @nekoprint_string(i8* %val)`
+- 指针：`call void @nekoprint_pointer(i8* %val)`
 
 `purr` 和 `meow` 作为输出别名会生成同样的调用。
+
+### 导入 `import`
+
+`import` 不直接生成 LLVM IR。导入解析发生在代码生成之前：
+
+1. 主文件解析成 AST
+2. 递归解析导入文件
+3. 收集导入文件里的 `function` 和 `extern`
+4. 把这些定义插入主程序体前面
+5. 语义分析和代码生成看到的是合并后的 AST
+
+因此导入文件不会作为独立模块链接，也不会产生运行时加载行为。
+
+### 外部函数 `extern`
+
+```scheme
+(extern atoi (string) int)
+(:= n (atoi "42"))
+```
+
+代码生成阶段会把 extern 声明转成 LLVM 函数声明：
+
+```llvm
+declare i32 @atoi(i8*)
+%calltmp = call i32 @atoi(i8* %str)
+```
+
+当前 extern 支持固定参数个数，类型范围为 `int`、`float`、`char`、`bool`、`string`、`pointer` 和 `(func ...)`。不支持 `void`、可变参数和数组 extern。
+
+### Opaque pointer `pointer`
+
+```scheme
+(extern malloc (int) pointer)
+(extern free_ptr (pointer) int)
+```
+
+LLVM 中 `pointer` 映射为 `i8*`。它只能作为值透传、打印或比较。字面量 `0` 可转换为空指针：
+
+```llvm
+store i8* null, i8** %p
+%same = icmp eq i8* %p.val, null
+```
+
+非零整数不会被当作合法 pointer 转换。
 
 ### 函数返回 `return`
 
@@ -200,15 +251,30 @@ store i32 42, i32* %ptr
 void nekoprint_int(int val)   { printf("%d\n", val); }
 void nekoprint_float(double val) { printf("%lf\n", val); }
 void nekoprint_char(char val) { printf("%c\n", val); }
+void nekoprint_bool(int val) { printf("%s\n", val ? "true" : "false"); }
+void nekoprint_string(const char *val) { printf("%s\n", val ? val : ""); }
+void nekoprint_pointer(void *val) { printf("%p\n", val); }
 ```
 
-编译时由 clang 自动链接。
+编译时由 `clang` 自动链接。项目模式下，`nekgo` 还会根据 `Neko.toml [c]` 把项目内 C 源码、头文件搜索路径和系统库参数加入同一条 `clang` 命令。
+
+`[c]` 配置映射关系：
+
+| Neko.toml 字段 | clang 参数 |
+|----------------|------------|
+| `sources` / `csrc/**/*.c` | 直接追加 `.c` 输入 |
+| `include_dirs` | `-I` |
+| `library_dirs` | `-L` |
+| `libraries` | `-l` |
 
 ## 五、使用方法
 
 ```bash
 # 查看 LLVM IR
 uv run neko llvm-ir examples/demo.neko
+
+# 查看 ARM64 汇编 (Apple Silicon macOS)
+uv run neko asm examples/demo.neko
 
 # 编译为可执行文件
 uv run neko build examples/demo.neko -o demo
@@ -221,16 +287,22 @@ uv run neko build examples/demo.neko -o demo
 uv run neko build examples/fibonacci.neko -o fib
 ./fib
 # 输出: 0 1 1 2 3 5 8 13 21 34 55 89
+
+# 项目模式：链接 runtime.c 和项目内 csrc/**/*.c
+cd examples/socket_adapter_demo
+uv run nekgo run -- 127.0.0.1 19001 miaow-from-neko
 ```
 
 ## 六、依赖
 
-- `llvmlite` — Python LLVM 绑定 (`pip install llvmlite`)
+- `llvmlite` — Python LLVM 绑定，由 `uv sync` 安装
 - `clang` — C 编译器，用于链接运行时
+- Apple Silicon macOS — ARM64 后端执行测试所需平台
 
 ## 七、已知限制
 
 - 数组仅支持一维
-- 无字符串类型
+- `pointer` 仅为 opaque pointer，不支持解引用、指针算术或字段访问
+- `extern` 不支持 `void`、可变参数和数组参数
 - 浮点使用 `double` 精度
-- 无垃圾回收或内存管理
+- 字符串运行时会分配内存，当前没有完整垃圾回收

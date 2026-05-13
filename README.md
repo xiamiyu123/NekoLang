@@ -28,8 +28,11 @@ NekoLang 使用 S 表达式（前缀表示法），以常规关键字表示程�
 | `(print expr)` | `print(expr)` | 输出 |
 | `(print "你好")` | `print("你好")` | 输出字符串字面量 |
 | `(function add ((a int)) int ...)` | 函数定义 | 支持参数和返回值 |
+| `(import math)` | 模块导入 | 引入其他 `.neko` 文件中的函数和 extern 声明 |
+| `(extern atoi (string) int)` | 外部函数 | 声明固定签名的 C 符号 |
 | `(lambda ((x int)) int ...)` | lambda 表达式 | 匿名函数，可赋值或传递 |
 | `(func (int int) int)` | 函数类型 | 函数指针类型，用于高阶函数 |
+| `pointer` | C opaque pointer | 在 extern 间透传 C 句柄 |
 | `(return expr)` | `return expr` | 函数返回 |
 | `(argc)` | `argc` | 用户命令行参数个数 |
 | `(argv-int 0)` | `argv[0]` | 读取并解析第一个命令行参数 |
@@ -181,6 +184,12 @@ uv run nekgo run --ephemeral
 
 # 向程序传参
 uv run nekgo run -- 42
+
+# 运行项目 tests/ 下的 .neko 测试
+uv run nekgo test
+
+# 清理项目 build/ 目录
+uv run nekgo clean
 ```
 
 项目结构：
@@ -200,6 +209,8 @@ hello/
 - `nekgo build` 将产物写入项目内 `build/`
 - `nekgo run` 默认也会更新并运行 `build/<项目名>`
 - 若只想临时编译运行、不保留产物，可使用 `uv run nekgo run --ephemeral`
+- `nekgo test` 会编译运行项目 `tests/` 下的 `.neko` 文件，并沿用入口文件目录作为导入根
+- `nekgo clean` 只在包含 `Neko.toml` 的项目根目录中删除 `build/`
 
 项目也可以携带自己的 C 源码并由 `nekgo` 一起编译链接。`Neko.toml` 里的 `[c]` 表当前支持：
 
@@ -373,6 +384,7 @@ uv run pytest tests/ -q -n auto
 ## 相关文档
 
 - [文法规范](/Users/xiami/Learning/NekoLang/docs/grammar.md)
+- [用户指南（中文）](/Users/xiami/Learning/NekoLang/docs/user-guide.zh.md)
 - [语言元素详解（中文）](/Users/xiami/Learning/NekoLang/docs/language-elements.zh.md)
 - [Language Elements Guide (English)](/Users/xiami/Learning/NekoLang/docs/language-elements.en.md)
 - [LLVM 后端说明](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)
@@ -382,10 +394,14 @@ uv run pytest tests/ -q -n auto
 ## 编译器架构
 
 ```
-源代码 → [词法分析器] → Token 流
-         [语法分析器] → AST
-         [语义分析器] → 符号表 + 四元式
-         [LLVM代码生成] → LLVM IR → 可执行文件
+源代码 / import 文件
+  → [词法分析器] → Token 流
+  → [语法分析器] → AST
+  → [导入解析] → 合并 function / extern 定义
+  → [语义分析器] → 符号表 + 四元式
+  → [LLVM / ARM64 代码生成]
+  → clang 链接 runtime.c 与项目内 C 源码
+  → 可执行文件
 ```
 
 ## 项目结构
@@ -402,9 +418,15 @@ neko/
 ├── symbol_table.py   # 符号表系统
 ├── semantic.py       # 语义分析 + 四元式生成
 ├── codegen_llvm.py   # LLVM IR 代码生成
+├── codegen_arm64.py  # Apple Silicon ARM64 汇编后端
 ├── build_utils.py    # 共享编译工具函数
+├── name_mangling.py  # Neko 标识符到 C/汇编符号的名称映射
 └── errors.py         # 编译错误提示
 
 runtime/
 └── runtime.c         # C 运行时 (输出、参数解析、标准输入、基础文件读写)
+
+examples/
+├── import_extern_runtime_demo/ # 多文件导入与 extern 示例
+└── socket_adapter_demo/        # 项目内 C socket 适配层示例
 ```

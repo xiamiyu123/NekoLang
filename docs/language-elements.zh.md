@@ -2,7 +2,7 @@
 
 本文面向中文读者，系统介绍 NekoLang 中常用的语言元素，重点说明它们的设计原理、典型示例，以及与主流语言的差异。
 
-本文优先使用 NekoLang 的个性化命名，如 `nya`、`nyan`、`paw`、`meow`、`purr-while`、`nyaa-def`、`neko-box`。如需和规范对照，可参考它们对应的标准关键字：`program`、`var`、`begin`、`print`、`while`、`function`、`array`。
+本文优先使用 NekoLang 的个性化命名，如 `nya`、`nyan`、`paw`、`meow`、`purr-while`、`nyaa-def`、`neko-box`。如需和规范对照，可参考它们对应的标准关键字：`program`、`var`、`begin`、`print`、`while`、`function`、`array`。`import`、`extern`、`pointer`、`lambda` 和类型名没有个性化别名。
 
 ## 1. 整体风格
 
@@ -711,7 +711,210 @@ NekoLang 的字符串是不可变的——每次操作返回新字符串，原�
 - 和 Python 不同：有独立的 char 类型，不是单字符字符串
 - 和 Java 类似：使用单引号表示字符字面量
 
-## 15. 综合示例
+## 15. 多文件导入 `import`
+
+### 作用
+
+`import` 用于把其他 `.neko` 文件中的 `function` 和 `extern` 定义引入当前程序。它必须写在文件开头、`nya` / `program` 之前。
+
+```scheme
+(import math)
+
+(nya main
+  (nyan ((x int)))
+  (paw
+    (:= x (twice 21))
+    (meow x)))
+```
+
+其中 `math.neko` 可以这样写：
+
+```scheme
+(function twice ((x int)) int
+  (return (* x 2)))
+```
+
+### 解析规则
+
+- `(import math)` 会解析为 `math.neko`
+- `(import ./math)` 会相对当前文件目录解析
+- `nekgo build/run/test` 会把项目入口文件所在目录作为额外导入根
+- 导入文件可以继续写 `import`
+- 导入文件顶层只应放 `import`、`function`、`extern`
+- 如果导入文件里有 `(program ...)`，当前实现会跳过它并打印警告
+- 循环导入会报错
+
+### 设计原理
+
+NekoLang 当前的 `import` 是“定义合并”模型。编译器先解析主文件，再递归解析导入文件，把导入到的函数和 extern 声明放到主程序体前面，然后再统一做语义分析。
+
+这意味着：
+
+- 导入不是运行时加载
+- 导入文件不会生成独立二进制
+- 顶层变量声明不作为可导出内容
+- 导入顺序由依赖优先的 DFS 决定
+
+## 16. 外部函数 `extern`
+
+### 作用
+
+`extern` 声明一个由 C 或系统库提供的固定签名函数，使 NekoLang 可以直接生成 C 调用约定的调用代码。
+
+```scheme
+(nya extern_demo
+  (nyan ((n int)))
+  (paw
+    (extern atoi (string) int)
+    (:= n (atoi "42"))
+    (meow n)))
+```
+
+### 签名结构
+
+```scheme
+(extern 函数名 (参数类型...) 返回类型)
+```
+
+例如：
+
+```scheme
+(extern abs (int) int)
+(extern atof (string) float)
+(extern getpid () int)
+```
+
+当前语义阶段支持的 extern 类型包括：
+
+- `int`
+- `float`
+- `char`
+- `bool`
+- `string`
+- `pointer`
+- `(func (...) ...)`
+
+暂不支持 `void`、可变参数函数，以及数组作为 extern 参数或返回值。
+
+### 与 C 链接的关系
+
+`extern` 只声明函数签名，不提供链接参数。函数符号来自：
+
+- 系统默认可链接符号
+- NekoLang 自带 `runtime/runtime.c`
+- `nekgo` 项目里的 `csrc/**/*.c`
+- `Neko.toml [c]` 中显式配置的源文件和库
+
+如果链接阶段报 undefined symbol，优先检查 `extern` 名称、C 函数名、项目 C 源路径和 `[c].libraries`。
+
+## 17. Opaque pointer `pointer`
+
+### 作用
+
+`pointer` 用于承载 C 世界返回的不透明句柄。NekoLang 不知道它指向什么结构，也不提供解引用、字段访问或指针算术。
+
+```scheme
+(nya null_pointer_demo
+  (nyan ((p pointer) (is_null bool)))
+  (paw
+    (:= p 0)
+    (:= is_null (= p 0))
+    (meow is_null)))
+```
+
+### 可做的事
+
+- 保存 C 函数返回的句柄
+- 把句柄传给其他 `extern`
+- 与另一个 `pointer` 比较
+- 与字面量 `0` 比较
+- 用字面量 `0` 表示空指针
+- 使用 `meow` / `print` 输出指针值
+
+### 不可做的事
+
+- 解引用
+- 访问结构体字段
+- 指针加减
+- 把非零整数当作指针
+- 把 NekoLang 数组当作 C 指针传入 extern
+
+### 适配层建议
+
+如果需要操作 socket、文件句柄、数据库连接或系统资源，建议把真实资源封装在 C 结构体中，让 NekoLang 只保存 `pointer` 句柄，并通过 `extern` 调用 C 包装函数：
+
+```scheme
+(extern neko_resource_open (string) pointer)
+(extern neko_resource_close (pointer) int)
+```
+
+返回 `pointer` 的函数可用 `0` 表示失败；返回 `int` 的操作函数可用 `0` / `1` 表示失败或成功。
+
+## 18. 项目内 C 适配层
+
+### 作用
+
+项目内 C 适配层让用户把系统 API 或第三方 C 库包装成 NekoLang 容易调用的窄接口。
+
+目录示例：
+
+```text
+demo/
+├── Neko.toml
+├── src/
+│   ├── main.neko
+│   └── native.neko
+└── csrc/
+    └── native_adapter.c
+```
+
+`src/native.neko`：
+
+```scheme
+(extern neko_demo_value () int)
+```
+
+`csrc/native_adapter.c`：
+
+```c
+int neko_demo_value(void) {
+    return 17;
+}
+```
+
+`src/main.neko`：
+
+```scheme
+(import native)
+
+(nya demo
+  (nyan ((x int)))
+  (paw
+    (:= x (neko_demo_value))
+    (meow x)))
+```
+
+### `Neko.toml [c]`
+
+```toml
+[c]
+auto_discover = true
+sources = []
+include_dirs = []
+library_dirs = []
+libraries = []
+```
+
+- `auto_discover = true` 时自动收集 `csrc/**/*.c`
+- `sources` 显式列出额外 `.c` 文件
+- `include_dirs` 添加 `clang -I`
+- `library_dirs` 添加 `clang -L`
+- `libraries` 添加 `clang -l`
+- `csrc/` 和 `csrc/include/` 存在时会自动加入头文件搜索路径
+
+完整网络示例可参考 [socket_adapter_demo](/Users/xiami/Learning/NekoLang/examples/socket_adapter_demo)。
+
+## 19. 综合示例
 
 ```scheme
 (nya full_walkthrough
@@ -757,7 +960,7 @@ NekoLang 的字符串是不可变的——每次操作返回新字符串，原�
 - 布尔值和条件分支
 - 输出与返回值相关逻辑
 
-## 16. 使用建议
+## 20. 使用建议
 
 - 教学示例里优先使用个性化命名，体现 NekoLang 的辨识度
 - 条件尽量写成比较表达式或布尔变量，避免依赖数值真值
@@ -765,5 +968,7 @@ NekoLang 的字符串是不可变的——每次操作返回新字符串，原�
 - 函数示例要显式写出 `return`
 - 字符串操作使用 `(+ s1 s2)` 拼接，`int-to-string` 做格式化
 - 字符字面量使用单引号 `'a'`，与字符串双引号区分
+- 多文件程序把公共函数和 extern 声明拆到独立 `.neko` 文件，用 `import` 引入
+- 和 C 交互时，让 C 适配层处理真实指针，NekoLang 侧只保存 `pointer` 句柄
 
 如果要进一步对照实现细节，可继续阅读 [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) 和 [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)。
