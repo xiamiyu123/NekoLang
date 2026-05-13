@@ -1,11 +1,14 @@
 import unittest
 import os
-import subprocess
-import sys
 import tempfile
+
+import pytest
+
+from neko import cli as neko_cli
 from neko.lexer import Lexer
 from neko.parser import Parser
 from neko.semantic import SemanticAnalyzer
+from tests._cli_support import run_cli_main
 
 
 def compile_source(source: str):
@@ -211,18 +214,14 @@ class TestFileFixtures(unittest.TestCase):
 class TestCLI(unittest.TestCase):
     def _run_cli(self, *args):
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        return subprocess.run(
-            [sys.executable, "-m", "neko.cli", *args],
-            capture_output=True,
-            text=True,
-            cwd=repo_root,
-        )
+        return run_cli_main(neko_cli.main, args, repo_root, subprocess_module=neko_cli.subprocess)
 
     def test_check_command(self):
         result = self._run_cli("check", "examples/demo.neko")
         self.assertEqual(result.returncode, 0)
         self.assertIn("检查通过", result.stdout)
 
+    @pytest.mark.slow
     def test_run_command_with_args(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             source_path = os.path.join(tmpdir, "args.neko")
@@ -235,6 +234,7 @@ class TestCLI(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout.strip(), "1\n9")
 
+    @pytest.mark.slow
     def test_legacy_compile_flag(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, "legacy-demo")

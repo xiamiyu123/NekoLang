@@ -4,6 +4,8 @@ import os
 import tempfile
 import unittest
 
+import pytest
+
 from neko.build_utils import compile_file_with_imports, compile_to_executable
 from neko.lexer import Lexer
 from neko.parser import Parser
@@ -97,6 +99,7 @@ class TestImportCompilation(unittest.TestCase):
         result = compile_file_with_imports(tmp_path)
         self.assertEqual(len(result.analyzer.errors), 0)
 
+    @pytest.mark.slow
     def test_basic_import_arm64(self):
         """Basic import on ARM64 backend."""
         import platform

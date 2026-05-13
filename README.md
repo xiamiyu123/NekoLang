@@ -279,8 +279,17 @@ uv run neko examples/demo.neko --all
 ## 运行测试
 
 ```bash
-uv run pytest tests/ -v
+# 日常快测：跳过真实编译/运行的慢测，并行执行
+uv run pytest tests/ -q -m "not slow" -n auto
+
+# 后端慢测：覆盖 clang 编译、生成二进制运行、build/run CLI 路径
+uv run pytest tests/ -q -m slow -n auto
+
+# 本地全量回归：保留完整测试语义，并行执行
+uv run pytest tests/ -q -n auto
 ```
+
+慢测会复用预编译的 runtime object，并将部分重复的小型后端执行用例合并为批量断言；CLI 测试优先在进程内调用入口函数，减少重复启动 Python 子进程的开销。
 
 ## 相关文档
 

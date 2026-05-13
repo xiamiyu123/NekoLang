@@ -5,6 +5,8 @@ from __future__ import annotations
 import platform
 import unittest
 
+import pytest
+
 import tests.test_llvm as llvm_tests
 from tests._codegen_support import (
     compile_and_run as _compile_and_run,
@@ -120,65 +122,78 @@ class Arm64BackendMixin:
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64BasicExecution(Arm64BackendMixin, llvm_tests.TestBasicExecution):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64ControlFlow(Arm64BackendMixin, llvm_tests.TestControlFlow):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64ComparisonOps(Arm64BackendMixin, llvm_tests.TestComparisonOps):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64IntegrationPrograms(Arm64BackendMixin, llvm_tests.TestIntegrationPrograms):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64StringOperations(Arm64BackendMixin, llvm_tests.TestStringOperations):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64CharOperations(Arm64BackendMixin, llvm_tests.TestCharOperations):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64Lambda(Arm64BackendMixin, llvm_tests.TestLambda):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64ArrayEdgeCases(Arm64BackendMixin, llvm_tests.TestArrayEdgeCases):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64FileIOEdgeCases(Arm64BackendMixin, llvm_tests.TestFileIOEdgeCases):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64ArgvEdgeCases(Arm64BackendMixin, llvm_tests.TestArgvEdgeCases):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64InputEdgeCases(Arm64BackendMixin, llvm_tests.TestInputEdgeCases):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64RandEdgeCases(Arm64BackendMixin, llvm_tests.TestRandEdgeCases):
     pass
 
 
 @unittest.skipUnless(ARM64_HOST, "ARM64 backend execution tests require Apple Silicon macOS")
+@pytest.mark.slow
 class TestARM64CodegenEdgeCases(Arm64BackendMixin, llvm_tests.TestCodegenEdgeCases):
     pass

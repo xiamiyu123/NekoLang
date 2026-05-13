@@ -9,6 +9,7 @@ import unittest
 from neko.codegen_llvm import LLVMCodegen
 from neko.lexer import Lexer
 from neko.parser import Parser
+import pytest
 from tests._codegen_support import (
     compile_and_run as _compile_and_run,
     compile_and_run_process as _compile_and_run_process,
@@ -153,50 +154,35 @@ class TestIRGeneration(unittest.TestCase):
         self.assertIn('call i32 @"neko_rand_range"', ir)
 
 
+@pytest.mark.slow
 class TestBasicExecution(unittest.TestCase):
     """Test compiled programs produce correct output."""
 
-    def test_print_literal(self):
-        output = compile_and_run("(program t (begin (print 42)))")
-        self.assertEqual(output, "42")
-
-    def test_meow_print_alias(self):
-        output = compile_and_run("(program t (var ((x int))) (begin (:= x 42) (meow x)))")
-        self.assertEqual(output, "42")
-
-    def test_variable_assign(self):
-        output = compile_and_run("(program t (var ((x int))) (begin (:= x 99) (print x)))")
-        self.assertEqual(output, "99")
-
-    def test_addition(self):
-        output = compile_and_run("(program t (var ((x int))) (begin (:= x (+ 3 4)) (print x)))")
-        self.assertEqual(output, "7")
-
-    def test_subtraction(self):
-        output = compile_and_run("(program t (var ((x int))) (begin (:= x (- 10 3)) (print x)))")
-        self.assertEqual(output, "7")
-
-    def test_multiplication(self):
-        output = compile_and_run("(program t (var ((x int))) (begin (:= x (* 3 4)) (print x)))")
-        self.assertEqual(output, "12")
-
-    def test_division(self):
-        output = compile_and_run("(program t (var ((x int))) (begin (:= x (/ 15 4)) (print x)))")
-        self.assertEqual(output, "3")
-
-    def test_nested_arithmetic(self):
-        output = compile_and_run("(program t (var ((x int))) (begin (:= x (+ (* 5 2) 3)) (print x)))")
-        self.assertEqual(output, "13")
-
-    def test_multiple_variables(self):
-        source = """(program t (var ((a int) (b int)))
-          (begin (:= a 10) (:= b 20) (print (+ a b))))"""
+    def test_basic_scalar_execution(self):
+        source = """(program t (var ((x int) (a int) (b int) (flag bool)))
+          (begin
+            (print 42)
+            (:= x 42)
+            (meow x)
+            (:= x 99)
+            (print x)
+            (:= x (+ 3 4))
+            (print x)
+            (:= x (- 10 3))
+            (print x)
+            (:= x (* 3 4))
+            (print x)
+            (:= x (/ 15 4))
+            (print x)
+            (:= x (+ (* 5 2) 3))
+            (print x)
+            (:= a 10)
+            (:= b 20)
+            (print (+ a b))
+            (:= flag true)
+            (print flag)))"""
         output = compile_and_run(source)
-        self.assertEqual(output, "30")
-
-    def test_bool_print(self):
-        output = compile_and_run("(program t (var ((flag bool))) (begin (:= flag true) (print flag)))")
-        self.assertEqual(output, "true")
+        self.assertEqual(output, "42\n42\n99\n7\n7\n12\n3\n13\n30\ntrue")
 
     def test_function_call(self):
         source = """(program t (var ((x int)))
@@ -489,6 +475,7 @@ class TestBasicExecution(unittest.TestCase):
         self.assertIn("runtime error: rand-range invalid bounds", result.stderr)
 
 
+@pytest.mark.slow
 class TestControlFlow(unittest.TestCase):
     """Test if and while."""
 
@@ -541,34 +528,29 @@ class TestControlFlow(unittest.TestCase):
         self.assertEqual(output, "6")
 
 
+@pytest.mark.slow
 class TestComparisonOps(unittest.TestCase):
     """Test all comparison operators."""
 
-    def test_lt(self):
-        source = "(program t (var ((x int))) (begin (if (< 1 2) (:= x 1) (:= x 0)) (print x)))"
-        self.assertEqual(compile_and_run(source), "1")
-
-    def test_gt(self):
-        source = "(program t (var ((x int))) (begin (if (> 2 1) (:= x 1) (:= x 0)) (print x)))"
-        self.assertEqual(compile_and_run(source), "1")
-
-    def test_eq(self):
-        source = "(program t (var ((x int))) (begin (if (= 5 5) (:= x 1) (:= x 0)) (print x)))"
-        self.assertEqual(compile_and_run(source), "1")
-
-    def test_neq(self):
-        source = "(program t (var ((x int))) (begin (if (!= 5 3) (:= x 1) (:= x 0)) (print x)))"
-        self.assertEqual(compile_and_run(source), "1")
-
-    def test_le(self):
-        source = "(program t (var ((x int))) (begin (if (<= 5 5) (:= x 1) (:= x 0)) (print x)))"
-        self.assertEqual(compile_and_run(source), "1")
-
-    def test_ge(self):
-        source = "(program t (var ((x int))) (begin (if (>= 5 3) (:= x 1) (:= x 0)) (print x)))"
-        self.assertEqual(compile_and_run(source), "1")
+    def test_comparison_operators(self):
+        source = """(program t (var ((x int)))
+          (begin
+            (if (< 1 2) (:= x 1) (:= x 0))
+            (print x)
+            (if (> 2 1) (:= x 1) (:= x 0))
+            (print x)
+            (if (= 5 5) (:= x 1) (:= x 0))
+            (print x)
+            (if (!= 5 3) (:= x 1) (:= x 0))
+            (print x)
+            (if (<= 5 5) (:= x 1) (:= x 0))
+            (print x)
+            (if (>= 5 3) (:= x 1) (:= x 0))
+            (print x)))"""
+        self.assertEqual(compile_and_run(source), "1\n1\n1\n1\n1\n1")
 
 
+@pytest.mark.slow
 class TestIntegrationPrograms(unittest.TestCase):
     """Test complete programs."""
 
@@ -645,6 +627,7 @@ class TestIntegrationPrograms(unittest.TestCase):
         self.assertEqual(output, "23")
 
 
+@pytest.mark.slow
 class TestStringOperations(unittest.TestCase):
     """Test string type and operations."""
 
@@ -935,6 +918,7 @@ class TestStringOperations(unittest.TestCase):
         self.assertEqual(output, "你好世界")
 
 
+@pytest.mark.slow
 class TestCharOperations(unittest.TestCase):
     """Test char literal and char operations."""
 
@@ -1036,6 +1020,7 @@ class TestCharOperations(unittest.TestCase):
         self.assertEqual(output, "66")
 
 
+@pytest.mark.slow
 class TestLambda(unittest.TestCase):
     """Test lambda expressions and function pointers."""
 
@@ -1107,6 +1092,7 @@ class TestLambda(unittest.TestCase):
         self.assertEqual(output, "10\n7\n36")
 
 
+@pytest.mark.slow
 class TestArrayEdgeCases(unittest.TestCase):
     """Edge case tests for array operations."""
 
@@ -1227,6 +1213,7 @@ class TestArrayEdgeCases(unittest.TestCase):
         self.assertEqual(output, "0\n10\n20\n30\n40")
 
 
+@pytest.mark.slow
 class TestFileIOEdgeCases(unittest.TestCase):
     """Edge case tests for file I/O operations."""
 
@@ -1313,6 +1300,7 @@ class TestFileIOEdgeCases(unittest.TestCase):
         self.assertIn("-3.14", output)
 
 
+@pytest.mark.slow
 class TestArgvEdgeCases(unittest.TestCase):
     """Edge case tests for argv operations."""
 
@@ -1426,6 +1414,7 @@ class TestArgvEdgeCases(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
 
 
+@pytest.mark.slow
 class TestInputEdgeCases(unittest.TestCase):
     """Edge case tests for input operations."""
 
@@ -1488,6 +1477,7 @@ class TestInputEdgeCases(unittest.TestCase):
         self.assertIn("true", output)
 
 
+@pytest.mark.slow
 class TestRandEdgeCases(unittest.TestCase):
     """Edge case tests for random number operations."""
 
@@ -1542,6 +1532,7 @@ class TestRandEdgeCases(unittest.TestCase):
         self.assertEqual(len(lines), 5)
 
 
+@pytest.mark.slow
 class TestCodegenEdgeCases(unittest.TestCase):
     """Edge case tests for code generation stability."""
 
