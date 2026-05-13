@@ -5,10 +5,16 @@ import { join } from "path";
 const API_PORT = 8000;
 let apiProcess: ChildProcess | null = null;
 
+function getBackendRoot(): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, "backend");
+  }
+  return join(__dirname, "../../..");
+}
+
 function startFastAPI(): void {
-  const projectRoot = join(__dirname, "../../..");
   apiProcess = spawn("uv", ["run", "uvicorn", "neko.viz_api:app", "--port", String(API_PORT)], {
-    cwd: projectRoot,
+    cwd: getBackendRoot(),
     stdio: ["ignore", "pipe", "pipe"],
   });
 

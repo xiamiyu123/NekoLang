@@ -1,0 +1,43 @@
+# NekoScope 打包
+
+NekoScope 使用 `electron-vite` 构建前端和主进程，使用 `electron-builder` 生成 Electron 应用包。
+
+## 本地打包
+
+```bash
+cd nekoscope
+npm ci
+npm run pack
+```
+
+`npm run pack` 会生成未压缩的应用目录，适合本地快速检查。
+
+```bash
+cd nekoscope
+npm run dist
+```
+
+`npm run dist` 会生成可分发的安装包，输出目录为 `nekoscope/release/`。
+
+## 后端资源
+
+打包配置会把以下资源复制到 Electron 的 `resources/backend/`：
+
+- `neko/`
+- `examples/`
+- `runtime/`
+- `pyproject.toml`
+- `uv.lock`
+
+应用启动后，主进程会在打包环境中从 `process.resourcesPath/backend` 启动 `uv run uvicorn neko.viz_api:app`。
+
+因此，运行打包后的应用仍需要目标机器能访问 `uv` 和 Python。
+
+## 自动打包
+
+GitHub Actions 工作流 `.github/workflows/nekoscope-package.yml` 支持：
+
+- 手动触发 `workflow_dispatch`
+- 推送 `nekoscope-v*` tag 时触发
+
+工作流会在 macOS ARM64 runner 上运行测试并上传 `.dmg` / `.zip` 产物。

@@ -1,0 +1,64 @@
+name: NekoScope Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "nekoscope-v*"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  macos-arm64:
+    name: macOS ARM64 Electron package
+    runs-on: macos-14
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: nekoscope/package-lock.json
+
+      - name: Install NekoScope dependencies
+        working-directory: nekoscope
+        run: npm ci
+
+      - name: Run NekoScope tests
+        working-directory: nekoscope
+        run: npm test
+
+      - name: Build Electron packages
+        working-directory: nekoscope
+        run: npm run dist
+
+      - name: Upload packaged app artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: nekoscope-macos-arm64
+          path: |
+            nekoscope/release/*.dmg
+            nekoscope/release/*.zip
+            nekoscope/release/*.blockmap
+          if-no-files-found: error

@@ -15,4 +15,5 @@ env/
 .mypy_cache/
 *.neko~
 .claude
+nekoscope/release/
 .gitignore
