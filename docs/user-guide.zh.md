@@ -275,6 +275,8 @@ uv run nekgo clean
 --backend arm64
 --mode debug
 --mode release
+--opt-level 0
+--opt-level 1
 --verbose
 ```
 
@@ -283,6 +285,7 @@ uv run nekgo clean
 - `auto` 在 Apple Silicon macOS 上选择 `arm64`，其他环境选择 `llvm`
 - `debug` 使用 `clang -O0 -g`
 - `release` 使用 `clang -O2`
+- `--opt-level` 只控制自研 ARM64 后端优化；默认 `0`，`1` 启用安全 O1 优化
 - `--verbose` 会打印生成的 LLVM IR 或 ARM64 汇编，以及最终 `clang` 命令
 
 ## 10. 外部 C 函数

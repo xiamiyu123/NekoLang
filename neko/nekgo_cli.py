@@ -116,6 +116,7 @@ def _compile_project_ast(
     mode: str,
     verbose: bool,
     c_build_config: CBuildConfig,
+    opt_level: int,
 ):
     result = _compile_project_file(source_path, entry_path)
     if result.analyzer.errors:
@@ -127,6 +128,7 @@ def _compile_project_ast(
         verbose=verbose,
         mode=mode,
         c_build_config=c_build_config,
+        opt_level=opt_level,
     )
     return result
 
@@ -212,6 +214,7 @@ def command_build(args: argparse.Namespace) -> int:
             mode=args.mode,
             verbose=args.verbose,
             c_build_config=c_build_config,
+            opt_level=args.opt_level,
         )
     except RuntimeError as exc:
         print(str(exc))
@@ -252,6 +255,7 @@ def command_run(args: argparse.Namespace) -> int:
                     mode=args.mode,
                     verbose=args.verbose,
                     c_build_config=c_build_config,
+                    opt_level=args.opt_level,
                 )
             except RuntimeError as exc:
                 print(str(exc))
@@ -269,6 +273,7 @@ def command_run(args: argparse.Namespace) -> int:
             mode=args.mode,
             verbose=args.verbose,
             c_build_config=c_build_config,
+            opt_level=args.opt_level,
         )
     except RuntimeError as exc:
         print(str(exc))
@@ -331,6 +336,7 @@ def command_test(args: argparse.Namespace) -> int:
                     backend=args.backend,
                     mode=args.mode,
                     c_build_config=c_build_config,
+                    opt_level=args.opt_level,
                 )
                 proc = subprocess.run([output], capture_output=True, text=True, timeout=30)
                 if proc.returncode == 0:
@@ -373,12 +379,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_build.add_argument("--verbose", action="store_true", help="打印 LLVM IR 和 clang 命令")
     p_build.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
     p_build.add_argument("--mode", choices=["debug", "release"], default="debug", help="编译模式")
+    p_build.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 后端优化等级")
     p_build.set_defaults(func=command_build)
 
     p_run = sub.add_parser("run", help="编译并运行当前项目")
     p_run.add_argument("--verbose", action="store_true", help="打印 LLVM IR 和 clang 命令")
     p_run.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
     p_run.add_argument("--mode", choices=["debug", "release"], default="debug", help="编译模式")
+    p_run.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 后端优化等级")
     p_run.add_argument("--ephemeral", action="store_true", help="使用临时构建产物运行，不写入 build/ 目录")
     p_run.add_argument("args", nargs=argparse.REMAINDER, help="传递给程序的参数")
     p_run.set_defaults(func=command_run)
@@ -386,6 +394,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_test = sub.add_parser("test", help="运行项目测试")
     p_test.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
     p_test.add_argument("--mode", choices=["debug", "release"], default="debug", help="编译模式")
+    p_test.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 后端优化等级")
     p_test.set_defaults(func=command_test)
 
     p_clean = sub.add_parser("clean", help="清理构建产物")

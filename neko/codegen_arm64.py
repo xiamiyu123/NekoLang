@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import struct
+import re
 from dataclasses import dataclass
 
 from .ast_nodes import (
@@ -205,8 +206,9 @@ class FrameLayout:
 class ARM64Codegen:
     """Generate Darwin ARM64 assembly for NekoLang."""
 
-    def __init__(self):
+    def __init__(self, opt_level: int = 0):
         self.lines: list[str] = []
+        self.opt_level = opt_level
         self.cstring_pool: dict[str, str] = {}
         self.float_pool: dict[int, str] = {}
         self.label_counter = 0
@@ -221,6 +223,7 @@ class ARM64Codegen:
         self.is_main = False
         self.frame_layout: FrameLayout | None = None
         self.expr_temp_depth = 0
+        self.used_vars: set[str] = set()
 
     def generate(self, ast: ProgramNode) -> str:
         self.lines = []
@@ -231,6 +234,8 @@ class ARM64Codegen:
         self._gen_program(ast)
         self._emit_literal_sections()
         self._emit(".subsections_via_symbols")
+        if self.opt_level >= 1:
+            self.lines = self._peephole_optimize(self.lines)
         return "\n".join(self.lines) + "\n"
 
     def _emit(self, line: str = ""):
@@ -240,6 +245,28 @@ class ARM64Codegen:
         label = f"L{prefix}_{self.label_counter}"
         self.label_counter += 1
         return label
+
+    def _peephole_optimize(self, lines: list[str]) -> list[str]:
+        optimized: list[str] = []
+        previous_line = None
+        mov_self_pattern = re.compile(r"^\s*mov\s+([wx]\d+),\s*\1$")
+
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped == "" and (not optimized or optimized[-1].strip() == ""):
+                continue
+            if mov_self_pattern.match(stripped):
+                continue
+            if stripped.startswith("b\t"):
+                target = stripped.split("\t", 1)[1]
+                next_non_empty = next((candidate.strip() for candidate in lines[index + 1:] if candidate.strip()), "")
+                if next_non_empty == f"{target}:":
+                    continue
+            if previous_line == line and stripped.startswith("mov\t"):
+                continue
+            optimized.append(line)
+            previous_line = line
+        return optimized
 
     def _function_symbol(self, name: str) -> str:
         return f"_{name}"
@@ -364,6 +391,103 @@ class ARM64Codegen:
 
         walk(node)
         return found
+
+    def _collect_used_vars(self, node: ASTNode) -> set[str]:
+        used: set[str] = set()
+
+        def walk_expr(expr: ASTNode):
+            if isinstance(expr, IdentifierNode):
+                if expr.name in self.var_types:
+                    used.add(expr.name)
+            elif isinstance(expr, BinOpNode):
+                walk_expr(expr.left)
+                walk_expr(expr.right)
+            elif isinstance(expr, FuncCallNode):
+                if expr.name in self.var_types:
+                    used.add(expr.name)
+                for arg in expr.args:
+                    walk_expr(arg)
+            elif isinstance(expr, LambdaDefNode):
+                walk_stmt(expr.body)
+            elif isinstance(expr, ArrayAccessNode):
+                walk_expr(expr.index)
+            elif isinstance(expr, ArgvNode):
+                walk_expr(expr.index)
+            elif isinstance(expr, ArgvStringNode):
+                walk_expr(expr.index)
+            elif isinstance(expr, RandomRangeNode):
+                walk_expr(expr.low)
+                walk_expr(expr.high)
+            elif isinstance(expr, FileReadNode):
+                walk_expr(expr.path)
+            elif isinstance(expr, StringLengthNode):
+                walk_expr(expr.string_expr)
+            elif isinstance(expr, StringAtNode):
+                walk_expr(expr.string_expr)
+                walk_expr(expr.index)
+            elif isinstance(expr, StringSubNode):
+                walk_expr(expr.string_expr)
+                walk_expr(expr.start)
+                walk_expr(expr.length)
+            elif isinstance(expr, StringCmpNode):
+                walk_expr(expr.left)
+                walk_expr(expr.right)
+            elif isinstance(expr, StringContainsNode):
+                walk_expr(expr.haystack)
+                walk_expr(expr.needle)
+            elif isinstance(expr, IntToStringNode):
+                walk_expr(expr.int_expr)
+            elif isinstance(expr, StringToIntNode):
+                walk_expr(expr.string_expr)
+            elif isinstance(expr, CharToIntNode):
+                walk_expr(expr.char_expr)
+            elif isinstance(expr, IntToCharNode):
+                walk_expr(expr.int_expr)
+            elif isinstance(expr, CharToStringNode):
+                walk_expr(expr.char_expr)
+            elif isinstance(expr, IsLetterNode):
+                walk_expr(expr.char_expr)
+            elif isinstance(expr, IsDigitNode):
+                walk_expr(expr.char_expr)
+            elif isinstance(expr, CharUpcaseNode):
+                walk_expr(expr.char_expr)
+            elif isinstance(expr, CharDowncaseNode):
+                walk_expr(expr.char_expr)
+
+        def walk_stmt(stmt: ASTNode):
+            if isinstance(stmt, AssignNode):
+                walk_expr(stmt.value)
+            elif isinstance(stmt, BeginBlockNode):
+                for inner in stmt.statements:
+                    walk_stmt(inner)
+            elif isinstance(stmt, IfNode):
+                walk_expr(stmt.condition)
+                walk_stmt(stmt.then_branch)
+                walk_stmt(stmt.else_branch)
+            elif isinstance(stmt, WhileNode):
+                walk_expr(stmt.condition)
+                walk_stmt(stmt.body)
+            elif isinstance(stmt, PrintNode):
+                walk_expr(stmt.value)
+            elif isinstance(stmt, ReturnNode):
+                walk_expr(stmt.value)
+            elif isinstance(stmt, ArrayAssignNode):
+                walk_expr(stmt.index)
+                walk_expr(stmt.value)
+            elif isinstance(stmt, ArrayPrintNode):
+                walk_expr(stmt.index)
+            elif isinstance(stmt, FileWriteNode):
+                walk_expr(stmt.path)
+                walk_expr(stmt.value)
+            elif isinstance(stmt, RandomSeedNode):
+                walk_expr(stmt.seed)
+            elif isinstance(stmt, FuncDefNode):
+                walk_stmt(stmt.body)
+            elif isinstance(stmt, LambdaDefNode):
+                walk_stmt(stmt.body)
+
+        walk_stmt(node)
+        return used
 
     def _compute_frame_layout(
         self,
@@ -575,6 +699,7 @@ class ARM64Codegen:
         saved_name = self.current_function_name
         saved_is_main = self.is_main
         saved_layout = self.frame_layout
+        saved_used_vars = self.used_vars
 
         self.current_return_type = node.return_type
         self.current_epilogue_label = self._new_label("epilogue")
@@ -585,10 +710,12 @@ class ARM64Codegen:
         self.var_offsets = dict(self.frame_layout.var_offsets)
         self.var_slot_kinds = {name: type_str for name, type_str in node.params}
         self.expr_temp_depth = 0
+        self.used_vars = self._collect_used_vars(node.body)
 
         self._emit_function_prologue(node.name, self.frame_layout.frame_size, save_main_args=False, mangle_name=True)
-        for name, type_str in node.params:
-            self._emit_var_zero_init(name, type_str)
+        if self.opt_level <= 0:
+            for name, type_str in node.params:
+                self._emit_var_zero_init(name, type_str)
 
         self._spill_params(node.params)
         self._gen_statement(node.body)
@@ -609,6 +736,7 @@ class ARM64Codegen:
         self.current_function_name = saved_name
         self.is_main = saved_is_main
         self.frame_layout = saved_layout
+        self.used_vars = saved_used_vars
 
     def _spill_params(self, params: list[tuple[str, str]]):
         int_index = 0
@@ -645,6 +773,7 @@ class ARM64Codegen:
         saved_name = self.current_function_name
         saved_is_main = self.is_main
         saved_layout = self.frame_layout
+        saved_used_vars = self.used_vars
 
         pairs: list[tuple[str, str]] = []
         for decl in node.block.var_decls:
@@ -659,6 +788,7 @@ class ARM64Codegen:
         self.var_offsets = dict(self.frame_layout.var_offsets)
         self.var_slot_kinds = {name: type_str for name, type_str in pairs}
         self.expr_temp_depth = 0
+        self.used_vars = self._collect_used_vars(node.block.body)
 
         self._emit_function_prologue("main", self.frame_layout.frame_size, save_main_args=True)
         self._gen_block(node.block)
@@ -675,6 +805,7 @@ class ARM64Codegen:
         self.current_function_name = saved_name
         self.is_main = saved_is_main
         self.frame_layout = saved_layout
+        self.used_vars = saved_used_vars
 
     def _gen_block(self, node: BlockNode):
         for decl in node.var_decls:
@@ -683,6 +814,8 @@ class ARM64Codegen:
 
     def _gen_var_decl(self, variables: list[tuple[str, str]]):
         for name, type_str in variables:
+            if self.opt_level >= 1 and name not in self.used_vars:
+                continue
             self._emit_var_zero_init(name, type_str)
 
     def _gen_begin_block(self, node: BeginBlockNode):
@@ -1015,6 +1148,18 @@ class ARM64Codegen:
             self._pop_expr_temp()
             self._emit("\tcmp\tx1, x0")
             self._emit(f"\tcset\tw0, {CMP_OPS[node.op]}")
+            return
+
+        if (
+            self.opt_level >= 1
+            and node.op in {"+", "-"}
+            and isinstance(node.right, IntLiteralNode)
+            and 0 <= node.right.value <= 4095
+        ):
+            self._gen_expression(node.left)
+            self._coerce_value(left_type, "int")
+            self._emit("\tmov\tw1, w0")
+            self._emit(f"\t{ARITH_OPS[node.op]}\tw0, w1, #{node.right.value}")
             return
 
         self._gen_expression(node.left)

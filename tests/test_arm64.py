@@ -100,6 +100,43 @@ class TestARM64AssemblyGeneration(unittest.TestCase):
         self.assertIn("_neko_fn_double_x002d_it", asm)
         self.assertNotIn("_double-it", asm)
 
+    def test_opt_level_zero_keeps_epilogue_branch(self):
+        asm = generate_asm_text(
+            "(program t (begin (function answer () int (return 42)) (print (answer))))",
+            opt_level=0,
+        )
+        self.assertIn("\tb\tLepilogue_", asm)
+
+    def test_opt_level_one_removes_branch_to_next_label(self):
+        asm = generate_asm_text(
+            "(program t (begin (function answer () int (return 42)) (print (answer))))",
+            opt_level=1,
+        )
+        self.assertNotIn("\tb\tLepilogue_", asm)
+
+    def test_opt_level_one_uses_add_immediate(self):
+        asm = generate_asm_text(
+            "(program t (var ((x int) (y int))) (begin (:= x 41) (:= y (+ x 1)) (print y)))",
+            opt_level=1,
+        )
+        self.assertIn("add\tw0, w1, #1", asm)
+
+    def test_opt_level_one_folds_integer_constants(self):
+        asm = generate_asm_text(
+            "(program t (var ((x int))) (begin (:= x (+ 40 2)) (print x)))",
+            opt_level=1,
+        )
+        self.assertIn("movz\tw0, #42", asm)
+        self.assertNotIn("add\tw0", asm)
+
+    def test_opt_level_one_skips_parameter_zero_init(self):
+        asm = generate_asm_text(
+            "(program t (begin (function inc ((x int)) int (return (+ x 1))) (print (inc 1))))",
+            opt_level=1,
+        )
+        function_body = asm.split("_neko_fn_inc:", 1)[1].split("_main:", 1)[0]
+        self.assertNotIn("str\twzr", function_body)
+
 
 class Arm64BackendMixin:
     def setUp(self):

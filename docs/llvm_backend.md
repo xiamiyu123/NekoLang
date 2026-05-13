@@ -22,7 +22,7 @@
   clang 链接 runtime.c + 项目内 C 源码 → 可执行文件
 ```
 
-LLVM 后端直接遍历 AST，使用 `llvmlite.ir` 构建 LLVM IR 模块。ARM64 后端生成面向 Apple Silicon macOS 的汇编文本，再交给 `clang` 链接。
+LLVM 后端直接遍历 AST，使用 `llvmlite.ir` 构建 LLVM IR 模块。ARM64 后端生成面向 Apple Silicon macOS 的汇编文本，再交给 `clang` 链接。自研 ARM64 后端的优化等级见 [arm64_backend.md](/Users/xiami/Learning/NekoLang/docs/arm64_backend.md)。
 
 ## 二、类型映射
 

@@ -96,7 +96,7 @@ def command_llvm_ir(args: argparse.Namespace) -> int:
 def command_asm(args: argparse.Namespace) -> int:
     result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
-    print(generate_assembly(result.ast))
+    print(generate_assembly(result.ast, opt_level=args.opt_level))
     return 0
 
 
@@ -104,7 +104,14 @@ def command_build(args: argparse.Namespace) -> int:
     result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     output = args.output or default_output_name(args.file)
-    compile_to_executable(result.ast, output, backend=args.backend, verbose=args.verbose, mode=args.mode)
+    compile_to_executable(
+        result.ast,
+        output,
+        backend=args.backend,
+        verbose=args.verbose,
+        mode=args.mode,
+        opt_level=args.opt_level,
+    )
     print(f"编译成功: {output}")
     return 0
 
@@ -119,7 +126,14 @@ def command_run(args: argparse.Namespace) -> int:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         output = os.path.join(tmpdir, default_output_name(args.file))
-        compile_to_executable(result.ast, output, backend=args.backend, verbose=args.verbose, mode=args.mode)
+        compile_to_executable(
+            result.ast,
+            output,
+            backend=args.backend,
+            verbose=args.verbose,
+            mode=args.mode,
+            opt_level=args.opt_level,
+        )
         proc = subprocess.run([output, *runtime_args], text=True)
         return proc.returncode
 
@@ -147,16 +161,19 @@ def build_parser() -> argparse.ArgumentParser:
             cmd.add_argument("--verbose", action="store_true", help="Print LLVM IR and clang command")
             cmd.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="Codegen backend")
             cmd.add_argument("--mode", choices=["debug", "release"], default="debug", help="Compilation mode")
+            cmd.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 backend optimization level")
             cmd.set_defaults(func=command_build)
         elif name == "run":
             cmd.add_argument("--verbose", action="store_true", help="Print LLVM IR and clang command")
             cmd.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="Codegen backend")
             cmd.add_argument("--mode", choices=["debug", "release"], default="debug", help="Compilation mode")
+            cmd.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 backend optimization level")
             cmd.add_argument("args", nargs=argparse.REMAINDER, help="Arguments passed to the program")
             cmd.set_defaults(func=command_run)
         elif name == "llvm-ir":
             cmd.set_defaults(func=command_llvm_ir)
         elif name == "asm":
+            cmd.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 backend optimization level")
             cmd.set_defaults(func=command_asm)
         elif name == "ast":
             cmd.set_defaults(func=command_ast)

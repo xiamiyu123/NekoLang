@@ -53,8 +53,8 @@ def _runtime_object_path() -> str:
     return object_path
 
 
-def _compile_to_test_executable(ast, output_path: str, backend: str = "llvm") -> str:
-    artifact = generate_code(ast, backend=backend)
+def _compile_to_test_executable(ast, output_path: str, backend: str = "llvm", opt_level: int = 0) -> str:
+    artifact = generate_code(ast, backend=backend, opt_level=opt_level)
 
     if artifact.backend == "arm64" and not _is_arm64_darwin():
         print("错误: ARM64 后端仅支持在 Apple Silicon macOS 本机构建和运行。")
@@ -84,6 +84,7 @@ def compile_and_run_process(
     backend: str = "llvm",
     args: list[str] | None = None,
     stdin_data: str | None = None,
+    opt_level: int = 0,
 ) -> subprocess.CompletedProcess:
     """Compile NekoLang source to executable, run it, return the process result."""
     result = compile_source(source)
@@ -91,7 +92,7 @@ def compile_and_run_process(
 
     with tempfile.TemporaryDirectory() as tmpdir:
         out_path = os.path.join(tmpdir, "test_bin")
-        _compile_to_test_executable(result.ast, out_path, backend=backend)
+        _compile_to_test_executable(result.ast, out_path, backend=backend, opt_level=opt_level)
         return subprocess.run(
             [out_path, *(args or [])],
             input=stdin_data,
@@ -118,7 +119,7 @@ def generate_ir_text(source: str) -> str:
     return generate_ir(result.ast)
 
 
-def generate_asm_text(source: str) -> str:
+def generate_asm_text(source: str, opt_level: int = 0) -> str:
     result = compile_source(source)
     ensure_no_semantic_errors(result)
-    return generate_assembly(result.ast)
+    return generate_assembly(result.ast, opt_level=opt_level)

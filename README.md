@@ -381,6 +381,9 @@ uv run neko llvm-ir examples/demo.neko
 uv run neko build examples/demo.neko -o demo
 ./demo
 
+# Apple Silicon macOS: 使用自研 ARM64 后端 O1 优化
+uv run neko build examples/demo.neko --backend arm64 --opt-level 1 -o demo
+
 # 编译并运行，向程序传参
 uv run neko run examples/runtime_demo.neko -- 41
 
@@ -429,6 +432,7 @@ uv run pytest tests/ -q -n auto
 - [语言元素详解（中文）](/Users/xiami/Learning/NekoLang/docs/language-elements.zh.md)
 - [Language Elements Guide (English)](/Users/xiami/Learning/NekoLang/docs/language-elements.en.md)
 - [LLVM 后端说明](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)
+- [ARM64 后端说明](/Users/xiami/Learning/NekoLang/docs/arm64_backend.md)
 - [开发路线图](/Users/xiami/Learning/NekoLang/docs/roadmap.md)
 - [v0.1 规格](/Users/xiami/Learning/NekoLang/docs/v0.1-spec.md)
 

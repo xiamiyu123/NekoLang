@@ -14,6 +14,7 @@ from neko.ast_nodes import ASTNode, ProgramNode, ImportNode, FuncDefNode, Extern
 from neko.codegen_arm64 import ARM64Codegen
 from neko.codegen_llvm import LLVMCodegen
 from neko.lexer import Lexer
+from neko.optimizer import optimize_ast_for_arm64
 from neko.parser import Parser
 from neko.semantic import SemanticAnalyzer
 
@@ -216,19 +217,24 @@ def _resolve_backend(requested: str) -> Literal["llvm", "arm64"]:
     raise ValueError(f"unknown backend: {requested}")
 
 
-def generate_code(ast: ProgramNode, backend: str = "auto") -> CodegenArtifact:
+def generate_code(ast: ProgramNode, backend: str = "auto", opt_level: int = 0) -> CodegenArtifact:
     resolved = _resolve_backend(backend)
     if resolved == "llvm":
         return CodegenArtifact(backend="llvm", text=LLVMCodegen().generate(ast), extension=".ll")
-    return CodegenArtifact(backend="arm64", text=ARM64Codegen().generate(ast), extension=".s")
+    optimized_ast = optimize_ast_for_arm64(ast, opt_level)
+    return CodegenArtifact(
+        backend="arm64",
+        text=ARM64Codegen(opt_level=opt_level).generate(optimized_ast),
+        extension=".s",
+    )
 
 
 def generate_ir(ast: ProgramNode) -> str:
     return generate_code(ast, "llvm").text
 
 
-def generate_assembly(ast: ProgramNode) -> str:
-    return generate_code(ast, "arm64").text
+def generate_assembly(ast: ProgramNode, opt_level: int = 0) -> str:
+    return generate_code(ast, "arm64", opt_level=opt_level).text
 
 
 def runtime_source_path() -> str:
@@ -299,8 +305,9 @@ def compile_to_executable(
     verbose: bool = False,
     mode: str = "debug",
     c_build_config: CBuildConfig | None = None,
+    opt_level: int = 0,
 ) -> str:
-    artifact = generate_code(ast, backend=backend)
+    artifact = generate_code(ast, backend=backend, opt_level=opt_level)
 
     if artifact.backend == "arm64" and not _is_arm64_darwin():
         print("错误: ARM64 后端仅支持在 Apple Silicon macOS 本机构建和运行。", file=sys.stderr)
