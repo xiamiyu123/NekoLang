@@ -349,7 +349,7 @@ def compile_to_executable(
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             details = [result.stderr.rstrip()]
-            if build_config.source_paths or build_config.libraries or "Undefined symbols" in result.stderr:
+            if _should_show_project_c_hint(result.stderr, build_config):
                 details.append("请检查 extern 名称、项目内 csrc/ 文件，以及 Neko.toml [c].libraries 配置。")
             print("clang 编译失败:\n" + "\n".join(part for part in details if part), file=sys.stderr)
             raise SystemExit(1)
@@ -357,6 +357,16 @@ def compile_to_executable(
         os.unlink(code_path)
 
     return output_path
+
+
+def _should_show_project_c_hint(stderr: str, build_config: CBuildConfig) -> bool:
+    lower_stderr = stderr.lower()
+    return (
+        bool(build_config.source_paths)
+        or bool(build_config.libraries)
+        or "undefined symbols" in lower_stderr
+        or "undefined reference" in lower_stderr
+    )
 
 
 def default_output_name(source_path: str) -> str:

@@ -9,9 +9,12 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHON_VERSION: "3.14"
+
 jobs:
-  fast-tests:
-    name: Fast tests
+  linux-x86-llvm-fast:
+    name: Linux x86_64 LLVM fast tests
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +24,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -34,8 +37,8 @@ jobs:
       - name: Run fast tests
         run: uv run pytest tests/ -q -m "not slow" -n auto
 
-  slow-tests:
-    name: Slow tests
+  linux-x86-llvm-slow:
+    name: Linux x86_64 LLVM slow tests
     runs-on: ubuntu-latest
 
     steps:
@@ -45,7 +48,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -57,3 +60,33 @@ jobs:
 
       - name: Run slow tests
         run: uv run pytest tests/ -q -m slow -n auto
+
+  macos-arm64-backends:
+    name: macOS ARM64 LLVM and self backend tests
+    runs-on: macos-14
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Show runner architecture
+        run: uname -a && python -c "import platform; print(platform.system(), platform.machine())"
+
+      - name: Run LLVM backend tests on ARM64
+        run: uv run pytest tests/test_llvm.py -q
+
+      - name: Run self ARM64 backend tests
+        run: uv run pytest tests/test_arm64.py -q
