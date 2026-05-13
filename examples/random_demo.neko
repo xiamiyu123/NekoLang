@@ -1,8 +1,10 @@
 ; NekoLang random demo
-; Seeds the generator and prints a value in [1, 100].
+; 固定随机种子后，生成并输出 [1, 100] 内的随机整数。
 (nya random_demo
   (nyan ((value int)))
   (paw
+    ; 固定种子，方便复现实验结果。
     (rand-seed 42)
+    ; 生成闭区间 [1, 100] 内的整数。
     (:= value (rand-range 1 100))
     (meow value)))

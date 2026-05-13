@@ -3,14 +3,17 @@
 (nya guess_number_rand
   (nyan ((guess int) (secret int) (solved bool)))
   (paw
+    ; 在 1 到 100 之间随机生成答案。
     (:= secret (rand-range 1 100))
     (:= solved false)
     (meow "欢迎来到猜数字游戏，请输入 1 到 100 之间的整数。")
 
+    ; 反复读取输入，直到猜中为止。
     (purr-while (= solved false)
       (paw
         (meow "请输入你的猜测：")
         (:= guess (input-int))
+        ; 根据比较结果给出不同提示。
         (if (< guess secret)
           (meow "太小了，请再试一次。")
           (if (> guess secret)

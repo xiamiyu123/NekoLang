@@ -1,10 +1,14 @@
 ; NekoLang runtime demo
-; Reads the first CLI argument, adds argc, writes the result to a file.
+; 读取第一个命令行整数参数，与参数个数相加后写入文件。
 (nya runtime_demo
   (nyan ((count int) (value int) (result int)))
   (paw
+    ; 统计传给程序的命令行参数个数。
     (:= count (argc))
+    ; 读取第一个参数，并按 int 解析。
     (:= value (argv-int 0))
+    ; 做一个简单计算，方便观察运行时接口是否工作正常。
     (:= result (+ value count))
+    ; 把结果写入文件，再打印到终端。
     (write-int "runtime_output.txt" result)
     (meow result)))

@@ -1,8 +1,10 @@
 ; NekoLang input demo
-; Reads two integers from stdin and prints their sum.
+; 从标准输入读取两个整数，然后输出它们的和。
 (nya input_demo
   (nyan ((a int) (b int)))
   (paw
+    ; 依次读取两个整数。
     (:= a (input-int))
     (:= b (input-int))
+    ; 直接把求和结果打印出来。
     (meow (+ a b))))

@@ -5,13 +5,18 @@
 (nya guess_number
   (nyan ((count int) (index int) (guess int) (secret int) (solved int)))
   (paw
+    ; 从命令行批量读取猜测值。
     (:= count (argc))
     (:= index 0)
+
+    ; 这个示例把答案固定为 42。
     (:= secret 42)
     (:= solved 0)
 
+    ; 顺序检查每一个猜测值。
     (purr-while (< index count)
       (paw
+        ; 一旦猜中，后面的参数就不再重复判断。
         (if (= solved 0)
           (paw
             (:= guess (argv-int index))
@@ -25,4 +30,5 @@
           (:= solved solved))
         (:= index (+ index 1))))
 
+    ; 最后一行汇总是否有人猜中。
     (meow solved)))

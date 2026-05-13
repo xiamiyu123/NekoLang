@@ -1,3 +1,5 @@
+// neko_tcp_adapter.c - 为 socket_adapter_demo 提供一个极小的 TCP 文本客户端
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdlib.h>
@@ -10,6 +12,7 @@ struct neko_tcp_client {
     int fd;
 };
 
+// 连接到指定主机和端口，成功时返回一个堆分配的 client 句柄。
 void *neko_tcp_connect(const char *host, int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -38,6 +41,7 @@ void *neko_tcp_connect(const char *host, int port) {
     return client;
 }
 
+// 发送一行文本；为了便于做 echo 示例，这里会自动补一个换行。
 int neko_tcp_send_text(void *handle, const char *text) {
     if (handle == NULL || text == NULL) {
         return 0;
@@ -54,6 +58,7 @@ int neko_tcp_send_text(void *handle, const char *text) {
     return 1;
 }
 
+// 持续读取直到遇到换行，返回一段以 '\0' 结尾的 C 字符串。
 char *neko_tcp_recv_line(void *handle) {
     if (handle == NULL) {
         char *empty = malloc(1);
@@ -96,6 +101,7 @@ char *neko_tcp_recv_line(void *handle) {
     return buffer;
 }
 
+// 关闭 socket 并释放前面分配的 client 结构体。
 int neko_tcp_close(void *handle) {
     if (handle == NULL) {
         return 0;

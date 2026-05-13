@@ -1,5 +1,5 @@
 ; meow-rand.neko — 随机数工具函数
 
-; NekoLang wrapper that returns random number in range [1, 100]
+; 对内建 rand-range 做一层包装，便于通过 import 复用。
 (function meow-rand ((min int) (max int)) int
   (return (rand-range min max)))

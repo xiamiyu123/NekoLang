@@ -2,18 +2,28 @@
 ; 运行前请先启动一个本地 TCP 文本服务。
 ; README 中提供了可直接复现的 loopback echo 示例。
 
+; tcp.neko 里只声明 extern 签名，真正的 socket 操作在 C 里实现。
 (import tcp)
 
 (nya socket_adapter_demo
   (nyan ((client pointer) (ok int) (reply string) (host string) (port int) (message string)))
   (paw
+    ; 从命令行读取主机、端口和要发送的文本。
     (:= host (argv-string 0))
     (:= port (argv-int 1))
     (:= message (argv-string 2))
+
+    ; 建立连接，得到一个 opaque pointer 句柄。
     (:= client (neko_tcp_connect host port))
+
+    ; 发送文本，C 侧会补上换行。
     (:= ok (neko_tcp_send_text client message))
     (meow ok)
+
+    ; 读取服务端返回的一整行文本。
     (:= reply (neko_tcp_recv_line client))
     (meow reply)
+
+    ; 关闭连接，释放句柄。
     (:= ok (neko_tcp_close client))
     (meow ok)))

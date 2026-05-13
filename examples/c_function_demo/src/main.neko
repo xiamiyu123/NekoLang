@@ -1,11 +1,17 @@
 ; c_function_demo - Neko 主程序调用项目内 C 函数
+; 这个示例展示最小的“项目内 C + Neko 主程序”协作方式。
 (import native)
 
 (nya c_function_demo
   (nyan ((seed int) (delta int) (total int)))
   (paw
+    ; 先准备两个普通的 Neko 整数参数。
     (:= seed 12)
     (:= delta 30)
+
+    ; 调用项目内 C 函数，把结果接回 Neko 变量。
     (:= total (neko_add_bonus seed delta))
     (meow total)
+
+    ; 再调用一个无参数的 C 函数。
     (meow (neko_magic_number))))

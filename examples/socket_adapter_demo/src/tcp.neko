@@ -1,3 +1,5 @@
+; 项目内 C 适配层暴露给 Neko 的四个入口。
+; Neko 通过这些 extern 使用 socket，但不会直接接触底层结构体。
 (extern neko_tcp_connect (string int) pointer)
 (extern neko_tcp_send_text (pointer string) int)
 (extern neko_tcp_recv_line (pointer) string)

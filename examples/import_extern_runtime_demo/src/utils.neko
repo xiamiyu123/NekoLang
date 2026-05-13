@@ -1,11 +1,14 @@
 ; utils.neko — 纯 NekoLang 函数库 (测试 import)
 ; 被导入的模块,不依赖 extern
 
+; 把输入值翻倍。
 (function double ((x int)) int
   (return (* x 2)))
 
+; 返回两个整数之和。
 (function add ((a int) (b int)) int
   (return (+ a b)))
 
+; 返回一个整数的平方。
 (function square ((x int)) int
   (return (* x x)))

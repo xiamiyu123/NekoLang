@@ -1,8 +1,12 @@
 ; NekoLang Demo Program
 ; 语言演示 - 对应课设示例 program example
+; 展示最基础的变量声明、算术表达式和输出。
 (nya example
   (nyan ((a int) (b int)))
   (paw
+    ; 先给变量 a 一个初始值。
     (:= a 2)
+    ; 计算 5 * a + 2，并把结果放进 b。
     (:= b (+ (* 5 a) 2))
+    ; 输出最终结果。
     (meow b)))

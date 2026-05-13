@@ -1,4 +1,5 @@
 ; String and Char operations demo
+; 把字符串和字符相关的常见内建操作串起来演示一遍。
 
 (program string_demo
   (var ((name string)
@@ -12,67 +13,67 @@
         (cmp int)
         (has bool)))
   (begin
-    ; String variable assignment
+    ; 字符串变量赋值
     (:= name "Neko")
     (print name)
 
-    ; String concatenation
+    ; 字符串拼接
     (:= greeting (+ "Hello, " name))
     (print greeting)
 
-    ; String length
+    ; 字符串长度
     (:= len (string-length greeting))
     (print len)
 
-    ; String character access
+    ; 读取指定位置的字符
     (:= ch (string-at greeting 0))
     (print ch)
 
-    ; Substring
+    ; 截取子串
     (:= name (string-sub greeting 7 4))
     (print name)
 
-    ; String comparison
+    ; 字符串比较
     (:= cmp (string-cmp "abc" "abc"))
     (print cmp)
 
-    ; String contains
+    ; 判断是否包含某个子串
     (:= has (string-contains greeting "Neko"))
     (print has)
 
-    ; int-to-string and concatenation
+    ; int 转 string，再参与拼接
     (:= n 42)
     (:= num_str (int-to-string n))
     (:= greeting (+ "value=" num_str))
     (print greeting)
 
-    ; string-to-int
+    ; string 转 int
     (:= n (string-to-int "123"))
     (print n)
 
-    ; Char literal
+    ; 字符字面量
     (:= ch 'A')
     (print ch)
 
-    ; Char to int (ASCII value)
+    ; char 转 int（字符码值）
     (:= n (char-to-int 'A'))
     (print n)
 
-    ; Int to char
+    ; int 转 char
     (:= ch (int-to-char 97))
     (print ch)
 
-    ; Char to string
+    ; char 转 string
     (:= name (char-to-string 'X'))
     (print name)
 
-    ; Character classification
+    ; 字符分类判断
     (:= is_alpha (is-letter 'a'))
     (print is_alpha)
     (:= is_alpha (is-digit '5'))
     (print is_alpha)
 
-    ; Case conversion
+    ; 大小写转换
     (:= upper (char-upcase 'h'))
     (print upper)
     (:= ch (char-downcase 'H'))

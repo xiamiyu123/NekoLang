@@ -1,2 +1,4 @@
+; 声明项目内 C 文件提供的函数签名。
+; Neko 只关心参数和返回类型，不关心具体实现细节。
 (extern neko_add_bonus (int int) int)
 (extern neko_magic_number () int)

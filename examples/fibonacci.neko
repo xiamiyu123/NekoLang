@@ -1,13 +1,20 @@
 ; NekoLang Fibonacci - 斐波那契数列
+; 先打印 0 和 1，再循环生成后续项。
 (nya fibonacci
   (nyan ((a int) (b int) (c int) (n int) (i int)))
   (paw
+    ; a 和 b 始终保存最近两项，c 保存新算出的下一项。
     (:= a 0)
     (:= b 1)
+    ; n 控制再生成多少项，i 记录当前迭代次数。
     (:= n 10)
     (:= i 0)
+
+    ; 先输出序列的前两项。
     (meow a)
     (meow b)
+
+    ; 每轮把 a、b 向前推进一位。
     (purr-while (< i n)
       (paw
         (:= c (+ a b))

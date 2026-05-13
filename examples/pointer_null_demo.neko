@@ -1,7 +1,10 @@
 ; pointer_null_demo — opaque pointer 空值语义示例
+; pointer 只能作为句柄传递或与 0 比较，不能在 Neko 里解引用。
 (nya pointer_null_demo
   (nyan ((handle pointer) (missing bool)))
   (paw
+    ; 用字面量 0 表示空指针。
     (:= handle 0)
+    ; 判断当前句柄是否为空。
     (:= missing (= handle 0))
     (meow missing)))

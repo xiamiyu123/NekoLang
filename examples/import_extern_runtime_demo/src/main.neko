@@ -1,7 +1,9 @@
 ; import_extern_runtime_demo — 测试 import + extern + runtime 共存
 ; 1. import 测试: 导入 utils.neko 中的函数
 ; 2. extern 测试: 在 libc.neko 中声明外部 C 函数
+; 3. runtime 测试: 使用随机数等内建运行时接口
 
+; utils 提供纯 Neko 函数，libc 提供 extern 声明，meow-rand 提供小包装函数。
 (import utils)
 (import libc)
 (import meow-rand)
@@ -27,7 +29,7 @@
     ; 初始化随机种子
     (rand-seed 42)
 
-    ; 测试 runtime: 调用内置随机函数
+    ; 测试 runtime: 通过包装函数调用内置随机数接口
     (:= x (meow-rand 1 100))
     (meow "meow-rand(1, 100) = ")
     (meow x)))
