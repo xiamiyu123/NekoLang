@@ -80,6 +80,7 @@ FLOAT_ARITH_OPS = {
 
 FLOAT_ARG_REGS = [f"d{i}" for i in range(8)]
 INT_ARG_REGS = [f"x{i}" for i in range(8)]
+INT_ARG_WREGS = [f"w{i}" for i in range(8)]
 EXPR_TEMP_SLOTS = 8
 CALL_ARG_SLOTS = 16
 SCRATCH_SLOT_COUNT = EXPR_TEMP_SLOTS + CALL_ARG_SLOTS
@@ -487,6 +488,46 @@ class ARM64Codegen:
     def _pop_expr_temp(self):
         self.expr_temp_depth -= 1
 
+    def _emit_reserve_stack_args(self, slot_count: int) -> int:
+        size = _align(slot_count * 8, 16)
+        if size:
+            self._emit(f"\tsub\tsp, sp, #{size}")
+        return size
+
+    def _emit_release_stack_args(self, size: int):
+        if size:
+            self._emit(f"\tadd\tsp, sp, #{size}")
+
+    def _emit_store_stack_arg(self, slot: int, type_str: str):
+        offset = slot * 8
+        if offset == 0:
+            self._emit_store_by_type("sp", type_str)
+            return
+        self._materialize_offset("x11", offset)
+        self._emit("\tadd\tx10, sp, x11")
+        self._emit_store_by_type("x10", type_str)
+
+    def _emit_load_stack_arg(self, slot: int, type_str: str, target_reg: str | None = None):
+        offset = slot * 8
+        address_reg = "sp"
+        if offset != 0:
+            self._materialize_offset("x11", offset)
+            self._emit("\tadd\tx10, sp, x11")
+            address_reg = "x10"
+
+        if _is_float_type(type_str):
+            reg = target_reg or "d0"
+            self._emit(f"\tldr\t{reg}, [{address_reg}]")
+        elif _is_char_type(type_str) or _is_bool_type(type_str):
+            reg = target_reg or "w0"
+            self._emit(f"\tldrb\t{reg}, [{address_reg}]")
+        elif _is_pointer_type(type_str):
+            reg = target_reg or "x0"
+            self._emit(f"\tldr\t{reg}, [{address_reg}]")
+        else:
+            reg = target_reg or "w0"
+            self._emit(f"\tldr\t{reg}, [{address_reg}]")
+
     def _emit_store_to_offset(self, offset: int, type_str: str, base: str = "x29"):
         self._materialize_offset("x11", offset)
         self._emit(f"\tsub\tx10, {base}, x11")
@@ -741,11 +782,12 @@ class ARM64Codegen:
         elem_type = _array_element_type(array_type)
         self._compute_array_element_address(node.name, node.index)
         self._emit("\tmov\tx0, x9")
-        self._emit_store_scratch(0, "string")
+        address_slot = self._push_expr_temp("pointer")
         value_type = self._infer_expression_type(node.value)
         self._gen_expression(node.value)
         self._coerce_value(value_type, elem_type, node.value)
-        self._emit_load_scratch(0, "string", target_reg="x9")
+        self._load_expr_temp(address_slot, "pointer", target_reg="x9")
+        self._pop_expr_temp()
         self._emit_store_by_type("x9", elem_type)
 
     def _gen_array_print(self, node: ArrayPrintNode):
@@ -1039,22 +1081,24 @@ class ARM64Codegen:
         if len(args) > CALL_ARG_SLOTS:
             raise RuntimeError("函数调用参数过多：超过临时参数槽上限")
 
+        stack_size = self._emit_reserve_stack_args(len(args))
         for index, (arg_node, expected_type) in enumerate(zip(args, param_types)):
             actual_type = self._infer_expression_type(arg_node)
             self._gen_expression(arg_node)
             self._coerce_value(actual_type, expected_type, arg_node)
-            self._emit_store_scratch(index, expected_type)
+            self._emit_store_stack_arg(index, expected_type)
 
         int_index = 0
         float_index = 0
         for index, expected_type in enumerate(param_types):
             if _is_float_type(expected_type):
-                self._emit_load_scratch(index, expected_type, target_reg=FLOAT_ARG_REGS[float_index])
+                self._emit_load_stack_arg(index, expected_type, target_reg=FLOAT_ARG_REGS[float_index])
                 float_index += 1
             else:
-                target_reg = INT_ARG_REGS[int_index] if _is_pointer_type(expected_type) else f"w{int_index}"
-                self._emit_load_scratch(index, expected_type, target_reg=target_reg)
+                target_reg = INT_ARG_REGS[int_index] if _is_pointer_type(expected_type) else INT_ARG_WREGS[int_index]
+                self._emit_load_stack_arg(index, expected_type, target_reg=target_reg)
                 int_index += 1
+        self._emit_release_stack_args(stack_size)
 
     def _compute_array_element_address(self, name: str, index_node: ASTNode):
         array_type = self.var_types.get(name)

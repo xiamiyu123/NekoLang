@@ -193,6 +193,16 @@ class TestBasicExecution(unittest.TestCase):
         output = compile_and_run(source)
         self.assertEqual(output, "9")
 
+    def test_nested_function_calls_as_arguments(self):
+        source = """(program t (var ((x int)))
+          (begin
+            (function inc ((n int)) int (return (+ n 1)))
+            (function add2 ((a int) (b int)) int (return (+ a b)))
+            (:= x (add2 (inc 10) (inc 20)))
+            (print x)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "32")
+
     def test_hyphenated_function_call(self):
         source = """(program t (var ((x int)))
           (begin
@@ -1149,6 +1159,15 @@ class TestArrayEdgeCases(unittest.TestCase):
             (array-print arr 0)))"""
         output = compile_and_run(source)
         self.assertEqual(output, "30")
+
+    def test_array_with_nested_call_value(self):
+        """Array element assignment should survive nested calls in the value expression."""
+        source = """(program t (var ((arr (array int 1)))) (begin
+            (function inc ((n int)) int (return (+ n 1)))
+            (array-set arr 0 (inc 41))
+            (array-print arr 0)))"""
+        output = compile_and_run(source)
+        self.assertEqual(output, "42")
 
     def test_float_array(self):
         """Float array should work."""
