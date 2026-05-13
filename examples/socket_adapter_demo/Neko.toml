@@ -1,0 +1,10 @@
+[project]
+name = "socket_adapter_demo"
+entry = "src/main.neko"
+
+[c]
+auto_discover = true
+sources = []
+include_dirs = []
+library_dirs = []
+libraries = []

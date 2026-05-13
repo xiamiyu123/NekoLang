@@ -201,6 +201,22 @@ hello/
 - `nekgo run` 默认也会更新并运行 `build/<项目名>`
 - 若只想临时编译运行、不保留产物，可使用 `uv run nekgo run --ephemeral`
 
+项目也可以携带自己的 C 源码并由 `nekgo` 一起编译链接。`Neko.toml` 里的 `[c]` 表当前支持：
+
+```toml
+[c]
+auto_discover = true
+sources = []
+include_dirs = []
+library_dirs = []
+libraries = []
+```
+
+- `auto_discover = true` 时自动收集 `csrc/**/*.c`
+- `sources` 可显式补充项目内其他 `.c` 文件
+- `include_dirs`、`library_dirs`、`libraries` 分别映射到 `clang` 的 `-I`、`-L`、`-l`
+- `csrc/` 与 `csrc/include/` 若存在，会自动加入头文件搜索路径
+
 ## 外部函数声明
 
 NekoLang 现在支持固定签名的 `extern` 声明，可直接调用默认可链接的 C 符号：
@@ -222,7 +238,70 @@ NekoLang 现在支持固定签名的 `extern` 声明，可直接调用默认可�
 - 只支持固定参数个数
 - 只支持 `int`、`float`、`char`、`bool`、`string`、`pointer` 和现有 `(func ...)` 类型
 - `pointer` 当前是 opaque pointer：可在 extern 间传递、可与另一 pointer 或字面量 `0` 比较，也可用字面量 `0` 赋值表示空指针
-- 暂不支持 `void`、可变参数、自定义链接参数，以及数组作为 extern 参数或返回值
+- 暂不支持 `void`、可变参数，以及数组作为 extern 参数或返回值
+- `extern` 语句本身不携带链接参数；项目级 C 链接配置通过 `Neko.toml [c]` 提供
+
+## 项目内 C 适配层
+
+第一版推荐的用户路径是：把 C 适配层放进项目内，通过 `extern` 暴露一个窄而稳定的接口，然后直接 `nekgo build/run/test`。
+
+目录约定：
+
+```text
+demo/
+├── Neko.toml
+├── src/
+│   ├── main.neko
+│   └── tcp.neko
+└── csrc/
+    └── neko_tcp_adapter.c
+```
+
+`src/tcp.neko`：
+
+```scheme
+(extern neko_tcp_connect (string int) pointer)
+(extern neko_tcp_send_text (pointer string) int)
+(extern neko_tcp_recv_line (pointer) string)
+(extern neko_tcp_close (pointer) int)
+```
+
+完整示例项目见 [examples/socket_adapter_demo](/Users/xiami/Learning/NekoLang/examples/socket_adapter_demo)。
+
+一个可直接验证的本地 loopback echo 流程：
+
+```bash
+# 终端 1：启动本地 echo 服务
+uv run python - <<'PY'
+import socketserver
+
+class Echo(socketserver.StreamRequestHandler):
+    def handle(self):
+        text = self.rfile.readline().decode().strip()
+        self.wfile.write(f"pong:{text}\n".encode())
+
+with socketserver.ThreadingTCPServer(("127.0.0.1", 19001), Echo) as server:
+    server.serve_forever()
+PY
+
+# 终端 2：进入示例项目并运行
+cd examples/socket_adapter_demo
+uv run nekgo run -- 127.0.0.1 19001 miaow-from-neko
+```
+
+预期输出：
+
+```text
+1
+pong:miaow-from-neko
+1
+```
+
+如果链接失败，优先检查三件事：
+
+- `extern` 名称是否与 C 函数名一致
+- 对应 `.c` 文件是否在 `csrc/` 或 `Neko.toml [c].sources` 中
+- 是否缺少 `Neko.toml [c].libraries` 里的系统库声明
 
 ## 环境准备
 

@@ -535,10 +535,13 @@ class TestNekgo(unittest.TestCase):
                     f.write(
                         "(import tcp)\n"
                         "(program socketdemo\n"
-                        "  (var ((client pointer) (ok int) (reply string)))\n"
+                        "  (var ((client pointer) (ok int) (reply string) (host string) (port int) (message string)))\n"
                         "  (begin\n"
-                        f"    (:= client (neko_tcp_connect \"{host}\" {port}))\n"
-                        "    (:= ok (neko_tcp_send_text client (argv-string 0)))\n"
+                        "    (:= host (argv-string 0))\n"
+                        "    (:= port (argv-int 1))\n"
+                        "    (:= message (argv-string 2))\n"
+                        "    (:= client (neko_tcp_connect host port))\n"
+                        "    (:= ok (neko_tcp_send_text client message))\n"
                         "    (print ok)\n"
                         "    (:= reply (neko_tcp_recv_line client))\n"
                         "    (print reply)\n"
@@ -661,7 +664,7 @@ class TestNekgo(unittest.TestCase):
                         + "\n"
                     )
 
-                result = self._run_nekgo("run", "--", "miaow", cwd=proj)
+                result = self._run_nekgo("run", "--", host, str(port), "miaow", cwd=proj)
                 self.assertEqual(result.returncode, 0)
                 self.assertEqual(result.stdout.strip(), "1\npong:miaow\n1")
             finally:

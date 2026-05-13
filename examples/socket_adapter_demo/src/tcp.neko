@@ -1,0 +1,4 @@
+(extern neko_tcp_connect (string int) pointer)
+(extern neko_tcp_send_text (pointer string) int)
+(extern neko_tcp_recv_line (pointer) string)
+(extern neko_tcp_close (pointer) int)

@@ -27,6 +27,7 @@ NekoLang 是一个编译器项目。
 - LLVM IR 生成
 - 通过 `clang` 与 `runtime/runtime.c` 链接为可执行文件
 - `check`、`build`、`run`、`llvm-ir` 等统一 CLI 命令入口
+- `nekgo` 项目内 C 源码链接（`Neko.toml [c]` + `csrc/` 自动发现）
 
 当前仍然存在的主要限制：
 
@@ -290,7 +291,8 @@ NekoLang 包含两个命令行工具：
 - 只支持固定参数个数
 - 只支持 `int`、`float`、`char`、`bool`、`string`、`pointer` 和现有 `(func ...)` 类型
 - `pointer` 当前按 opaque pointer 处理：只支持透传、与 pointer 比较，以及与字面量 `0` 的空指针用法
-- 暂不支持 `void`、可变参数、自定义链接配置，以及数组作为 extern 参数或返回值
+- 暂不支持 `void`、可变参数，以及数组作为 extern 参数或返回值
+- `extern` 语句本身不携带链接参数；项目级 C 链接配置通过 `Neko.toml [c]` 提供
 
 ### P3：多文件编译与模块系统
 
