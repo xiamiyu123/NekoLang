@@ -2,6 +2,11 @@ name: NekoScope Package
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version. Defaults to current UTC timestamp: yyyyMMddHHmm."
+        required: false
+        type: string
   push:
     tags:
       - "nekoscope-v*"
@@ -16,22 +21,37 @@ jobs:
   prepare-release:
     name: Prepare NekoScope release
     runs-on: ubuntu-latest
+    outputs:
+      release_name: ${{ steps.version.outputs.release_name }}
+      release_version: ${{ steps.version.outputs.release_version }}
 
     steps:
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/nekoscope-v* ]]; then
+            version="${GITHUB_REF_NAME#nekoscope-v}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="$(date -u +'%Y%m%d%H%M')"
+          fi
+
+          echo "release_version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "release_name=nekoscope-v${version}" >> "${GITHUB_OUTPUT}"
+          echo "NekoScope release version: ${version}"
+
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/nekoscope-v')
+        if: startsWith(github.ref, 'refs/tags/nekoscope-v') || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ github.ref_name }}" >/dev/null 2>&1 || \
-            gh release create "${{ github.ref_name }}" \
-              --verify-tag \
-              --title "${{ github.ref_name }}" \
-              --notes "NekoScope release ${{ github.ref_name }}"
-
-      - name: Skip release creation
-        if: ${{ !startsWith(github.ref, 'refs/tags/nekoscope-v') }}
-        run: echo "Release upload is only enabled for nekoscope-v* tags."
+          gh release view "${{ steps.version.outputs.release_name }}" >/dev/null 2>&1 || \
+            gh release create "${{ steps.version.outputs.release_name }}" \
+              --target "${{ github.sha }}" \
+              --title "${{ steps.version.outputs.release_name }}" \
+              --notes "NekoScope release ${{ steps.version.outputs.release_name }}"
 
   package:
     name: NekoScope package (${{ matrix.name }})
@@ -95,6 +115,8 @@ jobs:
 
       - name: Build Electron packages
         working-directory: nekoscope
+        env:
+          NEKOSCOPE_RELEASE_VERSION: ${{ needs.prepare-release.outputs.release_version }}
         run: npm run dist
 
       - name: Upload packaged app artifacts
@@ -105,7 +127,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload packages to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/nekoscope-v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.prepare-release.outputs.release_name }}
           files: ${{ matrix.release_glob }}

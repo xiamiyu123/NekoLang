@@ -19,6 +19,13 @@ npm run dist
 
 `npm run dist` 会生成可分发的安装包，输出目录为 `nekoscope/release/`。
 
+默认产物版本号使用当前 UTC 时间戳，精确到分钟，格式为 `yyyyMMddHHmm`。如需指定版本，可设置环境变量：
+
+```bash
+cd nekoscope
+NEKOSCOPE_RELEASE_VERSION=202605132305 npm run dist
+```
+
 ## 后端资源
 
 打包配置会把以下资源复制到 Electron 的 `resources/backend/`：
@@ -46,4 +53,4 @@ GitHub Actions 工作流 `.github/workflows/nekoscope-package.yml` 支持：
 - macOS：`.dmg` / `.zip`
 - Windows：`.exe` / `.zip`
 
-每个平台的产物都会作为 workflow artifact 保存；推送 `nekoscope-v*` tag 时，还会上传到同名 GitHub Release。
+每个平台的产物都会作为 workflow artifact 保存，并上传到 GitHub Release。手动触发时，如果没有填写版本号，会使用当前 UTC 时间戳生成 `nekoscope-vyyyyMMddHHmm`；推送 `nekoscope-v*` tag 时，会使用 tag 中的版本号。
