@@ -40,4 +40,10 @@ GitHub Actions 工作流 `.github/workflows/nekoscope-package.yml` 支持：
 - 手动触发 `workflow_dispatch`
 - 推送 `nekoscope-v*` tag 时触发
 
-工作流会在 macOS ARM64 runner 上运行测试并上传 `.dmg` / `.zip` 产物。
+工作流会在 Linux、macOS ARM64、Windows runner 上并行运行测试并生成安装包：
+
+- Linux：`.AppImage` / `.deb`
+- macOS：`.dmg` / `.zip`
+- Windows：`.exe` / `.zip`
+
+每个平台的产物都会作为 workflow artifact 保存；推送 `nekoscope-v*` tag 时，还会上传到同名 GitHub Release。
