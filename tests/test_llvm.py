@@ -1368,6 +1368,15 @@ class TestArgvEdgeCases(unittest.TestCase):
         result = compile_and_run_process(source, args=["hello"])
         self.assertEqual(result.stdout.strip(), "hello")
 
+    def test_argv_string_inside_extern_call(self):
+        """argv-string should remain valid when passed into another extern call."""
+        source = """(program t (var ((x int))) (begin
+            (extern atoi (string) int)
+            (:= x (atoi (argv-string 0)))
+            (print x)))"""
+        result = compile_and_run_process(source, args=["42"])
+        self.assertEqual(result.stdout.strip(), "42")
+
     def test_argv_multiple_args(self):
         """Multiple argv access should work."""
         source = """(program t (var ((a int) (b int))) (begin

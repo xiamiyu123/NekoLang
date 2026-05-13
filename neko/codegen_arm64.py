@@ -1119,33 +1119,15 @@ class ARM64Codegen:
         direct_special: str | None = None,
         value_type: str | None = None,
     ):
-        if direct_special == "argv":
+        if direct_special in {"argv", "argv_string"}:
             index_type = self._infer_expression_type(args[2][1])
             self._gen_expression(args[2][1])
             self._coerce_value(index_type, "int")
-            self._emit_store_scratch(2, "int")
+            slot = self._push_expr_temp("int")
             self._emit("\tmov\tw0, w20")
-            self._emit_store_scratch(0, "int")
-            self._emit("\tmov\tx0, x21")
-            self._emit_store_scratch(1, "string")
-            self._emit_load_scratch(0, "int", target_reg="w0")
-            self._emit_load_scratch(1, "string", target_reg="x1")
-            self._emit_load_scratch(2, "int", target_reg="w2")
-            self._emit(f"\tbl\t{symbol}")
-            return
-
-        if direct_special == "argv_string":
-            index_type = self._infer_expression_type(args[2][1])
-            self._gen_expression(args[2][1])
-            self._coerce_value(index_type, "int")
-            self._emit_store_scratch(2, "int")
-            self._emit("\tmov\tw0, w20")
-            self._emit_store_scratch(0, "int")
-            self._emit("\tmov\tx0, x21")
-            self._emit_store_scratch(1, "string")
-            self._emit_load_scratch(0, "int", target_reg="w0")
-            self._emit_load_scratch(1, "string", target_reg="x1")
-            self._emit_load_scratch(2, "int", target_reg="w2")
+            self._emit("\tmov\tx1, x21")
+            self._load_expr_temp(slot, "int", target_reg="w2")
+            self._pop_expr_temp()
             self._emit(f"\tbl\t{symbol}")
             return
 

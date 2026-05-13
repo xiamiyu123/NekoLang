@@ -104,7 +104,7 @@ def command_build(args: argparse.Namespace) -> int:
     result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     output = args.output or default_output_name(args.file)
-    compile_to_executable(result.ast, output, backend=args.backend, verbose=args.verbose)
+    compile_to_executable(result.ast, output, backend=args.backend, verbose=args.verbose, mode=args.mode)
     print(f"编译成功: {output}")
     return 0
 
@@ -119,7 +119,7 @@ def command_run(args: argparse.Namespace) -> int:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         output = os.path.join(tmpdir, default_output_name(args.file))
-        compile_to_executable(result.ast, output, backend=args.backend, verbose=args.verbose)
+        compile_to_executable(result.ast, output, backend=args.backend, verbose=args.verbose, mode=args.mode)
         proc = subprocess.run([output, *runtime_args], text=True)
         return proc.returncode
 
@@ -146,10 +146,12 @@ def build_parser() -> argparse.ArgumentParser:
             cmd.add_argument("-o", "--output", help="Output executable path")
             cmd.add_argument("--verbose", action="store_true", help="Print LLVM IR and clang command")
             cmd.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="Codegen backend")
+            cmd.add_argument("--mode", choices=["debug", "release"], default="debug", help="Compilation mode")
             cmd.set_defaults(func=command_build)
         elif name == "run":
             cmd.add_argument("--verbose", action="store_true", help="Print LLVM IR and clang command")
             cmd.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="Codegen backend")
+            cmd.add_argument("--mode", choices=["debug", "release"], default="debug", help="Compilation mode")
             cmd.add_argument("args", nargs=argparse.REMAINDER, help="Arguments passed to the program")
             cmd.set_defaults(func=command_run)
         elif name == "llvm-ir":
