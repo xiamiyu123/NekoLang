@@ -3,30 +3,31 @@
   "version": "0.1.0",
   "description": "NekoLang compilation pipeline visualizer",
   "private": true,
-  "type": "module",
+  "main": "electron-dist/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build && tsc -p tsconfig.electron.json",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "electron:dev": "tsc -p tsconfig.electron.json && electron .",
-    "electron:build": "tsc -p tsconfig.electron.json && electron-builder"
+    "electron:dev": "tsc -p tsconfig.electron.json && NODE_ENV=development electron .",
+    "electron:build": "tsc -p tsconfig.electron.json"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@monaco-editor/react": "^4.7.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.2",
+    "concurrently": "^9.2.1",
     "electron": "^35.5.1",
     "jsdom": "^26.1.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.1.4"
-  },
-  "main": "electron-dist/main.js"
+  }
 }
