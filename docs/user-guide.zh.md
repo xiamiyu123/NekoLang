@@ -1,6 +1,6 @@
 # NekoLang 用户指南
 
-本文面向“想把 NekoLang 程序跑起来”的用户，按实际使用路径介绍语言、项目结构、外部 C 适配层和示例。若需要更偏编译器实现的说明，可继续阅读 [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) 和 [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)。
+本文面向“想把 NekoLang 程序跑起来”的用户，按实际使用路径介绍语言、项目结构、外部 C 适配层和示例。若需要更偏安装的说明，可阅读 [installation.zh.md](/Users/xiami/Learning/NekoLang/docs/installation.zh.md)；若需要更偏编译器实现的说明，可继续阅读 [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) 和 [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)。
 
 ## 1. 环境准备
 
@@ -18,7 +18,32 @@ uv run neko run examples/demo.neko
 uv run nekgo new hello
 ```
 
-本机需要可用的 `clang`，因为 NekoLang 会先生成 LLVM IR 或 ARM64 汇编，再链接 `runtime/runtime.c` 和项目内 C 源码生成可执行文件。
+依赖分成两层：
+
+| 层级 | 内容 | 用到的命令 |
+|------|------|------------|
+| Python 工具层 | Python 3.10+、`uv`、`llvmlite` | 所有命令 |
+| 原生编译层 | `clang` 和平台对应的 C 链接工具链 | `build`、`run`、`nekgo test` |
+
+`clang` 不是 macOS 专属依赖。NekoLang 在生成可执行文件时，会先生成 LLVM IR 或 ARM64 汇编，再通过 `clang` 链接 `runtime/runtime.c` 和项目内 C 源码。只做 `check`、`tokens`、`ast`、`symbols`、`quads`、`llvm-ir` 时不需要 `clang`。
+
+各平台安装建议：
+
+| 平台 | 建议 |
+|------|------|
+| macOS | 安装 Xcode Command Line Tools：`xcode-select --install` |
+| Debian / Ubuntu | `sudo apt install clang build-essential` |
+| Fedora | `sudo dnf install clang gcc glibc-devel make` |
+| Arch Linux | `sudo pacman -S uv clang base-devel` |
+| Windows | 安装 LLVM clang，并准备 Visual Studio Build Tools C++ 工作负载或 MSYS2 clang |
+
+如果希望不写 `uv run`，可以在仓库根目录安装为当前用户工具：
+
+```bash
+uv tool install --editable .
+neko --help
+nekgo --help
+```
 
 ## 2. 单文件程序
 

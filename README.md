@@ -316,17 +316,57 @@ pong:miaow-from-neko
 
 ## 环境准备
 
-本项目使用 [UV](https://docs.astral.sh/uv/) 管理 Python 环境和依赖。
+本项目使用 [UV](https://docs.astral.sh/uv/) 管理 Python 环境和依赖。完整跨平台安装说明见 [安装与跨平台依赖](/Users/xiami/Learning/NekoLang/docs/installation.zh.md)。
 
 ```bash
-# 安装 UV (macOS/Linux)
+# macOS/Linux 可用官方安装脚本安装 UV
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 克隆后同步依赖
 uv sync
 ```
 
-所有命令通过 `uv run` 在项目虚拟环境中执行，无需手动激活 venv。
+依赖分成两层：
+
+- Python 工具层：Python 3.10+、`uv`、`llvmlite` 等 Python 包
+- 原生编译层：`clang` 和平台对应的 C 链接工具链
+
+`clang` 不是 macOS 专属依赖。只要执行会生成可执行文件的命令，就需要它：
+
+```bash
+uv run neko build examples/demo.neko -o demo
+uv run neko run examples/demo.neko
+uv run nekgo build
+uv run nekgo run
+```
+
+只做语义检查或查看中间结果时，不需要 `clang`：
+
+```bash
+uv run neko check examples/demo.neko
+uv run neko ast examples/demo.neko
+uv run neko llvm-ir examples/demo.neko
+```
+
+各平台原生工具链建议：
+
+| 平台 | 安装建议 |
+|------|----------|
+| macOS | `xcode-select --install` 或 Homebrew 的 LLVM；Apple Silicon 可用 `--backend arm64` |
+| Debian / Ubuntu | `sudo apt install clang build-essential` |
+| Fedora | `sudo dnf install clang gcc glibc-devel make` |
+| Arch Linux | `sudo pacman -S uv clang base-devel` |
+| Windows | `winget install LLVM.LLVM`，并安装 Visual Studio Build Tools 的 C++ 工作负载，或使用 MSYS2 clang |
+
+所有开发命令都可以通过 `uv run` 在项目虚拟环境中执行，无需手动激活 venv。
+
+如果希望把 `neko` 和 `nekgo` 安装成当前用户可直接调用的工具：
+
+```bash
+uv tool install --editable .
+neko --help
+nekgo --help
+```
 
 ## 使用方法
 
@@ -384,6 +424,7 @@ uv run pytest tests/ -q -n auto
 ## 相关文档
 
 - [文法规范](/Users/xiami/Learning/NekoLang/docs/grammar.md)
+- [安装与跨平台依赖](/Users/xiami/Learning/NekoLang/docs/installation.zh.md)
 - [用户指南（中文）](/Users/xiami/Learning/NekoLang/docs/user-guide.zh.md)
 - [语言元素详解（中文）](/Users/xiami/Learning/NekoLang/docs/language-elements.zh.md)
 - [Language Elements Guide (English)](/Users/xiami/Learning/NekoLang/docs/language-elements.en.md)

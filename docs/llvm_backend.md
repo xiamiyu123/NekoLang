@@ -296,8 +296,8 @@ uv run nekgo run -- 127.0.0.1 19001 miaow-from-neko
 ## 六、依赖
 
 - `llvmlite` — Python LLVM 绑定，由 `uv sync` 安装
-- `clang` — C 编译器，用于链接运行时
-- Apple Silicon macOS — ARM64 后端执行测试所需平台
+- `clang` — C 编译器，用于 `build/run/test` 的最终链接；macOS、Linux、Windows 都需要对应平台可用的 C 工具链
+- Apple Silicon macOS — ARM64 后端执行测试所需平台；其他平台使用 LLVM IR 后端
 
 ## 七、已知限制
 
@@ -306,3 +306,4 @@ uv run nekgo run -- 127.0.0.1 19001 miaow-from-neko
 - `extern` 不支持 `void`、可变参数和数组参数
 - 浮点使用 `double` 精度
 - 字符串运行时会分配内存，当前没有完整垃圾回收
+- `examples/socket_adapter_demo` 使用 POSIX socket 头文件，适合 macOS/Linux；Windows 需要单独的 Winsock C 适配层
