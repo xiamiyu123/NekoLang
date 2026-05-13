@@ -17,10 +17,10 @@ describe("TabBar", () => {
     expect(screen.getByText("Assembly")).toBeTruthy();
   });
 
-  it("highlights the active tab with accent color", () => {
+  it("marks the active tab", () => {
     render(<TabBar tabs={TABS} active="ast" onChange={() => {}} />);
     const astTab = screen.getByText("AST");
-    expect(astTab.style.color.toLowerCase()).toBe("rgb(245, 194, 231)");
+    expect(astTab).toHaveClass("active");
   });
 
   it("calls onChange when a tab is clicked", async () => {

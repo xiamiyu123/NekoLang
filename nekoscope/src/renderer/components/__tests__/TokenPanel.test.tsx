@@ -13,7 +13,7 @@ describe("TokenPanel", () => {
       tk("program", "nya", 1, 1),
       tk("identifier", "t", 2, 3),
     ];
-    render(<TokenPanel tokens={tokens} />);
+    render(<TokenPanel tokens={tokens} theme="dark" />);
     expect(screen.getByText("nya")).toBeTruthy();
     expect(screen.getByText("t")).toBeTruthy();
     expect(screen.getByText("program")).toBeTruthy();
@@ -22,17 +22,17 @@ describe("TokenPanel", () => {
 
   it("shows line and column info for each token", () => {
     const tokens: Token[] = [tk("keyword", "nyan", 3, 5)];
-    render(<TokenPanel tokens={tokens} />);
+    render(<TokenPanel tokens={tokens} theme="dark" />);
     expect(screen.getByText(/3:5/)).toBeTruthy();
   });
 
   it("renders empty state when no tokens", () => {
-    render(<TokenPanel tokens={[]} />);
+    render(<TokenPanel tokens={[]} theme="dark" />);
     expect(screen.getByText(/没有生成词法单元/)).toBeTruthy();
   });
 
   it("renders hint when null tokens passed", () => {
-    render(<TokenPanel tokens={null as unknown as Token[]} />);
+    render(<TokenPanel tokens={null as unknown as Token[]} theme="dark" />);
     expect(screen.getByText(/运行编译后可以看到词法单元/)).toBeTruthy();
   });
 });

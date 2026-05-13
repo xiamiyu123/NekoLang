@@ -1,11 +1,12 @@
 import type { Token } from "../types/compiler";
-import { tokenColor } from "../styles/theme";
+import { tokenColor, type ResolvedTheme } from "../styles/theme";
 
 interface Props {
   tokens: Token[] | null;
+  theme: ResolvedTheme;
 }
 
-export function TokenPanel({ tokens }: Props) {
+export function TokenPanel({ tokens, theme }: Props) {
   if (!tokens) {
     return (
       <div className="empty-panel">运行编译后可以看到词法单元。</div>
@@ -25,7 +26,7 @@ export function TokenPanel({ tokens }: Props) {
         >
           <span
             className="token-type"
-            style={{ background: tokenColor(t.type) }}
+            style={{ background: tokenColor(t.type, theme) }}
           >
             {t.type}
           </span>

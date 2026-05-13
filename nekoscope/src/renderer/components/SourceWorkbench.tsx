@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
-import Editor, { type OnMount } from "@monaco-editor/react";
+import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
 import { BookOpen, Play, RotateCcw } from "lucide-react";
+import type { ResolvedTheme } from "../styles/theme";
 import type { Example } from "../types/compiler";
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
   examples: Example[];
   activeExample: string | null;
   loading: boolean;
+  theme: ResolvedTheme;
   onSourceChange: (source: string) => void;
   onExampleLoad: (name: string) => void;
   onCompileNow: () => void;
@@ -19,6 +21,7 @@ export function SourceWorkbench({
   examples,
   activeExample,
   loading,
+  theme,
   onSourceChange,
   onExampleLoad,
   onCompileNow,
@@ -42,6 +45,50 @@ export function SourceWorkbench({
     editorRef.current = editor;
     layoutEditor();
   }, [layoutEditor]);
+
+  const handleBeforeMount: BeforeMount = useCallback((monaco) => {
+    monaco.editor.defineTheme("nekoscope-light", {
+      base: "vs",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "778292", fontStyle: "italic" },
+        { token: "keyword", foreground: "775bd6", fontStyle: "bold" },
+        { token: "number", foreground: "4f923f" },
+        { token: "string", foreground: "b97712" },
+      ],
+      colors: {
+        "editor.background": "#fbfcff",
+        "editor.foreground": "#24313d",
+        "editor.lineHighlightBackground": "#edf2fb",
+        "editorLineNumber.foreground": "#9aa8b8",
+        "editorCursor.foreground": "#2f73d9",
+        "editor.selectionBackground": "#c9dcff",
+        "editor.inactiveSelectionBackground": "#e6eefc",
+      },
+    });
+
+    monaco.editor.defineTheme("nekoscope-neko", {
+      base: "vs",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "b77f96", fontStyle: "italic" },
+        { token: "keyword", foreground: "c65fcf", fontStyle: "bold" },
+        { token: "number", foreground: "62a85b" },
+        { token: "string", foreground: "e78b2f" },
+      ],
+      colors: {
+        "editor.background": "#fffafd",
+        "editor.foreground": "#463240",
+        "editor.lineHighlightBackground": "#ffe8f2",
+        "editorLineNumber.foreground": "#c995ad",
+        "editorCursor.foreground": "#ff6fa5",
+        "editor.selectionBackground": "#ffc9df",
+        "editor.inactiveSelectionBackground": "#ffe3ef",
+        "editorIndentGuide.background1": "#f4c9d9",
+        "editorIndentGuide.activeBackground1": "#e996b6",
+      },
+    });
+  }, []);
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -83,8 +130,9 @@ export function SourceWorkbench({
           defaultLanguage="scheme"
           value={source}
           onChange={(value) => onSourceChange(value ?? "")}
+          beforeMount={handleBeforeMount}
           onMount={handleEditorMount}
-          theme="vs-dark"
+          theme={theme === "dark" ? "vs-dark" : theme === "neko" ? "nekoscope-neko" : "nekoscope-light"}
           options={{
             automaticLayout: true,
             minimap: { enabled: false },

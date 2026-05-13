@@ -21,6 +21,7 @@ describe("SourceWorkbench", () => {
         examples={[]}
         activeExample={null}
         loading={false}
+        theme="dark"
         onSourceChange={() => {}}
         onExampleLoad={() => {}}
         onCompileNow={() => {}}

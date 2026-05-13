@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Binary,
   Boxes,
-  Braces,
+  Cat,
   Cpu,
   GitBranch,
   ListTree,
+  Monitor,
+  Moon,
   Route,
   SearchCode,
+  Sun,
 } from "lucide-react";
 import { compile, getExamples, getExampleSource } from "./api/client";
 import { AssemblyPanel } from "./components/AssemblyPanel";
@@ -19,6 +22,16 @@ import { StageGuide, type StageInfo } from "./components/StageGuide";
 import { StageLesson } from "./components/StageLesson";
 import { SymbolTablePanel } from "./components/SymbolTablePanel";
 import { TokenPanel } from "./components/TokenPanel";
+import {
+  isThemePreference,
+  nextThemePreference,
+  resolveTheme,
+  THEME_STORAGE_KEY,
+  themePreferenceDescriptions,
+  themePreferenceLabels,
+  type ResolvedTheme,
+  type ThemePreference,
+} from "./styles/theme";
 import type { CompileResult, Example } from "./types/compiler";
 import "./styles/app.css";
 
@@ -115,6 +128,17 @@ function pipelineStats(result: CompileResult | null) {
   ];
 }
 
+function getInitialThemePreference(): ThemePreference {
+  if (typeof window === "undefined") return "system";
+  const storedPreference = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return isThemePreference(storedPreference) ? storedPreference : "system";
+}
+
+function getSystemPrefersDark(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return true;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
 export default function App() {
   const [source, setSource] = useState(DEFAULT_SOURCE);
   const [result, setResult] = useState<CompileResult | null>(null);
@@ -124,6 +148,8 @@ export default function App() {
   const [activeExample, setActiveExample] = useState<string | null>(null);
   const [backend, setBackend] = useState("llvm");
   const [apiError, setApiError] = useState<string | null>(null);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
 
@@ -153,6 +179,24 @@ export default function App() {
       setApiError(error instanceof Error ? error.message : "示例列表加载失败");
     });
   }, []);
+
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (event: MediaQueryListEvent) => setSystemPrefersDark(event.matches);
+    setSystemPrefersDark(query.matches);
+    query.addEventListener("change", handleChange);
+    return () => query.removeEventListener("change", handleChange);
+  }, []);
+
+  const resolvedTheme = resolveTheme(themePreference, systemPrefersDark);
+
+  useEffect(() => {
+    document.documentElement.dataset.themePreference = themePreference;
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.style.colorScheme = resolvedTheme === "dark" ? "dark" : "light";
+    window.localStorage.setItem(THEME_STORAGE_KEY, themePreference);
+  }, [resolvedTheme, themePreference]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -185,17 +229,32 @@ export default function App() {
   const activeStageInfo = findStage(activeStage);
   const stats = pipelineStats(result);
   const errors = result?.errors ?? [];
+  const ThemeIcon = themePreference === "light"
+    ? Sun
+    : themePreference === "dark"
+      ? Moon
+      : themePreference === "neko"
+        ? Cat
+        : Monitor;
+  const themeButtonLabel = `${themePreferenceDescriptions[themePreference]}，当前为 ${themePreferenceLabels[themePreference]}`;
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-block">
-          <div className="brand-mark" aria-hidden="true">
-            <SearchCode size={22} />
-          </div>
+          <button
+            className="brand-mark"
+            type="button"
+            onClick={() => setThemePreference((preference) => nextThemePreference(preference))}
+            title={themeButtonLabel}
+            aria-label={themeButtonLabel}
+          >
+            <SearchCode className="brand-code-icon" size={22} aria-hidden="true" />
+            <ThemeIcon className="brand-theme-icon" size={14} aria-hidden="true" />
+          </button>
           <div>
             <h1>NekoScope</h1>
-            <p>NekoLang 编译管线可视化平台</p>
+            <p>NekoLang 编译管线可视化平台 · {themePreferenceLabels[themePreference]}</p>
           </div>
         </div>
         <div className="status-cluster">
@@ -214,6 +273,7 @@ export default function App() {
           examples={examples}
           activeExample={activeExample}
           loading={loading}
+          theme={resolvedTheme}
           onSourceChange={(nextSource) => {
             setSource(nextSource);
             setActiveExample(null);
@@ -253,6 +313,7 @@ export default function App() {
                 activeStage={activeStage}
                 result={result}
                 backend={backend}
+                theme={resolvedTheme}
                 onBackendChange={setBackend}
               />
             </section>
@@ -267,18 +328,19 @@ interface ArtifactViewProps {
   activeStage: string;
   result: CompileResult | null;
   backend: string;
+  theme: ResolvedTheme;
   onBackendChange: (backend: string) => void;
 }
 
-function ArtifactView({ activeStage, result, backend, onBackendChange }: ArtifactViewProps) {
+function ArtifactView({ activeStage, result, backend, theme, onBackendChange }: ArtifactViewProps) {
   if (activeStage === "overview") {
     return <PipelineOverview result={result} />;
   }
   if (activeStage === "tokens") {
-    return <TokenPanel tokens={result?.tokens ?? null} />;
+    return <TokenPanel tokens={result?.tokens ?? null} theme={theme} />;
   }
   if (activeStage === "ast") {
-    return <ASTPanel ast={result?.ast ?? null} />;
+    return <ASTPanel ast={result?.ast ?? null} theme={theme} />;
   }
   if (activeStage === "symbols") {
     return <SymbolTablePanel symbols={result?.symbols ?? null} />;

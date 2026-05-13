@@ -58,12 +58,12 @@ describe("astToFlow", () => {
 
 describe("ASTPanel", () => {
   it("shows placeholder when ast is null", () => {
-    render(<ASTPanel ast={null} />);
+    render(<ASTPanel ast={null} theme="dark" />);
     expect(screen.getByText(/运行编译后可以看到 AST/)).toBeTruthy();
   });
 
   it("renders react-flow container when ast is provided", () => {
-    render(<ASTPanel ast={fnDef} />);
+    render(<ASTPanel ast={fnDef} theme="dark" />);
     // react-flow renders its container
     expect(document.querySelector(".react-flow")).toBeTruthy();
   });
