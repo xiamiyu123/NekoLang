@@ -1,0 +1,15 @@
+(function square ((x int)) int
+  (return (* x x)))
+
+(function cube ((x int)) int
+  (return (* x (* x x))))
+
+(function abs-int ((x int)) int
+  (if (< x 0)
+    (return (- 0 x))
+    (return x)))
+
+(function max2 ((a int) (b int)) int
+  (if (> a b)
+    (return a)
+    (return b)))

@@ -19,6 +19,31 @@ class TestNekgo(unittest.TestCase):
     def _run_nekgo(self, *args, cwd=None):
         return run_cli_main(nekgo_cli.main, args, cwd or REPO_ROOT, subprocess_module=nekgo_cli.subprocess)
 
+    def _write_mathx_package(self, base_dir, *, name="mathx", exports=None):
+        exports = ["src/mathx.neko"] if exports is None else exports
+        package_dir = os.path.join(base_dir, name)
+        os.makedirs(os.path.join(package_dir, "src"), exist_ok=True)
+        with open(os.path.join(package_dir, "Neko.toml"), "w", encoding="utf-8") as f:
+            quoted_exports = ", ".join(f'"{export}"' for export in exports)
+            f.write(
+                "[package]\n"
+                f'name = "{name}"\n'
+                'version = "0.1.0"\n'
+                f"exports = [{quoted_exports}]\n"
+            )
+        with open(os.path.join(package_dir, "src", "mathx.neko"), "w", encoding="utf-8") as f:
+            f.write(
+                "(function square ((x int)) int\n"
+                "  (return (* x x)))\n"
+                "\n"
+                "(function cube ((x int)) int\n"
+                "  (return (* x (* x x))))\n"
+            )
+        os.makedirs(os.path.join(package_dir, "build"), exist_ok=True)
+        with open(os.path.join(package_dir, "build", "ignored.txt"), "w", encoding="utf-8") as f:
+            f.write("ignore me")
+        return package_dir
+
     def test_new_creates_project(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self._run_nekgo("new", "testproj", cwd=tmpdir)
@@ -36,6 +61,7 @@ class TestNekgo(unittest.TestCase):
             self.assertIn("[c]", toml_text)
             self.assertIn("auto_discover = true", toml_text)
             self.assertIn("sources = []", toml_text)
+            self.assertIn("[dependencies]", toml_text)
 
     def test_new_rejects_existing_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -141,6 +167,119 @@ class TestNekgo(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("Neko.toml", result.stdout)
             self.assertTrue(os.path.isdir(build_dir))
+
+    def test_load_package_copies_package_and_updates_toml(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_dir = self._write_mathx_package(tmpdir)
+            self._run_nekgo("new", "usepkg", cwd=tmpdir)
+            proj = os.path.join(tmpdir, "usepkg")
+
+            result = self._run_nekgo("load", package_dir, cwd=proj)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("已加载包 'mathx'", result.stdout)
+
+            package_copy = os.path.join(proj, ".neko", "packages", "mathx")
+            self.assertTrue(os.path.isfile(os.path.join(package_copy, "src", "mathx.neko")))
+            self.assertFalse(os.path.exists(os.path.join(package_copy, "build", "ignored.txt")))
+            with open(os.path.join(proj, "Neko.toml"), "r", encoding="utf-8") as f:
+                toml_text = f.read()
+            self.assertIn("[dependencies.mathx]", toml_text)
+            self.assertIn('path = ".neko/packages/mathx"', toml_text)
+            self.assertIn('version = "0.1.0"', toml_text)
+            self.assertIn('exports = ["src/mathx.neko"]', toml_text)
+
+    def test_list_package_outputs_loaded_dependencies(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_dir = self._write_mathx_package(tmpdir)
+            self._run_nekgo("new", "listpkg", cwd=tmpdir)
+            proj = os.path.join(tmpdir, "listpkg")
+            self._run_nekgo("load", package_dir, cwd=proj)
+
+            result = self._run_nekgo("list", cwd=proj)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("mathx 0.1.0 (.neko/packages/mathx) exports: src/mathx.neko", result.stdout)
+
+    @pytest.mark.slow
+    def test_run_uses_loaded_package_without_source_import(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_dir = self._write_mathx_package(tmpdir)
+            self._run_nekgo("new", "runpkg", cwd=tmpdir)
+            proj = os.path.join(tmpdir, "runpkg")
+            self._run_nekgo("load", package_dir, cwd=proj)
+            with open(os.path.join(proj, "src", "main.neko"), "w", encoding="utf-8") as f:
+                f.write(
+                    "(program runpkg\n"
+                    "  (var ((x int)))\n"
+                    "  (begin\n"
+                    "    (:= x (square 12))\n"
+                    "    (print x)))\n"
+                )
+
+            result = self._run_nekgo("run", cwd=proj)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "144")
+
+    @pytest.mark.slow
+    def test_run_tests_use_loaded_package_without_source_import(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_dir = self._write_mathx_package(tmpdir)
+            self._run_nekgo("new", "testpkg", cwd=tmpdir)
+            proj = os.path.join(tmpdir, "testpkg")
+            self._run_nekgo("load", package_dir, cwd=proj)
+            os.makedirs(os.path.join(proj, "tests"), exist_ok=True)
+            with open(os.path.join(proj, "tests", "use_mathx.neko"), "w", encoding="utf-8") as f:
+                f.write(
+                    "(program use_mathx\n"
+                    "  (var ((x int)))\n"
+                    "  (begin\n"
+                    "    (:= x (cube 3))\n"
+                    "    (print x)))\n"
+                )
+
+            result = self._run_nekgo("test", cwd=proj)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("1 通过", result.stdout)
+
+    def test_load_package_reports_invalid_manifests(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._run_nekgo("new", "badpkg", cwd=tmpdir)
+            proj = os.path.join(tmpdir, "badpkg")
+
+            missing_toml = os.path.join(tmpdir, "missing_toml")
+            os.makedirs(missing_toml)
+            result = self._run_nekgo("load", missing_toml, cwd=proj)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("缺少 Neko.toml", result.stdout)
+
+            missing_name = os.path.join(tmpdir, "missing_name")
+            os.makedirs(os.path.join(missing_name, "src"))
+            with open(os.path.join(missing_name, "Neko.toml"), "w", encoding="utf-8") as f:
+                f.write('[package]\nversion = "0.1.0"\nexports = ["src/mathx.neko"]\n')
+            with open(os.path.join(missing_name, "src", "mathx.neko"), "w", encoding="utf-8") as f:
+                f.write("(function square ((x int)) int (return (* x x)))\n")
+            result = self._run_nekgo("load", missing_name, cwd=proj)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("缺少 'name'", result.stdout)
+
+            missing_export = self._write_mathx_package(tmpdir, name="broken", exports=["src/missing.neko"])
+            result = self._run_nekgo("load", missing_export, cwd=proj)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("导出文件未找到", result.stdout)
+
+    def test_load_package_is_idempotent_for_declared_dependency(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_dir = self._write_mathx_package(tmpdir)
+            self._run_nekgo("new", "againpkg", cwd=tmpdir)
+            proj = os.path.join(tmpdir, "againpkg")
+
+            first = self._run_nekgo("load", package_dir, cwd=proj)
+            second = self._run_nekgo("load", package_dir, cwd=proj)
+            self.assertEqual(first.returncode, 0)
+            self.assertEqual(second.returncode, 0)
+            self.assertIn("已加载", second.stdout)
+            with open(os.path.join(proj, "Neko.toml"), "r", encoding="utf-8") as f:
+                toml_text = f.read()
+            self.assertEqual(toml_text.count("[dependencies.mathx]"), 1)
 
     def test_run_tests_passes(self):
         with tempfile.TemporaryDirectory() as tmpdir:

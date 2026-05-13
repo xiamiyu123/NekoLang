@@ -115,6 +115,7 @@ def _resolve_imports(
     imports: list[ImportNode],
     base_dir: str,
     visited: set[str],
+    resolving: set[str],
     collected: list[ASTNode],
     import_roots: Sequence[str] | None = None,
 ) -> None:
@@ -125,30 +126,51 @@ def _resolve_imports(
             searched = ", ".join(candidates)
             raise SystemExit(f"错误: 导入文件 '{imp.path}' 未找到 (已搜索: {searched})")
         abs_path = os.path.abspath(resolved_path)
-        if abs_path in visited:
+        if abs_path in resolving:
             raise SystemExit(f"错误: 检测到循环依赖 '{imp.path}' ({abs_path})")
+        if abs_path in visited:
+            continue
 
-        visited.add(abs_path)
-        imp_base = os.path.dirname(abs_path)
+        _resolve_definition_file(abs_path, visited, resolving, collected, import_roots)
 
-        source = read_source(abs_path)
-        lexer = Lexer(source)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        parser.set_source(source)
 
-        nested_imports, defs = parser.parse_definition_file()
+def _resolve_definition_file(
+    path: str,
+    visited: set[str],
+    resolving: set[str],
+    collected: list[ASTNode],
+    import_roots: Sequence[str] | None = None,
+) -> None:
+    abs_path = os.path.abspath(path)
+    if abs_path in resolving:
+        raise SystemExit(f"错误: 检测到循环依赖 '{abs_path}'")
+    if abs_path in visited:
+        return
 
-        # Recursively resolve nested imports first (DFS: dependencies before dependents)
-        if nested_imports:
-            _resolve_imports(nested_imports, imp_base, visited, collected, import_roots)
+    resolving.add(abs_path)
+    imp_base = os.path.dirname(abs_path)
 
-        collected.extend(defs)
+    source = read_source(abs_path)
+    lexer = Lexer(source)
+    tokens = lexer.tokenize()
+    parser = Parser(tokens)
+    parser.set_source(source)
+
+    nested_imports, defs = parser.parse_definition_file()
+
+    # Recursively resolve nested imports first (DFS: dependencies before dependents)
+    if nested_imports:
+        _resolve_imports(nested_imports, imp_base, visited, resolving, collected, import_roots)
+
+    collected.extend(defs)
+    resolving.remove(abs_path)
+    visited.add(abs_path)
 
 
 def compile_file_with_imports(
     path: str,
     import_roots: Sequence[str] | None = None,
+    auto_import_paths: Sequence[str] | None = None,
 ) -> CompilationResult:
     """Compile a file, recursively resolving and merging all imports."""
     source = read_source(path)
@@ -158,7 +180,7 @@ def compile_file_with_imports(
     parser.set_source(source)
     ast = parser.parse()
 
-    if not ast.imports:
+    if not ast.imports and not auto_import_paths:
         # No imports — run normal compilation
         analyzer = SemanticAnalyzer()
         analyzer.set_source(source)
@@ -167,9 +189,17 @@ def compile_file_with_imports(
 
     # Resolve imports
     base_dir = os.path.dirname(os.path.abspath(path))
-    visited = {os.path.abspath(path)}  # prevent the main file from importing itself
+    main_path = os.path.abspath(path)
+    visited: set[str] = set()
+    resolving = {main_path}  # prevent the main file from importing itself
     imported_defs: list[ASTNode] = []
-    _resolve_imports(ast.imports, base_dir, visited, imported_defs, import_roots)
+    for auto_import_path in auto_import_paths or ():
+        abs_auto_path = os.path.abspath(auto_import_path)
+        if not os.path.isfile(abs_auto_path):
+            raise SystemExit(f"错误: 自动导入文件 '{auto_import_path}' 未找到")
+        _resolve_definition_file(abs_auto_path, visited, resolving, imported_defs, import_roots)
+    _resolve_imports(ast.imports, base_dir, visited, resolving, imported_defs, import_roots)
+    resolving.remove(main_path)
 
     # Inject imported definitions at the beginning of the body
     ast.block.body.statements = imported_defs + ast.block.body.statements

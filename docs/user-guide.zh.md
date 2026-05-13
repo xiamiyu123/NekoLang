@@ -259,11 +259,33 @@ uv run nekgo run -- 41
 uv run nekgo run --ephemeral
 uv run nekgo test
 uv run nekgo clean
+uv run nekgo load ../examples/packages/mathx
+uv run nekgo list
 ```
 
 `build` 和默认 `run` 会更新 `build/<项目名>`。`--ephemeral` 使用临时产物运行，不保留到项目 `build/` 目录。
 
 `test` 会运行项目 `tests/` 目录下所有 `.neko` 文件。测试文件也可以 `import` 入口目录中的模块。
+
+`load` 用于加载本地 Neko 包。包会被复制到当前项目的 `.neko/packages/`，并写入 `Neko.toml` 的依赖表：
+
+```toml
+[dependencies.mathx]
+path = ".neko/packages/mathx"
+version = "0.1.0"
+exports = ["src/mathx.neko"]
+```
+
+包自己的 `Neko.toml` 需要声明默认导出文件：
+
+```toml
+[package]
+name = "mathx"
+version = "0.1.0"
+exports = ["src/mathx.neko"]
+```
+
+加载后，`nekgo build`、`nekgo run` 和 `nekgo test` 会自动导入这些导出文件中的定义，主程序可以直接调用包函数，无需额外写 `(import mathx)`。
 
 ## 9. 后端与编译模式
 

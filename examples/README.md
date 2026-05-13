@@ -18,6 +18,28 @@
 | `string_demo.neko` | `uv run neko run examples/string_demo.neko` | 字符串拼接、长度、转换 |
 | `pointer_null_demo.neko` | `uv run neko run examples/pointer_null_demo.neko` | `pointer` 空值赋值与比较 |
 
+## 本地包示例
+
+### `packages/mathx`
+
+这个示例展示：
+
+- 纯 Neko 本地包的 `Neko.toml`
+- `exports` 声明默认导出的定义文件
+- 主项目 `nekgo load` 后无需手写 `(import ...)` 即可调用包函数
+
+试用：
+
+```bash
+repo=$(pwd)
+tmpdir=$(mktemp -d)
+cd "$tmpdir"
+uv run --project "$repo" nekgo new use_mathx
+cd use_mathx
+uv run --project "$repo" nekgo load "$repo/examples/packages/mathx"
+uv run --project "$repo" nekgo list
+```
+
 ## 多文件与 extern 示例
 
 ### `c_function_demo`

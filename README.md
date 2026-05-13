@@ -190,6 +190,10 @@ uv run nekgo test
 
 # 清理项目 build/ 目录
 uv run nekgo clean
+
+# 加载本地包并查看已加载包
+uv run nekgo load ../examples/packages/mathx
+uv run nekgo list
 ```
 
 项目结构：
@@ -210,7 +214,27 @@ hello/
 - `nekgo run` 默认也会更新并运行 `build/<项目名>`
 - 若只想临时编译运行、不保留产物，可使用 `uv run nekgo run --ephemeral`
 - `nekgo test` 会编译运行项目 `tests/` 下的 `.neko` 文件，并沿用入口文件目录作为导入根
+- `nekgo load <包目录>` 会把本地包复制到 `.neko/packages/` 并写入 `Neko.toml`
+- `nekgo list` 会列出当前项目已经加载的包
 - `nekgo clean` 只在包含 `Neko.toml` 的项目根目录中删除 `build/`
+
+本地包可以把 `.neko` 定义作为默认导出，加载后主程序无需手写 `(import ...)`：
+
+```toml
+[package]
+name = "mathx"
+version = "0.1.0"
+exports = ["src/mathx.neko"]
+```
+
+加载后项目 `Neko.toml` 会追加：
+
+```toml
+[dependencies.mathx]
+path = ".neko/packages/mathx"
+version = "0.1.0"
+exports = ["src/mathx.neko"]
+```
 
 项目也可以携带自己的 C 源码并由 `nekgo` 一起编译链接。`Neko.toml` 里的 `[c]` 表当前支持：
 
