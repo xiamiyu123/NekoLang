@@ -1,7 +1,26 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import Editor from "@monaco-editor/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Binary,
+  Boxes,
+  Braces,
+  Cpu,
+  GitBranch,
+  ListTree,
+  Route,
+  SearchCode,
+} from "lucide-react";
 import { compile, getExamples, getExampleSource } from "./api/client";
+import { AssemblyPanel } from "./components/AssemblyPanel";
+import { ASTPanel } from "./components/ASTPanel";
+import { DiagnosticPanel } from "./components/DiagnosticPanel";
+import { QuadruplePanel } from "./components/QuadruplePanel";
+import { SourceWorkbench } from "./components/SourceWorkbench";
+import { StageGuide, type StageInfo } from "./components/StageGuide";
+import { StageLesson } from "./components/StageLesson";
+import { SymbolTablePanel } from "./components/SymbolTablePanel";
+import { TokenPanel } from "./components/TokenPanel";
 import type { CompileResult, Example } from "./types/compiler";
+import "./styles/app.css";
 
 const DEFAULT_SOURCE = `(nya t
   (nyan ((a int) (b int)))
@@ -10,116 +29,294 @@ const DEFAULT_SOURCE = `(nya t
     (:= b (+ a 32))
     (meow b)))`;
 
+const STAGES: StageInfo[] = [
+  {
+    key: "overview",
+    label: "路线图",
+    shortLabel: "Pipeline",
+    outputName: "全局观察",
+    description: "展示源码经过词法分析、语法分析、语义分析、中间表示和代码生成后的完整产物。",
+    focus: "提供编译管线的总览、状态和关键产物统计。",
+    icon: Route,
+  },
+  {
+    key: "tokens",
+    label: "词法分析",
+    shortLabel: "Lexing",
+    outputName: "Tokens",
+    description: "词法分析把源码文本切分为带类型和值的位置化 Token。",
+    focus: "展示 Token 类型、字面值以及源码行列位置。",
+    icon: Binary,
+  },
+  {
+    key: "ast",
+    label: "语法分析",
+    shortLabel: "Parsing",
+    outputName: "AST",
+    description: "语法分析把 Token 序列组织成抽象语法树，呈现程序的层级结构。",
+    focus: "展示表达式、语句、块和程序节点之间的父子关系。",
+    icon: GitBranch,
+  },
+  {
+    key: "symbols",
+    label: "语义分析",
+    shortLabel: "Semantic",
+    outputName: "符号表",
+    description: "语义分析检查声明、类型和可引用性，并产出符号表与常量池。",
+    focus: "展示变量、函数、参数和常量的登记结果。",
+    blockedByErrors: true,
+    icon: Boxes,
+  },
+  {
+    key: "quads",
+    label: "中间表示",
+    shortLabel: "IR",
+    outputName: "四元式",
+    description: "四元式将语义结果转换为线性中间表示，用于后续优化和代码生成。",
+    focus: "展示每条中间指令的操作、参数和结果位置。",
+    blockedByErrors: true,
+    icon: ListTree,
+  },
+  {
+    key: "assembly",
+    label: "代码生成",
+    shortLabel: "Codegen",
+    outputName: "LLVM / ARM64",
+    description: "代码生成输出目标后端文本，支持 LLVM IR 和 ARM64 之间切换。",
+    focus: "展示当前后端生成的目标代码。",
+    blockedByErrors: true,
+    icon: Cpu,
+  },
+];
+
+function findStage(key: string): StageInfo {
+  return STAGES.find((stage) => stage.key === key) ?? STAGES[0];
+}
+
+function computeCompletedStages(result: CompileResult | null): Set<string> {
+  const completed = new Set<string>(["overview"]);
+  if (!result) return completed;
+  if (result.tokens.length > 0) completed.add("tokens");
+  if (result.ast) completed.add("ast");
+  if (result.symbols.entries.length > 0 || Object.keys(result.symbols.constants).length > 0) {
+    completed.add("symbols");
+  }
+  if (result.quadruples.length > 0) completed.add("quads");
+  if (result.assembly.trim().length > 0) completed.add("assembly");
+  return completed;
+}
+
+function pipelineStats(result: CompileResult | null) {
+  return [
+    { label: "Tokens", value: result?.tokens.length ?? 0 },
+    { label: "Symbols", value: result?.symbols.entries.length ?? 0 },
+    { label: "Quads", value: result?.quadruples.length ?? 0 },
+    { label: "Errors", value: result?.errors.length ?? 0 },
+  ];
+}
+
 export default function App() {
   const [source, setSource] = useState(DEFAULT_SOURCE);
   const [result, setResult] = useState<CompileResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [examples, setExamples] = useState<Example[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const [activeStage, setActiveStage] = useState("overview");
+  const [activeExample, setActiveExample] = useState<string | null>(null);
+  const [backend, setBackend] = useState("llvm");
+  const [apiError, setApiError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
-  // Load examples on mount
+  const runCompile = useCallback(async (nextSource = source, nextBackend = backend) => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    setLoading(true);
+    setApiError(null);
+    try {
+      const nextResult = await compile(nextSource, nextBackend);
+      if (requestId === requestIdRef.current) {
+        setResult(nextResult);
+      }
+    } catch (error) {
+      if (requestId === requestIdRef.current) {
+        setApiError(error instanceof Error ? error.message : "无法连接 NekoScope API");
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [backend, source]);
+
   useEffect(() => {
-    getExamples().then(setExamples).catch(console.error);
+    getExamples().then(setExamples).catch((error) => {
+      setApiError(error instanceof Error ? error.message : "示例列表加载失败");
+    });
   }, []);
 
-  // Compile on source change (debounced)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setLoading(true);
-      compile(source, "llvm")
-        .then(setResult)
-        .catch(console.error)
-        .finally(() => setLoading(false));
+      void runCompile(source, backend);
     }, 500);
-    return () => clearTimeout(debounceRef.current);
-  }, [source]);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [backend, runCompile, source]);
 
   const loadExample = useCallback(async (name: string) => {
-    const src = await getExampleSource(name);
-    setSource(src);
+    try {
+      const nextSource = await getExampleSource(name);
+      setActiveExample(name);
+      setSource(nextSource);
+      setActiveStage("overview");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "示例加载失败");
+    }
   }, []);
 
+  const resetSource = useCallback(() => {
+    setActiveExample(null);
+    setSource(DEFAULT_SOURCE);
+    setActiveStage("overview");
+  }, []);
+
+  const completedStages = useMemo(() => computeCompletedStages(result), [result]);
+  const activeStageInfo = findStage(activeStage);
+  const stats = pipelineStats(result);
+  const errors = result?.errors ?? [];
+
   return (
-    <div style={{ display: "flex", height: "100vh", fontFamily: "sans-serif" }}>
-      {/* Sidebar */}
-      <div style={{ width: 200, background: "#1e1e2e", color: "#cdd6f4", padding: 12, overflowY: "auto" }}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 14, color: "#f5c2e7" }}>
-          NekoScope
-        </h3>
-        <div style={{ fontSize: 11, color: "#6c7086", marginBottom: 12 }}>
-          Examples
-        </div>
-        {examples.map((ex) => (
-          <div
-            key={ex.name}
-            onClick={() => loadExample(ex.name)}
-            style={{
-              padding: "6px 8px",
-              cursor: "pointer",
-              borderRadius: 4,
-              fontSize: 13,
-              marginBottom: 2,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#313244")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            {ex.description}
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand-block">
+          <div className="brand-mark" aria-hidden="true">
+            <SearchCode size={22} />
           </div>
-        ))}
-      </div>
+          <div>
+            <h1>NekoScope</h1>
+            <p>NekoLang 编译管线可视化平台</p>
+          </div>
+        </div>
+        <div className="status-cluster">
+          {stats.map((item) => (
+            <div className="stat-pill" key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+      </header>
 
-      {/* Editor */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <div style={{ flex: 1, borderBottom: "1px solid #313244" }}>
-          <Editor
-            height="100%"
-            defaultLanguage="scheme"
-            value={source}
-            onChange={(v) => setSource(v ?? "")}
-            theme="vs-dark"
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              lineNumbersMinChars: 3,
-              scrollBeyondLastLine: false,
-            }}
+      <main className="workspace-grid">
+        <SourceWorkbench
+          source={source}
+          examples={examples}
+          activeExample={activeExample}
+          loading={loading}
+          onSourceChange={(nextSource) => {
+            setSource(nextSource);
+            setActiveExample(null);
+          }}
+          onExampleLoad={loadExample}
+          onCompileNow={() => void runCompile(source, backend)}
+          onReset={resetSource}
+        />
+
+        <section className="teaching-workbench">
+          <StageGuide
+            stages={STAGES}
+            activeStage={activeStage}
+            completedStages={completedStages}
+            onSelect={setActiveStage}
           />
-        </div>
 
-        {/* Output */}
-        <div style={{ height: "45%", overflow: "auto", background: "#181825", padding: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <span style={{ color: "#f5c2e7", fontWeight: 600, fontSize: 13 }}>
-              Compilation Result
-            </span>
-            {loading && <span style={{ color: "#6c7086", fontSize: 12 }}>compiling...</span>}
-            {result && !loading && (
-              <span style={{ color: result.errors.length ? "#f38ba8" : "#a6e3a1", fontSize: 12 }}>
-                {result.errors.length
-                  ? `${result.errors.length} error(s)`
-                  : `${result.tokens.length} tokens`}
-              </span>
-            )}
-          </div>
-          {result && (
-            <pre style={{
-              color: "#cdd6f4",
-              fontSize: 12,
-              lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-              margin: 0,
-            }}>
-              {result.errors.length > 0
-                ? result.errors.map((e) => `[${e.phase}] Line ${e.line}: ${e.message}`).join("\n")
-                : `AST: ${result.ast.nodeType}(${(result.ast as Record<string, unknown>).name ?? ""})
-Tokens: ${result.tokens.length}
-Assembly (${result.assembly.includes("define") ? "LLVM" : "ARM64"}):
-${result.assembly.slice(0, 500)}${result.assembly.length > 500 ? "\n..." : ""}`}
-            </pre>
+          {apiError ? (
+            <div className="api-error">
+              <strong>API 连接失败</strong>
+              <span>{apiError}</span>
+            </div>
+          ) : (
+            <DiagnosticPanel errors={errors} loading={loading} />
           )}
+
+          <div className="stage-content-grid">
+            <StageLesson stage={activeStageInfo} />
+            <section className="artifact-panel">
+              <header className="panel-heading">
+                <div>
+                  <div className="panel-kicker">Artifact</div>
+                  <h2>{activeStageInfo.outputName}</h2>
+                </div>
+              </header>
+              <ArtifactView
+                activeStage={activeStage}
+                result={result}
+                backend={backend}
+                onBackendChange={setBackend}
+              />
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+interface ArtifactViewProps {
+  activeStage: string;
+  result: CompileResult | null;
+  backend: string;
+  onBackendChange: (backend: string) => void;
+}
+
+function ArtifactView({ activeStage, result, backend, onBackendChange }: ArtifactViewProps) {
+  if (activeStage === "overview") {
+    return <PipelineOverview result={result} />;
+  }
+  if (activeStage === "tokens") {
+    return <TokenPanel tokens={result?.tokens ?? null} />;
+  }
+  if (activeStage === "ast") {
+    return <ASTPanel ast={result?.ast ?? null} />;
+  }
+  if (activeStage === "symbols") {
+    return <SymbolTablePanel symbols={result?.symbols ?? null} />;
+  }
+  if (activeStage === "quads") {
+    return <QuadruplePanel quadruples={result?.quadruples ?? null} />;
+  }
+  return (
+    <AssemblyPanel
+      assembly={result?.assembly ?? null}
+      backend={backend}
+      onBackendChange={onBackendChange}
+    />
+  );
+}
+
+function PipelineOverview({ result }: { result: CompileResult | null }) {
+  const rows = [
+    { name: "源码", detail: "输入的 NekoLang 文本", value: `${result?.source.split(/\r?\n/).length ?? 0} 行` },
+    { name: "Tokens", detail: "带类别和位置的词法单元", value: `${result?.tokens.length ?? 0} 个` },
+    { name: "AST", detail: "表达程序结构的树", value: result?.ast?.nodeType ?? "等待编译" },
+    { name: "符号表", detail: "变量、函数、常量的登记结果", value: `${result?.symbols.entries.length ?? 0} 项` },
+    { name: "四元式", detail: "线性的中间表示", value: `${result?.quadruples.length ?? 0} 行` },
+    { name: "目标代码", detail: "LLVM IR 或 ARM64 文本", value: result?.assembly ? `${result.assembly.split(/\r?\n/).length} 行` : "等待生成" },
+  ];
+
+  return (
+    <div className="overview-panel">
+      {rows.map((row, index) => (
+        <div className="overview-row" key={row.name}>
+          <div className="overview-number">{index + 1}</div>
+          <div>
+            <strong>{row.name}</strong>
+            <span>{row.detail}</span>
+          </div>
+          <code>{row.value}</code>
         </div>
-      </div>
+      ))}
     </div>
   );
 }

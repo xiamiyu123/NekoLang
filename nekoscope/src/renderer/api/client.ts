@@ -1,6 +1,6 @@
 import type { CompileResult, Example } from "../types/compiler";
 
-let BASE_URL = "http://localhost:8000";
+let BASE_URL = "http://127.0.0.1:8000";
 
 export function setBaseUrl(url: string) {
   BASE_URL = url;

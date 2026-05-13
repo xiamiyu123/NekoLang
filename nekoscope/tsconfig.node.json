@@ -6,7 +6,8 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "composite": true,
+    "noEmit": false
   },
   "include": ["electron.vite.config.ts"]
 }

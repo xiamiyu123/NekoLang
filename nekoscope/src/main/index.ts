@@ -45,7 +45,14 @@ async function createWindow(): Promise<void> {
   });
 
   if (!app.isPackaged) {
-    await win.loadURL("http://localhost:5173");
+    // electron-vite sets ELECTRON_RENDERER_URL in dev mode
+    const devUrl = process.env.ELECTRON_RENDERER_URL;
+    if (devUrl) {
+      await win.loadURL(devUrl);
+    } else {
+      // fallback to default Vite port
+      await win.loadURL("http://localhost:5173");
+    }
     win.webContents.openDevTools();
   } else {
     await win.loadFile(join(__dirname, "../renderer/index.html"));
