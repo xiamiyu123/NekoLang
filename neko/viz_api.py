@@ -5,13 +5,17 @@ Exposes the NekoLang compilation pipeline as JSON endpoints.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
+import subprocess
+import tempfile
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from neko.build_utils import compile_source, generate_code
+from neko.build_utils import compile_source, compile_to_executable, generate_code
 from neko.errors import NekoError
 from neko.viz_serializers import (
     serialize_ast,
@@ -49,6 +53,12 @@ class AssemblyRequest(BaseModel):
     backend: str = "auto"
 
 
+class RunRequest(BaseModel):
+    source: str
+    backend: str = "auto"
+    timeoutSeconds: float = 5.0
+
+
 # --- Helpers ---
 
 
@@ -79,7 +89,8 @@ def _discover_examples() -> list[dict[str, str]]:
 def root():
     return {"name": "NekoScope API", "version": "0.1.0", "endpoints": [
         "POST /api/compile", "POST /api/tokens", "POST /api/ast",
-        "POST /api/assembly", "GET /api/examples", "GET /api/examples/{name}",
+        "POST /api/assembly", "POST /api/run", "GET /api/examples",
+        "GET /api/examples/{name}",
     ]}
 
 
@@ -111,6 +122,63 @@ def api_assembly(req: AssemblyRequest):
         }
     artifact = generate_code(result.ast, backend=req.backend)
     return {"assembly": artifact.text}
+
+
+@app.post("/api/run")
+def api_run(req: RunRequest):
+    result = _run_pipeline(req.source)
+    if result.analyzer.errors:
+        return {
+            "stdout": "",
+            "stderr": "",
+            "exitCode": None,
+            "timedOut": False,
+            "errors": serialize_errors(result.analyzer.errors),
+            "compileError": "",
+        }
+
+    timeout = max(0.1, min(req.timeoutSeconds, 30.0))
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "nekoscope-run")
+        compile_stderr = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(compile_stderr):
+                compile_to_executable(result.ast, output, backend=req.backend)
+        except SystemExit:
+            return {
+                "stdout": "",
+                "stderr": compile_stderr.getvalue(),
+                "exitCode": None,
+                "timedOut": False,
+                "errors": [],
+                "compileError": compile_stderr.getvalue(),
+            }
+
+        try:
+            proc = subprocess.run(
+                [output],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return {
+                "stdout": exc.stdout or "",
+                "stderr": exc.stderr or "",
+                "exitCode": None,
+                "timedOut": True,
+                "errors": [],
+                "compileError": "",
+            }
+
+    return {
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "exitCode": proc.returncode,
+        "timedOut": False,
+        "errors": [],
+        "compileError": "",
+    }
 
 
 @app.get("/api/examples")

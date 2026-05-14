@@ -1,4 +1,4 @@
-import type { CompileResult, Example } from "../types/compiler";
+import type { CompileResult, Example, RunResult } from "../types/compiler";
 
 let BASE_URL = "http://127.0.0.1:8000";
 
@@ -85,6 +85,17 @@ export async function compile(
     }
     throw error;
   }
+}
+
+export async function runProgram(
+  source: string,
+  backend: string = "auto"
+): Promise<RunResult> {
+  return request<RunResult>("/api/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, backend }),
+  });
 }
 
 export async function getExamples(): Promise<Example[]> {

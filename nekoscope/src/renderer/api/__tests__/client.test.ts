@@ -5,6 +5,7 @@ import {
   compile,
   getExamples,
   getExampleSource,
+  runProgram,
   setBaseUrl,
 } from "../client";
 
@@ -24,6 +25,15 @@ const mockExamplesResponse = {
     { name: "demo", description: "Demo" },
     { name: "fibonacci", description: "Fibonacci" },
   ],
+};
+
+const mockRunResponse = {
+  stdout: "42\n",
+  stderr: "",
+  exitCode: 0,
+  timedOut: false,
+  errors: [],
+  compileError: "",
 };
 
 describe("API client", () => {
@@ -69,6 +79,19 @@ describe("API client", () => {
       message: expect.stringContaining("编译失败"),
       detail: expect.stringContaining("期望 ')'"),
     });
+  });
+
+  it("runProgram posts source and backend to run endpoint", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(mockRunResponse), { status: 200 })
+    );
+
+    const result = await runProgram("source", "llvm");
+    expect(result.stdout).toBe("42\n");
+    expect(result.exitCode).toBe(0);
+    expect(fetchSpy.mock.calls[0][0]).toBe("http://localhost:8000/api/run");
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+    expect(body).toMatchObject({ source: "source", backend: "llvm" });
   });
 
   it("getExamples returns list", async () => {

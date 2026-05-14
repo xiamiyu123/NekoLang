@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import { BookOpen, Play, RotateCcw } from "lucide-react";
+import { BookOpen, Hammer, Play, RotateCcw } from "lucide-react";
 import type { ResolvedTheme } from "../styles/theme";
 import type { Example } from "../types/compiler";
 
@@ -9,10 +9,12 @@ interface Props {
   examples: Example[];
   activeExample: string | null;
   loading: boolean;
+  running: boolean;
   theme: ResolvedTheme;
   onSourceChange: (source: string) => void;
   onExampleLoad: (name: string) => void;
   onCompileNow: () => void;
+  onRunNow: () => void;
   onReset: () => void;
 }
 
@@ -21,10 +23,12 @@ export function SourceWorkbench({
   examples,
   activeExample,
   loading,
+  running,
   theme,
   onSourceChange,
   onExampleLoad,
   onCompileNow,
+  onRunNow,
   onReset,
 }: Props) {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -115,10 +119,20 @@ export function SourceWorkbench({
           <h2>源码编辑器</h2>
         </div>
         <div className="toolbar">
-          <button className="icon-button" type="button" onClick={onCompileNow} title="立即编译">
+          <button className="icon-button" type="button" onClick={onCompileNow} title="立即编译" aria-label="立即编译">
+            <Hammer size={16} />
+          </button>
+          <button
+            className="icon-button run-button"
+            type="button"
+            onClick={onRunNow}
+            title="运行"
+            aria-label="运行"
+            disabled={running}
+          >
             <Play size={16} />
           </button>
-          <button className="icon-button" type="button" onClick={onReset} title="恢复默认示例">
+          <button className="icon-button" type="button" onClick={onReset} title="恢复默认示例" aria-label="恢复默认示例">
             <RotateCcw size={16} />
           </button>
         </div>
@@ -166,6 +180,7 @@ export function SourceWorkbench({
       </div>
 
       {loading && <div className="compile-pulse">编译中</div>}
+      {running && <div className="compile-pulse run-pulse">运行中</div>}
     </section>
   );
 }

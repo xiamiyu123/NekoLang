@@ -27,6 +27,16 @@ function mockApi(
     if (url.endsWith("/api/compile")) {
       return compileResponse.clone();
     }
+    if (url.endsWith("/api/run")) {
+      return new Response(JSON.stringify({
+        stdout: "42\n",
+        stderr: "",
+        exitCode: 0,
+        timedOut: false,
+        errors: [],
+        compileError: "",
+      }), { status: 200 });
+    }
     return new Response("Not Found", { status: 404 });
   });
 }
@@ -84,5 +94,19 @@ describe("App", () => {
 
     expect(screen.getByRole("heading", { name: "Tokens" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /词法分析/ })).toHaveClass("active");
+  });
+
+  it("runs the current source and shows stdout", async () => {
+    const user = userEvent.setup();
+    mockApi();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "运行" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("运行结果")).toBeTruthy();
+    });
+    expect(screen.getByText("退出码 0")).toBeTruthy();
+    expect(screen.getByText("42")).toBeTruthy();
   });
 });

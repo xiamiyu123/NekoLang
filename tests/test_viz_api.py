@@ -98,6 +98,28 @@ class TestAssemblyEndpoint(unittest.TestCase):
         self.assertGreater(len(data["errors"]), 0)
 
 
+class TestRunEndpoint(unittest.TestCase):
+    def test_run_returns_program_output(self):
+        client = _get_client()
+        resp = client.post("/api/run", json={"source": VALID_SOURCE, "backend": "llvm"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["stdout"], "42\n")
+        self.assertEqual(data["stderr"], "")
+        self.assertEqual(data["exitCode"], 0)
+        self.assertFalse(data["timedOut"])
+        self.assertEqual(data["errors"], [])
+
+    def test_run_with_semantic_errors_returns_diagnostics(self):
+        client = _get_client()
+        resp = client.post("/api/run", json={"source": ERROR_SOURCE, "backend": "llvm"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIsNone(data["exitCode"])
+        self.assertGreater(len(data["errors"]), 0)
+        self.assertEqual(data["errors"][0]["phase"], "Semantic")
+
+
 class TestExamplesEndpoint(unittest.TestCase):
     def test_list_examples(self):
         client = _get_client()

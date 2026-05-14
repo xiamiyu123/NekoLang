@@ -21,15 +21,38 @@ describe("SourceWorkbench", () => {
         examples={[]}
         activeExample={null}
         loading={false}
+        running={false}
         theme="dark"
         onSourceChange={() => {}}
         onExampleLoad={() => {}}
         onCompileNow={() => {}}
+        onRunNow={() => {}}
         onReset={() => {}}
       />
     );
 
     expect(screen.getByText("源码编辑器")).toBeTruthy();
     expect(editorMock.props.options).toMatchObject({ automaticLayout: true });
+  });
+
+  it("renders separate compile and run actions", () => {
+    render(
+      <SourceWorkbench
+        source="(nya t (paw))"
+        examples={[]}
+        activeExample={null}
+        loading={false}
+        running={false}
+        theme="light"
+        onSourceChange={() => {}}
+        onExampleLoad={() => {}}
+        onCompileNow={() => {}}
+        onRunNow={() => {}}
+        onReset={() => {}}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "立即编译" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "运行" })).toBeTruthy();
   });
 });

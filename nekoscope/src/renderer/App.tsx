@@ -14,11 +14,12 @@ import {
   SearchCode,
   Sun,
 } from "lucide-react";
-import { CompileFailureError, compile, getExamples, getExampleSource } from "./api/client";
+import { CompileFailureError, compile, getExamples, getExampleSource, runProgram } from "./api/client";
 import { AssemblyPanel } from "./components/AssemblyPanel";
 import { ASTPanel } from "./components/ASTPanel";
 import { DiagnosticPanel } from "./components/DiagnosticPanel";
 import { QuadruplePanel } from "./components/QuadruplePanel";
+import { RunOutputPanel } from "./components/RunOutputPanel";
 import { SourceWorkbench } from "./components/SourceWorkbench";
 import { StageGuide, type StageInfo } from "./components/StageGuide";
 import { StageLesson } from "./components/StageLesson";
@@ -34,7 +35,7 @@ import {
   type ResolvedTheme,
   type ThemePreference,
 } from "./styles/theme";
-import type { CompileResult, Example } from "./types/compiler";
+import type { CompileResult, Example, RunResult } from "./types/compiler";
 import "./styles/app.css";
 
 const DEFAULT_SOURCE = `(nya t
@@ -179,7 +180,9 @@ function getSystemPrefersDark(): boolean {
 export default function App() {
   const [source, setSource] = useState(DEFAULT_SOURCE);
   const [result, setResult] = useState<CompileResult | null>(null);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
   const [examples, setExamples] = useState<Example[]>([]);
   const [activeStage, setActiveStage] = useState("overview");
   const [activeExample, setActiveExample] = useState<string | null>(null);
@@ -254,6 +257,7 @@ export default function App() {
       const nextResult = await compile(nextSource, nextBackend);
       if (requestId === requestIdRef.current) {
         setResult(nextResult);
+        setRunResult(null);
       }
     } catch (error) {
       if (requestId === requestIdRef.current) {
@@ -268,6 +272,20 @@ export default function App() {
       if (requestId === requestIdRef.current) {
         setLoading(false);
       }
+    }
+  }, [backend, source]);
+
+  const runCurrentSource = useCallback(async () => {
+    setRunning(true);
+    setApiError(null);
+    setCompileFailure(null);
+    try {
+      const nextRunResult = await runProgram(source, backend);
+      setRunResult(nextRunResult);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "运行失败");
+    } finally {
+      setRunning(false);
     }
   }, [backend, source]);
 
@@ -309,6 +327,7 @@ export default function App() {
     try {
       const nextSource = await getExampleSource(name);
       setCompileFailure(null);
+      setRunResult(null);
       setActiveExample(name);
       setSource(nextSource);
       setActiveStage("overview");
@@ -319,6 +338,7 @@ export default function App() {
 
   const resetSource = useCallback(() => {
     setActiveExample(null);
+    setRunResult(null);
     setSource(DEFAULT_SOURCE);
     setActiveStage("overview");
   }, []);
@@ -375,13 +395,16 @@ export default function App() {
           examples={examples}
           activeExample={activeExample}
           loading={loading}
+          running={running}
           theme={resolvedTheme}
           onSourceChange={(nextSource) => {
             setSource(nextSource);
             setActiveExample(null);
+            setRunResult(null);
           }}
           onExampleLoad={loadExample}
           onCompileNow={() => void runCompile(source, backend)}
+          onRunNow={() => void runCurrentSource()}
           onReset={resetSource}
         />
 
@@ -401,7 +424,7 @@ export default function App() {
           onKeyDown={handleWorkspaceResizeKeyDown}
         />
 
-        <section className="teaching-workbench">
+        <section className={`teaching-workbench ${runResult || running ? "has-run-output" : ""}`}>
           <StageGuide
             stages={STAGES}
             activeStage={activeStage}
@@ -422,6 +445,7 @@ export default function App() {
           ) : (
             <DiagnosticPanel errors={errors} loading={loading} />
           )}
+          <RunOutputPanel result={runResult} running={running} />
 
           <div className={`stage-content-grid ${lessonCollapsed ? "lesson-collapsed" : ""}`}>
             {lessonCollapsed ? (

@@ -84,6 +84,15 @@ export interface CompileResult {
   backend: string;
 }
 
+export interface RunResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  errors: CompileError[];
+  compileError: string;
+}
+
 /** Example metadata from GET /api/examples */
 export interface Example {
   name: string;

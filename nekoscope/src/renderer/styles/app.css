@@ -330,6 +330,10 @@ button {
   background: var(--bg-soft);
 }
 
+.teaching-workbench.has-run-output {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
 .workspace-resizer {
   position: relative;
   z-index: 2;
@@ -418,6 +422,16 @@ button {
   background: var(--panel-3);
 }
 
+.icon-button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.run-button {
+  color: var(--leaf);
+}
+
 .editor-shell {
   min-width: 0;
   min-height: 0;
@@ -494,6 +508,13 @@ button {
   font-size: 12px;
   text-align: center;
   background: var(--pending-bg);
+}
+
+.run-pulse {
+  bottom: 132px;
+  color: var(--leaf);
+  border-color: color-mix(in srgb, var(--leaf) 48%, var(--line));
+  background: var(--ok-bg);
 }
 
 .stage-guide {
@@ -601,6 +622,88 @@ button {
 
 .api-error span {
   margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.run-output-panel {
+  display: grid;
+  gap: 10px;
+  max-height: 220px;
+  min-height: 0;
+  padding: 12px 16px;
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.run-output-panel.timeout {
+  background: var(--pending-bg);
+}
+
+.run-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.run-output-head div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.run-output-head code {
+  flex: 0 0 auto;
+  color: var(--amber);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.run-output-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.run-output-grid span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.run-output-block {
+  min-height: 44px;
+  max-height: 110px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--code-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  background: var(--code-bg);
+}
+
+.run-output-block.error {
+  color: var(--danger-code-text);
+  background: var(--danger-code-bg);
+}
+
+.run-output-errors {
+  display: grid;
+  gap: 8px;
+}
+
+.run-output-pending {
   color: var(--muted);
   font-size: 13px;
 }
