@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { compile, getExamples, getExampleSource, setBaseUrl } from "../client";
+import {
+  ApiRequestError,
+  CompileFailureError,
+  compile,
+  getExamples,
+  getExampleSource,
+  setBaseUrl,
+} from "../client";
 
 const mockCompileResponse = {
   source: "(nya t (paw (meow 0)))",
@@ -49,6 +56,21 @@ describe("API client", () => {
     expect(body.backend).toBe("llvm");
   });
 
+  it("compile reports backend compilation details instead of a generic API error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: "[Parser] Line 1, Column 12: 期望 ')'" }),
+        { status: 400 }
+      )
+    );
+
+    await expect(compile("(nya t (paw")).rejects.toMatchObject({
+      name: "CompileFailureError",
+      message: expect.stringContaining("编译失败"),
+      detail: expect.stringContaining("期望 ')'"),
+    });
+  });
+
   it("getExamples returns list", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify(mockExamplesResponse), { status: 200 })
@@ -68,11 +90,15 @@ describe("API client", () => {
     expect(source).toContain("nya");
   });
 
-  it("throws on non-ok response", async () => {
+  it("throws request error with backend detail on non-ok response", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response('{"detail":"Not Found"}', { status: 404 })
     );
 
-    await expect(getExampleSource("nonexistent")).rejects.toThrow("404");
+    await expect(getExampleSource("nonexistent")).rejects.toMatchObject({
+      name: "ApiRequestError",
+      message: expect.stringContaining("404"),
+      detail: "Not Found",
+    });
   });
 });

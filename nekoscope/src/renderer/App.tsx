@@ -12,7 +12,7 @@ import {
   SearchCode,
   Sun,
 } from "lucide-react";
-import { compile, getExamples, getExampleSource } from "./api/client";
+import { CompileFailureError, compile, getExamples, getExampleSource } from "./api/client";
 import { AssemblyPanel } from "./components/AssemblyPanel";
 import { ASTPanel } from "./components/ASTPanel";
 import { DiagnosticPanel } from "./components/DiagnosticPanel";
@@ -148,6 +148,7 @@ export default function App() {
   const [activeExample, setActiveExample] = useState<string | null>(null);
   const [backend, setBackend] = useState("llvm");
   const [apiError, setApiError] = useState<string | null>(null);
+  const [compileFailure, setCompileFailure] = useState<string | null>(null);
   const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
   const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -158,6 +159,7 @@ export default function App() {
     requestIdRef.current = requestId;
     setLoading(true);
     setApiError(null);
+    setCompileFailure(null);
     try {
       const nextResult = await compile(nextSource, nextBackend);
       if (requestId === requestIdRef.current) {
@@ -165,7 +167,12 @@ export default function App() {
       }
     } catch (error) {
       if (requestId === requestIdRef.current) {
-        setApiError(error instanceof Error ? error.message : "无法连接 NekoScope API");
+        if (error instanceof CompileFailureError) {
+          setResult(null);
+          setCompileFailure(error.detail);
+        } else {
+          setApiError(error instanceof Error ? error.message : "无法连接 NekoScope API");
+        }
       }
     } finally {
       if (requestId === requestIdRef.current) {
@@ -211,6 +218,7 @@ export default function App() {
   const loadExample = useCallback(async (name: string) => {
     try {
       const nextSource = await getExampleSource(name);
+      setCompileFailure(null);
       setActiveExample(name);
       setSource(nextSource);
       setActiveStage("overview");
@@ -295,6 +303,11 @@ export default function App() {
             <div className="api-error">
               <strong>API 连接失败</strong>
               <span>{apiError}</span>
+            </div>
+          ) : compileFailure ? (
+            <div className="api-error">
+              <strong>编译失败</strong>
+              <span>{compileFailure}</span>
             </div>
           ) : (
             <DiagnosticPanel errors={errors} loading={loading} />
