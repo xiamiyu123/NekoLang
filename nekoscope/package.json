@@ -61,6 +61,14 @@
       {
         "from": "../uv.lock",
         "to": "backend/uv.lock"
+      },
+      {
+        "from": "resources/bin",
+        "to": "bin",
+        "filter": [
+          "uv",
+          "uv.exe"
+        ]
       }
     ],
     "mac": {

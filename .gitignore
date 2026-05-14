@@ -18,4 +18,5 @@ env/
 nekoscope/node_modules/
 nekoscope/out/
 nekoscope/release/
+nekoscope/resources/bin/
 .gitignore

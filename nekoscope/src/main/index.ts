@@ -12,9 +12,28 @@ function getBackendRoot(): string {
   return join(__dirname, "../../..");
 }
 
+function getUvCommand(): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, "bin", process.platform === "win32" ? "uv.exe" : "uv");
+  }
+  return "uv";
+}
+
+function createBackendEnv(): NodeJS.ProcessEnv {
+  if (!app.isPackaged) return process.env;
+
+  const backendDataRoot = join(app.getPath("userData"), "backend");
+  return {
+    ...process.env,
+    UV_CACHE_DIR: join(backendDataRoot, "uv-cache"),
+    UV_PROJECT_ENVIRONMENT: join(backendDataRoot, ".venv"),
+  };
+}
+
 function startFastAPI(): void {
-  apiProcess = spawn("uv", ["run", "uvicorn", "neko.viz_api:app", "--port", String(API_PORT)], {
+  apiProcess = spawn(getUvCommand(), ["run", "uvicorn", "neko.viz_api:app", "--port", String(API_PORT)], {
     cwd: getBackendRoot(),
+    env: createBackendEnv(),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -28,6 +47,11 @@ function startFastAPI(): void {
 
   apiProcess.on("exit", (code) => {
     console.log(`[FastAPI] exited with code ${code}`);
+    apiProcess = null;
+  });
+
+  apiProcess.on("error", (error) => {
+    console.error(`[FastAPI] failed to start: ${error.message}`);
     apiProcess = null;
   });
 }

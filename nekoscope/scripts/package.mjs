@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { constants } from "node:fs";
+import { access, copyFile, mkdir, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
@@ -41,12 +43,54 @@ export function createBuilderArgs(argv = process.argv, binPath = resolvePackageB
   return [binPath, ...argv.slice(2)];
 }
 
-function runNodeScript(args, env) {
+export function getBundledUvName(platform = process.platform) {
+  return platform === "win32" ? "uv.exe" : "uv";
+}
+
+export function createUvResourcePath(rootDir = process.cwd(), platform = process.platform) {
+  return path.join(rootDir, "resources", "bin", getBundledUvName(platform));
+}
+
+export function createUvExecutableCandidates(sourceEnv = process.env, platform = process.platform) {
+  const executableName = getBundledUvName(platform);
+  const pathValue = sourceEnv.PATH || "";
+  return pathValue
+    .split(path.delimiter)
+    .filter(Boolean)
+    .map((entry) => path.join(entry, executableName));
+}
+
+export async function resolveUvExecutable(sourceEnv = process.env, platform = process.platform) {
+  for (const candidate of createUvExecutableCandidates(sourceEnv, platform)) {
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Keep searching PATH.
+    }
+  }
+
+  throw new Error("Cannot find uv executable on PATH. Install uv before packaging NekoScope.");
+}
+
+export async function prepareBundledUv({
+  rootDir = process.cwd(),
+  platform = process.platform,
+  sourceEnv = process.env,
+} = {}) {
+  const uvPath = createUvResourcePath(rootDir, platform);
+  const sourceUvPath = await resolveUvExecutable(sourceEnv, platform);
+
+  await mkdir(path.dirname(uvPath), { recursive: true });
+  await rm(uvPath, { force: true });
+  await copyFile(sourceUvPath, uvPath, constants.COPYFILE_FICLONE);
+
+  return uvPath;
+}
+
+function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, {
-      env,
-      stdio: "inherit",
-    });
+    const child = spawn(command, args, options);
 
     child.on("exit", (code, signal) => {
       if (signal) {
@@ -66,9 +110,19 @@ function runNodeScript(args, env) {
   });
 }
 
+function runNodeScript(args, env) {
+  return runCommand(process.execPath, args, {
+    env,
+    stdio: "inherit",
+  });
+}
+
 export async function runPackage({ argv = process.argv, sourceEnv = process.env } = {}) {
   const env = createPackageEnv(sourceEnv);
   console.log(`NekoScope release version: ${env.NEKOSCOPE_RELEASE_VERSION}`);
+
+  const bundledUvPath = await prepareBundledUv({ sourceEnv });
+  console.log(`Bundled uv: ${bundledUvPath}`);
 
   await runNodeScript([resolvePackageBin("electron-vite"), "build"], env);
   await runNodeScript(createBuilderArgs(argv), env);

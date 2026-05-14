@@ -36,9 +36,9 @@ NEKOSCOPE_RELEASE_VERSION=202605132305 npm run dist
 - `pyproject.toml`
 - `uv.lock`
 
-应用启动后，主进程会在打包环境中从 `process.resourcesPath/backend` 启动 `uv run uvicorn neko.viz_api:app`。
+`npm run pack` / `npm run dist` 会先从当前 `PATH` 找到 `uv`，复制到 `nekoscope/resources/bin/`，再由 electron-builder 放入 Electron 的 `resources/bin/`。
 
-因此，运行打包后的应用仍需要目标机器能访问 `uv` 和 Python。
+应用启动后，主进程会在打包环境中从 `process.resourcesPath/backend` 调用内置的 `resources/bin/uv` 启动 `uv run uvicorn neko.viz_api:app`。打包后的应用不再要求目标机器的 `PATH` 能访问 `uv`；uv 的虚拟环境和缓存会写入应用的用户数据目录。
 
 ## 自动打包
 
