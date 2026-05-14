@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "NekoLang compilation pipeline visualizer",
   "private": true,
+  "homepage": "https://github.com/xiamiyu123/NekoLang",
+  "author": {
+    "name": "xiamiyu123",
+    "email": "xiamiyu123@users.noreply.github.com"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node ./scripts/dev.mjs",
@@ -73,6 +78,7 @@
     },
     "linux": {
       "category": "Development",
+      "maintainer": "xiamiyu123 <xiamiyu123@users.noreply.github.com>",
       "target": [
         "AppImage",
         "deb"
