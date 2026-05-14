@@ -14,7 +14,7 @@ import {
   SearchCode,
   Sun,
 } from "lucide-react";
-import { CompileFailureError, compile, getExamples, getExampleSource, runProgram } from "./api/client";
+import { CompileFailureError, compile, getExamples, getExampleSource, openWorkspace, readWorkspaceFile, runProgram } from "./api/client";
 import { AssemblyPanel } from "./components/AssemblyPanel";
 import { ASTPanel } from "./components/ASTPanel";
 import { DiagnosticPanel } from "./components/DiagnosticPanel";
@@ -36,6 +36,7 @@ import {
   type ThemePreference,
 } from "./styles/theme";
 import type { CompileResult, Example, RunResult } from "./types/compiler";
+import type { WorkspaceFile } from "./types/workspace";
 import "./styles/app.css";
 
 const DEFAULT_SOURCE = `(nya t
@@ -194,6 +195,12 @@ export default function App() {
   const [lessonCollapsed, setLessonCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
   const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark);
+  const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
+  const [workspaceTree, setWorkspaceTree] = useState<WorkspaceFile[] | null>(null);
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [workspaceEntryFile, setWorkspaceEntryFile] = useState<string | null>(null);
+  const [fileTreeVisible, setFileTreeVisible] = useState(false);
+  const entrySourceRef = useRef(DEFAULT_SOURCE);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -253,8 +260,20 @@ export default function App() {
     setLoading(true);
     setApiError(null);
     setCompileFailure(null);
+
+    // In project mode, always compile from the entry file
+    const effectiveSourcePath = workspaceEntryFile ?? activeFilePath;
+    const effectiveSource = workspaceEntryFile && activeFilePath !== workspaceEntryFile
+      ? entrySourceRef.current
+      : nextSource;
+
     try {
-      const nextResult = await compile(nextSource, nextBackend);
+      const nextResult = await compile(
+        effectiveSource,
+        nextBackend,
+        workspaceRoot ?? undefined,
+        effectiveSourcePath ?? undefined
+      );
       if (requestId === requestIdRef.current) {
         setResult(nextResult);
         setRunResult(null);
@@ -273,21 +292,32 @@ export default function App() {
         setLoading(false);
       }
     }
-  }, [backend, source]);
+  }, [backend, source, workspaceRoot, activeFilePath, workspaceEntryFile]);
 
   const runCurrentSource = useCallback(async () => {
     setRunning(true);
     setApiError(null);
     setCompileFailure(null);
+
+    const effectiveSourcePath = workspaceEntryFile ?? activeFilePath;
+    const effectiveSource = workspaceEntryFile && activeFilePath !== workspaceEntryFile
+      ? entrySourceRef.current
+      : source;
+
     try {
-      const nextRunResult = await runProgram(source, backend);
+      const nextRunResult = await runProgram(
+        effectiveSource,
+        backend,
+        workspaceRoot ?? undefined,
+        effectiveSourcePath ?? undefined
+      );
       setRunResult(nextRunResult);
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "运行失败");
     } finally {
       setRunning(false);
     }
-  }, [backend, source]);
+  }, [backend, source, workspaceRoot, activeFilePath, workspaceEntryFile]);
 
   useEffect(() => {
     getExamples().then(setExamples).catch((error) => {
@@ -312,6 +342,13 @@ export default function App() {
     document.documentElement.style.colorScheme = resolvedTheme === "dark" ? "dark" : "light";
     window.localStorage.setItem(THEME_STORAGE_KEY, themePreference);
   }, [resolvedTheme, themePreference]);
+
+  // Keep entry source cache in sync when editing the entry file
+  useEffect(() => {
+    if (workspaceEntryFile && activeFilePath === workspaceEntryFile) {
+      entrySourceRef.current = source;
+    }
+  }, [source, workspaceEntryFile, activeFilePath]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -339,9 +376,81 @@ export default function App() {
   const resetSource = useCallback(() => {
     setActiveExample(null);
     setRunResult(null);
+    setWorkspaceRoot(null);
+    setWorkspaceTree(null);
+    setActiveFilePath(null);
+    setWorkspaceEntryFile(null);
+    setFileTreeVisible(false);
     setSource(DEFAULT_SOURCE);
     setActiveStage("overview");
   }, []);
+
+  const handleOpenFile = useCallback(async () => {
+    const filePath = await window.nekoscope.openFile();
+    if (!filePath) return;
+    try {
+      const content = await window.nekoscope.readFile(filePath);
+      setSource(content);
+      setActiveExample(null);
+      setActiveFilePath(filePath);
+      setWorkspaceRoot(null);
+      setWorkspaceTree(null);
+      setWorkspaceEntryFile(null);
+      setFileTreeVisible(false);
+      setRunResult(null);
+      setActiveStage("overview");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "无法读取文件");
+    }
+  }, []);
+
+  const handleOpenFolder = useCallback(async () => {
+    const folderPath = await window.nekoscope.openFolder();
+    if (!folderPath) return;
+    try {
+      setApiError(null);
+      const info = await openWorkspace(folderPath);
+      setWorkspaceRoot(info.rootPath);
+      setWorkspaceTree(info.tree.children ?? []);
+      setFileTreeVisible(true);
+      setActiveExample(null);
+      setRunResult(null);
+      setActiveStage("overview");
+      if (info.entryFile) {
+        const entryAbsPath = info.entryFile.startsWith("/")
+          ? info.entryFile
+          : `${info.rootPath}/${info.entryFile}`;
+        try {
+          const { source: entrySource } = await readWorkspaceFile(info.rootPath, entryAbsPath);
+          setSource(entrySource);
+          setActiveFilePath(entryAbsPath);
+          setWorkspaceEntryFile(entryAbsPath);
+          entrySourceRef.current = entrySource;
+        } catch {
+          setWorkspaceEntryFile(null);
+        }
+      } else {
+        setWorkspaceEntryFile(null);
+      }
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "无法打开项目文件夹");
+    }
+  }, []);
+
+  const handleFileSelect = useCallback(async (file: WorkspaceFile) => {
+    if (!workspaceRoot) return;
+    try {
+      setApiError(null);
+      const { source: fileSource } = await readWorkspaceFile(workspaceRoot, file.path);
+      setSource(fileSource);
+      setActiveFilePath(file.path);
+      setActiveExample(null);
+      setRunResult(null);
+      setActiveStage("overview");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "无法读取文件");
+    }
+  }, [workspaceRoot]);
 
   const completedStages = useMemo(() => computeCompletedStages(result), [result]);
   const activeStageInfo = findStage(activeStage);
@@ -406,6 +515,14 @@ export default function App() {
           onCompileNow={() => void runCompile(source, backend)}
           onRunNow={() => void runCurrentSource()}
           onReset={resetSource}
+          onOpenFile={handleOpenFile}
+          onOpenFolder={handleOpenFolder}
+          workspaceTree={workspaceTree}
+          workspaceRoot={workspaceRoot}
+          activeFilePath={activeFilePath}
+          onFileSelect={handleFileSelect}
+          fileTreeVisible={fileTreeVisible}
+          onToggleFileTree={() => setFileTreeVisible((v) => !v)}
         />
 
         <div

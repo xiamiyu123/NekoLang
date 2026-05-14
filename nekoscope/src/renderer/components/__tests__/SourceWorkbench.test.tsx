@@ -13,6 +13,18 @@ vi.mock("@monaco-editor/react", () => ({
   },
 }));
 
+const noop = () => {};
+const baseProps = {
+  onOpenFile: noop,
+  onOpenFolder: noop,
+  workspaceTree: null as any,
+  workspaceRoot: null,
+  activeFilePath: null,
+  onFileSelect: noop,
+  fileTreeVisible: false,
+  onToggleFileTree: noop,
+};
+
 describe("SourceWorkbench", () => {
   it("enables Monaco automatic layout to follow container size changes", () => {
     render(
@@ -28,6 +40,7 @@ describe("SourceWorkbench", () => {
         onCompileNow={() => {}}
         onRunNow={() => {}}
         onReset={() => {}}
+        {...baseProps}
       />
     );
 
@@ -49,6 +62,7 @@ describe("SourceWorkbench", () => {
         onCompileNow={() => {}}
         onRunNow={() => {}}
         onReset={() => {}}
+        {...baseProps}
       />
     );
 

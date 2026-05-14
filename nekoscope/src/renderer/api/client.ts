@@ -1,4 +1,5 @@
 import type { CompileResult, Example, RunResult } from "../types/compiler";
+import type { WorkspaceInfo } from "../types/workspace";
 
 let BASE_URL = "http://127.0.0.1:8000";
 
@@ -70,13 +71,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function compile(
   source: string,
-  backend: string = "auto"
+  backend: string = "auto",
+  projectRoot?: string,
+  sourcePath?: string
 ): Promise<CompileResult> {
   try {
     return await request<CompileResult>("/api/compile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source, backend }),
+      body: JSON.stringify({
+        source,
+        backend,
+        ...(projectRoot ? { projectRoot } : {}),
+        ...(sourcePath ? { sourcePath } : {}),
+      }),
     });
   } catch (error) {
     if (error instanceof ApiRequestError && error.status === 400) {
@@ -89,12 +97,19 @@ export async function compile(
 
 export async function runProgram(
   source: string,
-  backend: string = "auto"
+  backend: string = "auto",
+  projectRoot?: string,
+  sourcePath?: string
 ): Promise<RunResult> {
   return request<RunResult>("/api/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source, backend }),
+    body: JSON.stringify({
+      source,
+      backend,
+      ...(projectRoot ? { projectRoot } : {}),
+      ...(sourcePath ? { sourcePath } : {}),
+    }),
   });
 }
 
@@ -106,4 +121,23 @@ export async function getExamples(): Promise<Example[]> {
 export async function getExampleSource(name: string): Promise<string> {
   const data = await request<{ source: string }>(`/api/examples/${name}`);
   return data.source;
+}
+
+export async function openWorkspace(folderPath: string): Promise<WorkspaceInfo> {
+  return request<WorkspaceInfo>("/api/workspace/open", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: folderPath }),
+  });
+}
+
+export async function readWorkspaceFile(
+  rootPath: string,
+  filePath: string
+): Promise<{ source: string; path: string; relativePath: string }> {
+  return request("/api/workspace/file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rootPath, filePath }),
+  });
 }

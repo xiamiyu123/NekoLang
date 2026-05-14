@@ -15,8 +15,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from neko.build_utils import compile_source, compile_to_executable, generate_code
+from neko.build_utils import (
+    CBuildConfig,
+    compile_file_with_imports,
+    compile_source,
+    compile_to_executable,
+    generate_code,
+    resolve_c_build_config,
+)
 from neko.errors import NekoError
+from neko.nekgo_cli import _load_toml_file
 from neko.viz_serializers import (
     serialize_ast,
     serialize_compilation_result,
@@ -42,6 +50,8 @@ EXAMPLES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "example
 class CompileRequest(BaseModel):
     source: str
     backend: str = "auto"
+    projectRoot: str | None = None
+    sourcePath: str | None = None
 
 
 class SourceRequest(BaseModel):
@@ -57,6 +67,17 @@ class RunRequest(BaseModel):
     source: str
     backend: str = "auto"
     timeoutSeconds: float = 5.0
+    projectRoot: str | None = None
+    sourcePath: str | None = None
+
+
+class WorkspaceOpenRequest(BaseModel):
+    path: str
+
+
+class WorkspaceFileRequest(BaseModel):
+    rootPath: str
+    filePath: str
 
 
 # --- Helpers ---
@@ -82,6 +103,85 @@ def _discover_examples() -> list[dict[str, str]]:
     return examples
 
 
+def _scan_directory(root_path: str) -> dict:
+    """Recursively scan a directory for project files (.neko, .c, .h, Neko.toml)."""
+    root_path = os.path.abspath(root_path)
+    _SOURCE_EXTS = (".neko", ".c", ".h")
+
+    def _scan(dir_path: str) -> list[dict]:
+        entries: list[dict] = []
+        try:
+            names = sorted(os.listdir(dir_path))
+        except PermissionError:
+            return entries
+        for name in names:
+            full = os.path.join(dir_path, name)
+            if name.startswith(".") or name == "build" or name == "__pycache__":
+                continue
+            rel = os.path.relpath(full, root_path)
+            if os.path.isdir(full):
+                children = _scan(full)
+                entries.append({
+                    "name": name,
+                    "path": full,
+                    "relativePath": rel,
+                    "isDirectory": True,
+                    "children": children,
+                })
+            elif name.endswith(_SOURCE_EXTS) or name == "Neko.toml":
+                entries.append({
+                    "name": name,
+                    "path": full,
+                    "relativePath": rel,
+                    "isDirectory": False,
+                })
+        return entries
+
+    tree = {
+        "name": os.path.basename(root_path),
+        "path": root_path,
+        "relativePath": ".",
+        "isDirectory": True,
+        "children": _scan(root_path),
+    }
+
+    toml_path = os.path.join(root_path, "Neko.toml")
+    project_name = os.path.basename(root_path)
+    entry_file = None
+    if os.path.isfile(toml_path):
+        try:
+            config = _load_toml_file(toml_path)
+            if config and "project" in config:
+                project = config["project"]
+                project_name = project.get("name", project_name)
+                entry_file = project.get("entry", None)
+        except Exception:
+            pass
+
+    return {
+        "rootPath": root_path,
+        "projectName": project_name,
+        "entryFile": entry_file,
+        "tree": tree,
+    }
+
+
+def _compile_project_source(source: str, project_root: str, source_path: str):
+    """Compile source with import resolution by writing to a temp file
+    adjacent to the original source file, then calling compile_file_with_imports."""
+    orig_dir = os.path.dirname(os.path.abspath(source_path))
+    fd, tmp_path = tempfile.mkstemp(suffix=".neko", dir=orig_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(source)
+        return compile_file_with_imports(
+            tmp_path,
+            import_roots=[os.path.abspath(project_root)],
+        )
+    finally:
+        os.unlink(tmp_path)
+
+
 # --- Endpoints ---
 
 
@@ -91,12 +191,16 @@ def root():
         "POST /api/compile", "POST /api/tokens", "POST /api/ast",
         "POST /api/assembly", "POST /api/run", "GET /api/examples",
         "GET /api/examples/{name}",
+        "POST /api/workspace/open", "POST /api/workspace/file",
     ]}
 
 
 @app.post("/api/compile")
 def api_compile(req: CompileRequest):
-    result = _run_pipeline(req.source)
+    if req.sourcePath and req.projectRoot:
+        result = _compile_project_source(req.source, req.projectRoot, req.sourcePath)
+    else:
+        result = _run_pipeline(req.source)
     return serialize_compilation_result(result, backend=req.backend)
 
 
@@ -126,7 +230,10 @@ def api_assembly(req: AssemblyRequest):
 
 @app.post("/api/run")
 def api_run(req: RunRequest):
-    result = _run_pipeline(req.source)
+    if req.sourcePath and req.projectRoot:
+        result = _compile_project_source(req.source, req.projectRoot, req.sourcePath)
+    else:
+        result = _run_pipeline(req.source)
     if result.analyzer.errors:
         return {
             "stdout": "",
@@ -137,13 +244,24 @@ def api_run(req: RunRequest):
             "compileError": "",
         }
 
+    # Resolve C build config from Neko.toml when running a project
+    c_build_config = CBuildConfig()
+    if req.projectRoot:
+        toml_path = os.path.join(req.projectRoot, "Neko.toml")
+        if os.path.isfile(toml_path):
+            try:
+                toml_config = _load_toml_file(toml_path)
+                c_build_config = resolve_c_build_config(req.projectRoot, toml_config.get("c"))
+            except Exception:
+                pass
+
     timeout = max(0.1, min(req.timeoutSeconds, 30.0))
     with tempfile.TemporaryDirectory() as tmpdir:
         output = os.path.join(tmpdir, "nekoscope-run")
         compile_stderr = io.StringIO()
         try:
             with contextlib.redirect_stderr(compile_stderr):
-                compile_to_executable(result.ast, output, backend=req.backend)
+                compile_to_executable(result.ast, output, backend=req.backend, c_build_config=c_build_config)
         except SystemExit:
             return {
                 "stdout": "",
@@ -193,3 +311,28 @@ def api_example(name: str):
         raise HTTPException(status_code=404, detail=f"Example '{name}' not found")
     with open(path, "r", encoding="utf-8") as f:
         return {"source": f.read()}
+
+
+@app.post("/api/workspace/open")
+def api_workspace_open(req: WorkspaceOpenRequest):
+    path = os.path.abspath(req.path)
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+    return _scan_directory(path)
+
+
+@app.post("/api/workspace/file")
+def api_workspace_file(req: WorkspaceFileRequest):
+    file_path = os.path.abspath(req.filePath)
+    root_real = os.path.realpath(req.rootPath)
+    file_real = os.path.realpath(file_path)
+    if not file_real.startswith(root_real + os.sep) and file_real != root_real:
+        raise HTTPException(status_code=403, detail="File is outside workspace root")
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+    with open(file_path, "r", encoding="utf-8") as f:
+        return {
+            "source": f.read(),
+            "path": file_path,
+            "relativePath": os.path.relpath(file_path, req.rootPath),
+        }

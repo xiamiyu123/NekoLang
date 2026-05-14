@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { spawn, ChildProcess } from "child_process";
+import { readFile } from "fs/promises";
 import { join } from "path";
 import {
   handleActivate,
@@ -99,6 +100,36 @@ async function createWindow(): Promise<void> {
     await win.loadFile(join(__dirname, "../renderer/index.html"));
   }
 }
+
+// --- IPC handlers ---
+
+ipcMain.handle("dialog:openFile", async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (!win) return null;
+  const result = await dialog.showOpenDialog(win, {
+    title: "Open NekoLang File",
+    filters: [
+      { name: "NekoLang Source", extensions: ["neko"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+    properties: ["openFile"],
+  });
+  return result.canceled ? null : result.filePaths[0] ?? null;
+});
+
+ipcMain.handle("dialog:openFolder", async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (!win) return null;
+  const result = await dialog.showOpenDialog(win, {
+    title: "Open Project Folder",
+    properties: ["openDirectory"],
+  });
+  return result.canceled ? null : result.filePaths[0] ?? null;
+});
+
+ipcMain.handle("fs:readFile", async (_event, filePath: string) => {
+  return readFile(filePath, "utf-8");
+});
 
 const lifecycle: NekoScopeLifecycle = {
   platform: process.platform,

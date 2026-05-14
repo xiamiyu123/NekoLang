@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import { BookOpen, Hammer, Play, RotateCcw } from "lucide-react";
+import { BookOpen, FileUp, FolderOpen, Hammer, PanelLeftOpen, Play, RotateCcw } from "lucide-react";
 import type { ResolvedTheme } from "../styles/theme";
 import type { Example } from "../types/compiler";
+import type { WorkspaceFile } from "../types/workspace";
+import { FileTree } from "./FileTree";
 
 interface Props {
   source: string;
@@ -16,6 +18,14 @@ interface Props {
   onCompileNow: () => void;
   onRunNow: () => void;
   onReset: () => void;
+  onOpenFile: () => void;
+  onOpenFolder: () => void;
+  workspaceTree: WorkspaceFile[] | null;
+  workspaceRoot: string | null;
+  activeFilePath: string | null;
+  onFileSelect: (file: WorkspaceFile) => void;
+  fileTreeVisible: boolean;
+  onToggleFileTree: () => void;
 }
 
 export function SourceWorkbench({
@@ -30,6 +40,13 @@ export function SourceWorkbench({
   onCompileNow,
   onRunNow,
   onReset,
+  onOpenFile,
+  onOpenFolder,
+  workspaceTree,
+  activeFilePath,
+  onFileSelect,
+  fileTreeVisible,
+  onToggleFileTree,
 }: Props) {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -119,6 +136,23 @@ export function SourceWorkbench({
           <h2>源码编辑器</h2>
         </div>
         <div className="toolbar">
+          <button className="icon-button" type="button" onClick={onOpenFile} title="打开文件" aria-label="打开文件">
+            <FileUp size={16} />
+          </button>
+          <button className="icon-button" type="button" onClick={onOpenFolder} title="打开项目文件夹" aria-label="打开项目文件夹">
+            <FolderOpen size={16} />
+          </button>
+          {workspaceTree && (
+            <button
+              className={`icon-button ${fileTreeVisible ? "active" : ""}`}
+              type="button"
+              onClick={onToggleFileTree}
+              title="切换文件树"
+              aria-label="切换文件树"
+            >
+              <PanelLeftOpen size={16} />
+            </button>
+          )}
           <button className="icon-button" type="button" onClick={onCompileNow} title="立即编译" aria-label="立即编译">
             <Hammer size={16} />
           </button>
@@ -138,44 +172,57 @@ export function SourceWorkbench({
         </div>
       </header>
 
-      <div className="editor-shell" ref={shellRef}>
-        <Editor
-          height="100%"
-          defaultLanguage="scheme"
-          value={source}
-          onChange={(value) => onSourceChange(value ?? "")}
-          beforeMount={handleBeforeMount}
-          onMount={handleEditorMount}
-          theme={theme === "dark" ? "vs-dark" : theme === "neko" ? "nekoscope-neko" : "nekoscope-light"}
-          options={{
-            automaticLayout: true,
-            minimap: { enabled: false },
-            fontSize: 14,
-            fontLigatures: true,
-            lineNumbersMinChars: 3,
-            scrollBeyondLastLine: false,
-            tabSize: 2,
-            wordWrap: "on",
-          }}
-        />
-      </div>
+      <div className="source-body">
+        {fileTreeVisible && workspaceTree && (
+          <aside className="file-tree-panel">
+            <FileTree
+              files={workspaceTree}
+              activeFilePath={activeFilePath}
+              onFileSelect={onFileSelect}
+            />
+          </aside>
+        )}
+        <div className="editor-column">
+          <div className="editor-shell" ref={shellRef}>
+            <Editor
+              height="100%"
+              defaultLanguage="scheme"
+              value={source}
+              onChange={(value) => onSourceChange(value ?? "")}
+              beforeMount={handleBeforeMount}
+              onMount={handleEditorMount}
+              theme={theme === "dark" ? "vs-dark" : theme === "neko" ? "nekoscope-neko" : "nekoscope-light"}
+              options={{
+                automaticLayout: true,
+                minimap: { enabled: false },
+                fontSize: 14,
+                fontLigatures: true,
+                lineNumbersMinChars: 3,
+                scrollBeyondLastLine: false,
+                tabSize: 2,
+                wordWrap: "on",
+              }}
+            />
+          </div>
 
-      <div className="example-strip" aria-label="示例程序">
-        <div className="example-strip-title">
-          <BookOpen size={15} />
-          示例
-        </div>
-        <div className="example-list">
-          {examples.map((example) => (
-            <button
-              className={`example-chip ${activeExample === example.name ? "active" : ""}`}
-              type="button"
-              key={example.name}
-              onClick={() => onExampleLoad(example.name)}
-            >
-              {example.description}
-            </button>
-          ))}
+          <div className="example-strip" aria-label="示例程序">
+            <div className="example-strip-title">
+              <BookOpen size={15} />
+              示例
+            </div>
+            <div className="example-list">
+              {examples.map((example) => (
+                <button
+                  className={`example-chip ${activeExample === example.name ? "active" : ""}`}
+                  type="button"
+                  key={example.name}
+                  onClick={() => onExampleLoad(example.name)}
+                >
+                  {example.description}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
