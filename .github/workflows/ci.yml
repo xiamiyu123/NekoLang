@@ -133,3 +133,23 @@ jobs:
       - name: Build NekoScope
         working-directory: nekoscope
         run: npm run build
+
+      - name: Package NekoScope directory
+        working-directory: nekoscope
+        run: npm run pack
+
+      - name: Verify bundled uv in packaged app
+        working-directory: nekoscope
+        shell: bash
+        run: |
+          case "${RUNNER_OS}" in
+            Linux)
+              test -x release/linux-unpacked/resources/bin/uv
+              ;;
+            macOS)
+              test -x release/mac-arm64/NekoScope.app/Contents/Resources/bin/uv
+              ;;
+            Windows)
+              test -f release/win-unpacked/resources/bin/uv.exe
+              ;;
+          esac
