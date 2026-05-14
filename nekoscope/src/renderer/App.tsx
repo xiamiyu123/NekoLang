@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 import {
   Binary,
   Boxes,
@@ -8,6 +9,7 @@ import {
   ListTree,
   Monitor,
   Moon,
+  PanelLeftOpen,
   Route,
   SearchCode,
   Sun,
@@ -102,6 +104,41 @@ const STAGES: StageInfo[] = [
   },
 ];
 
+const MIN_SOURCE_PANE_PERCENT = 28;
+const MAX_SOURCE_PANE_PERCENT = 68;
+const SOURCE_PANE_KEYBOARD_STEP = 3;
+const MIN_SOURCE_PANE_WIDTH = 360;
+const MIN_TEACHING_PANE_WIDTH = 420;
+const WORKSPACE_RESIZER_WIDTH = 12;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getSourcePanePercentBounds(workspaceWidth: number): { min: number; max: number } {
+  if (workspaceWidth <= 0) {
+    return { min: MIN_SOURCE_PANE_PERCENT, max: MAX_SOURCE_PANE_PERCENT };
+  }
+
+  const minByPixels = (MIN_SOURCE_PANE_WIDTH / workspaceWidth) * 100;
+  const maxByPixels = (
+    (workspaceWidth - WORKSPACE_RESIZER_WIDTH - MIN_TEACHING_PANE_WIDTH) /
+    workspaceWidth
+  ) * 100;
+  const min = clamp(
+    Math.max(MIN_SOURCE_PANE_PERCENT, minByPixels),
+    MIN_SOURCE_PANE_PERCENT,
+    MAX_SOURCE_PANE_PERCENT
+  );
+  const max = clamp(
+    Math.min(MAX_SOURCE_PANE_PERCENT, maxByPixels),
+    min,
+    MAX_SOURCE_PANE_PERCENT
+  );
+
+  return { min, max };
+}
+
 function findStage(key: string): StageInfo {
   return STAGES.find((stage) => stage.key === key) ?? STAGES[0];
 }
@@ -149,10 +186,63 @@ export default function App() {
   const [backend, setBackend] = useState("llvm");
   const [apiError, setApiError] = useState<string | null>(null);
   const [compileFailure, setCompileFailure] = useState<string | null>(null);
+  const [sourcePanePercent, setSourcePanePercent] = useState(43);
+  const [resizingWorkspace, setResizingWorkspace] = useState(false);
+  const [lessonCollapsed, setLessonCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
   const [systemPrefersDark, setSystemPrefersDark] = useState(getSystemPrefersDark);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  const activeResizePointerRef = useRef<number | null>(null);
+
+  const clampSourcePanePercent = useCallback((value: number) => {
+    const workspace = workspaceRef.current;
+    if (!workspace) {
+      return clamp(value, MIN_SOURCE_PANE_PERCENT, MAX_SOURCE_PANE_PERCENT);
+    }
+    const { min, max } = getSourcePanePercentBounds(workspace.getBoundingClientRect().width);
+    return clamp(value, min, max);
+  }, []);
+
+  const resizeSourcePane = useCallback((clientX: number) => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    const rect = workspace.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const nextPercent = ((clientX - rect.left) / rect.width) * 100;
+    setSourcePanePercent(clampSourcePanePercent(nextPercent));
+  }, [clampSourcePanePercent]);
+
+  const beginWorkspaceResize = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    activeResizePointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setResizingWorkspace(true);
+    resizeSourcePane(event.clientX);
+  }, [resizeSourcePane]);
+
+  const moveWorkspaceResize = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (activeResizePointerRef.current !== event.pointerId) return;
+    resizeSourcePane(event.clientX);
+  }, [resizeSourcePane]);
+
+  const endWorkspaceResize = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (activeResizePointerRef.current !== event.pointerId) return;
+    activeResizePointerRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setResizingWorkspace(false);
+  }, []);
+
+  const handleWorkspaceResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowLeft" ? -1 : 1;
+    setSourcePanePercent((current) => (
+      clampSourcePanePercent(current + direction * SOURCE_PANE_KEYBOARD_STEP)
+    ));
+  }, [clampSourcePanePercent]);
 
   const runCompile = useCallback(async (nextSource = source, nextBackend = backend) => {
     const requestId = requestIdRef.current + 1;
@@ -275,7 +365,11 @@ export default function App() {
         </div>
       </header>
 
-      <main className="workspace-grid">
+      <main
+        className={`workspace-grid ${resizingWorkspace ? "resizing" : ""}`}
+        ref={workspaceRef}
+        style={{ "--source-pane-width": `${sourcePanePercent}%` } as CSSProperties}
+      >
         <SourceWorkbench
           source={source}
           examples={examples}
@@ -289,6 +383,22 @@ export default function App() {
           onExampleLoad={loadExample}
           onCompileNow={() => void runCompile(source, backend)}
           onReset={resetSource}
+        />
+
+        <div
+          className="workspace-resizer"
+          role="separator"
+          aria-label="调整源码编辑器宽度"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_SOURCE_PANE_PERCENT}
+          aria-valuemax={MAX_SOURCE_PANE_PERCENT}
+          aria-valuenow={Math.round(sourcePanePercent)}
+          tabIndex={0}
+          onPointerDown={beginWorkspaceResize}
+          onPointerMove={moveWorkspaceResize}
+          onPointerUp={endWorkspaceResize}
+          onPointerCancel={endWorkspaceResize}
+          onKeyDown={handleWorkspaceResizeKeyDown}
         />
 
         <section className="teaching-workbench">
@@ -313,8 +423,24 @@ export default function App() {
             <DiagnosticPanel errors={errors} loading={loading} />
           )}
 
-          <div className="stage-content-grid">
-            <StageLesson stage={activeStageInfo} />
+          <div className={`stage-content-grid ${lessonCollapsed ? "lesson-collapsed" : ""}`}>
+            {lessonCollapsed ? (
+              <button
+                className="lesson-rail"
+                type="button"
+                onClick={() => setLessonCollapsed(false)}
+                title="展开阶段说明"
+                aria-label="展开阶段说明"
+              >
+                <PanelLeftOpen size={16} />
+                <span>阶段说明</span>
+              </button>
+            ) : (
+              <StageLesson
+                stage={activeStageInfo}
+                onCollapse={() => setLessonCollapsed(true)}
+              />
+            )}
             <section className="artifact-panel">
               <header className="panel-heading">
                 <div>
@@ -328,6 +454,7 @@ export default function App() {
                 backend={backend}
                 theme={resolvedTheme}
                 onBackendChange={setBackend}
+                onStageSelect={setActiveStage}
               />
             </section>
           </div>
@@ -343,11 +470,19 @@ interface ArtifactViewProps {
   backend: string;
   theme: ResolvedTheme;
   onBackendChange: (backend: string) => void;
+  onStageSelect: (stage: string) => void;
 }
 
-function ArtifactView({ activeStage, result, backend, theme, onBackendChange }: ArtifactViewProps) {
+function ArtifactView({
+  activeStage,
+  result,
+  backend,
+  theme,
+  onBackendChange,
+  onStageSelect,
+}: ArtifactViewProps) {
   if (activeStage === "overview") {
-    return <PipelineOverview result={result} />;
+    return <PipelineOverview result={result} onStageSelect={onStageSelect} />;
   }
   if (activeStage === "tokens") {
     return <TokenPanel tokens={result?.tokens ?? null} theme={theme} />;
@@ -370,27 +505,39 @@ function ArtifactView({ activeStage, result, backend, theme, onBackendChange }: 
   );
 }
 
-function PipelineOverview({ result }: { result: CompileResult | null }) {
+function PipelineOverview({
+  result,
+  onStageSelect,
+}: {
+  result: CompileResult | null;
+  onStageSelect: (stage: string) => void;
+}) {
   const rows = [
-    { name: "源码", detail: "输入的 NekoLang 文本", value: `${result?.source.split(/\r?\n/).length ?? 0} 行` },
-    { name: "Tokens", detail: "带类别和位置的词法单元", value: `${result?.tokens.length ?? 0} 个` },
-    { name: "AST", detail: "表达程序结构的树", value: result?.ast?.nodeType ?? "等待编译" },
-    { name: "符号表", detail: "变量、函数、常量的登记结果", value: `${result?.symbols.entries.length ?? 0} 项` },
-    { name: "四元式", detail: "线性的中间表示", value: `${result?.quadruples.length ?? 0} 行` },
-    { name: "目标代码", detail: "LLVM IR 或 ARM64 文本", value: result?.assembly ? `${result.assembly.split(/\r?\n/).length} 行` : "等待生成" },
+    { stage: "overview", name: "源码", detail: "输入的 NekoLang 文本", value: `${result?.source.split(/\r?\n/).length ?? 0} 行` },
+    { stage: "tokens", name: "Tokens", detail: "带类别和位置的词法单元", value: `${result?.tokens.length ?? 0} 个` },
+    { stage: "ast", name: "AST", detail: "表达程序结构的树", value: result?.ast?.nodeType ?? "等待编译" },
+    { stage: "symbols", name: "符号表", detail: "变量、函数、常量的登记结果", value: `${result?.symbols.entries.length ?? 0} 项` },
+    { stage: "quads", name: "四元式", detail: "线性的中间表示", value: `${result?.quadruples.length ?? 0} 行` },
+    { stage: "assembly", name: "目标代码", detail: "LLVM IR 或 ARM64 文本", value: result?.assembly ? `${result.assembly.split(/\r?\n/).length} 行` : "等待生成" },
   ];
 
   return (
     <div className="overview-panel">
       {rows.map((row, index) => (
-        <div className="overview-row" key={row.name}>
+        <button
+          className="overview-row"
+          key={row.name}
+          onClick={() => onStageSelect(row.stage)}
+          aria-label={`查看${row.name}阶段`}
+          type="button"
+        >
           <div className="overview-number">{index + 1}</div>
           <div>
             <strong>{row.name}</strong>
             <span>{row.detail}</span>
           </div>
           <code>{row.value}</code>
-        </div>
+        </button>
       ))}
     </div>
   );

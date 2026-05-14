@@ -298,7 +298,10 @@ button {
 
 .workspace-grid {
   display: grid;
-  grid-template-columns: minmax(420px, 43vw) minmax(520px, 1fr);
+  grid-template-columns:
+    minmax(360px, var(--source-pane-width, 43%))
+    12px
+    minmax(420px, 1fr);
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -317,6 +320,7 @@ button {
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(280px, 1fr) auto;
+  border-right: 0;
 }
 
 .teaching-workbench {
@@ -324,6 +328,47 @@ button {
   grid-template-rows: auto auto minmax(0, 1fr);
   border-right: 0;
   background: var(--bg-soft);
+}
+
+.workspace-resizer {
+  position: relative;
+  z-index: 2;
+  min-width: 12px;
+  border-right: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, transparent 0 4px, var(--line-strong) 4px 6px, transparent 6px 100%),
+    var(--bg-soft);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.workspace-resizer::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 44px;
+  border-radius: 999px;
+  content: "";
+  background: var(--line-strong);
+  transform: translate(-50%, -50%);
+  opacity: 0.72;
+}
+
+.workspace-resizer:hover,
+.workspace-resizer:focus-visible,
+.workspace-grid.resizing .workspace-resizer {
+  border-color: var(--accent-strong);
+  background:
+    linear-gradient(90deg, transparent 0 4px, var(--accent-strong) 4px 6px, transparent 6px 100%),
+    var(--accent-soft);
+  outline: none;
+}
+
+.workspace-grid.resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .panel-heading {
@@ -631,11 +676,26 @@ button {
   min-height: 0;
 }
 
+.stage-content-grid.lesson-collapsed {
+  grid-template-columns: 46px minmax(0, 1fr);
+}
+
 .lesson-panel {
   min-width: 0;
   padding: 18px 18px 20px;
   border-right: 1px solid var(--line);
   background: var(--panel);
+}
+
+.lesson-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lesson-toggle {
+  flex: 0 0 auto;
 }
 
 .lesson-panel h2 {
@@ -669,6 +729,36 @@ button {
 .lesson-focus strong {
   font-size: 14px;
   line-height: 1.45;
+}
+
+.lesson-rail {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 8px;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.lesson-rail:hover,
+.lesson-rail:focus-visible {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.lesson-rail span {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-orientation: mixed;
+  writing-mode: vertical-rl;
 }
 
 .artifact-panel {
@@ -705,7 +795,23 @@ button {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
+  color: var(--text);
+  text-align: left;
   background: var(--panel);
+  cursor: pointer;
+}
+
+.overview-row:hover,
+.overview-row:focus-visible {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.overview-row:hover .overview-number,
+.overview-row:focus-visible .overview-number {
+  color: var(--panel);
+  background: var(--accent-strong);
 }
 
 .overview-number {
@@ -1012,6 +1118,10 @@ button {
     border-bottom: 1px solid var(--line);
   }
 
+  .workspace-resizer {
+    display: none;
+  }
+
   .stage-guide {
     grid-template-columns: repeat(3, minmax(120px, 1fr));
   }
@@ -1023,6 +1133,24 @@ button {
   .lesson-panel {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .stage-content-grid.lesson-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-rail {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: none;
+    justify-content: start;
+    min-height: 44px;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .lesson-rail span {
+    writing-mode: horizontal-tb;
   }
 }
 
