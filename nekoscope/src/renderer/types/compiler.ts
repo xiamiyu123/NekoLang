@@ -48,6 +48,29 @@ export interface Quadruple {
   t: string;
 }
 
+export interface QuadrupleOptimizationStep {
+  name: string;
+  detail: string;
+  beforeCount: number;
+  afterCount: number;
+  changed: boolean;
+}
+
+export interface QuadrupleOptimization {
+  level: string;
+  source: string;
+  enabled: boolean;
+  changed: boolean;
+  beforeCount: number;
+  afterCount: number;
+  initial: Quadruple[];
+  optimized: Quadruple[];
+  initialConstants: Record<string, string | number>;
+  optimizedConstants: Record<string, string | number>;
+  steps: QuadrupleOptimizationStep[];
+  diagnostics: CompileError[];
+}
+
 /** Full compilation result from POST /api/compile */
 export interface CompileResult {
   source: string;
@@ -55,6 +78,7 @@ export interface CompileResult {
   ast: ASTNode;
   symbols: SymbolTableSnapshot;
   quadruples: Quadruple[];
+  quadrupleOptimization?: QuadrupleOptimization;
   assembly: string;
   errors: CompileError[];
   backend: string;

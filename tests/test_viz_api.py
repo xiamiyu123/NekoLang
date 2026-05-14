@@ -25,6 +25,7 @@ class TestCompileEndpoint(unittest.TestCase):
         self.assertIn("ast", data)
         self.assertIn("symbols", data)
         self.assertIn("quadruples", data)
+        self.assertIn("quadrupleOptimization", data)
         self.assertIn("assembly", data)
         self.assertIn("errors", data)
         self.assertEqual(data["backend"], "llvm")
@@ -32,6 +33,7 @@ class TestCompileEndpoint(unittest.TestCase):
         self.assertEqual(data["ast"]["nodeType"], "Program")
         self.assertGreater(len(data["symbols"]["entries"]), 0)
         self.assertGreater(len(data["quadruples"]), 0)
+        self.assertEqual(data["quadrupleOptimization"]["beforeCount"], len(data["quadruples"]))
 
     def test_compile_with_errors(self):
         client = _get_client()

@@ -498,6 +498,7 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertIn("ast", serialized)
         self.assertIn("symbols", serialized)
         self.assertIn("quadruples", serialized)
+        self.assertIn("quadrupleOptimization", serialized)
         self.assertIn("assembly", serialized)
         self.assertIn("errors", serialized)
         self.assertEqual(serialized["backend"], "llvm")
@@ -505,8 +506,31 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual(serialized["ast"]["nodeType"], "Program")
         self.assertGreater(len(serialized["symbols"]["entries"]), 0)
         self.assertGreater(len(serialized["quadruples"]), 0)
+        self.assertEqual(
+            serialized["quadrupleOptimization"]["beforeCount"],
+            len(serialized["quadruples"]),
+        )
         self.assertIsInstance(serialized["assembly"], str)
         self.assertEqual(serialized["errors"], [])
+
+    def test_serialize_compilation_result_includes_optimized_quadruples(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int))) (paw (:= a (+ 2 3)) (meow a)))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        optimization = serialized["quadrupleOptimization"]
+
+        self.assertTrue(optimization["changed"])
+        self.assertEqual(optimization["beforeCount"], 5)
+        self.assertEqual(optimization["afterCount"], 4)
+        self.assertEqual([q["op"] for q in optimization["initial"]], ["program", "+", ":=", "print", "end"])
+        self.assertEqual([q["op"] for q in optimization["optimized"]], ["program", ":=", "print", "end"])
+        self.assertEqual(optimization["optimized"][1]["ob1"], "C1")
+        self.assertEqual(optimization["optimizedConstants"], {"5": "C1"})
+        self.assertEqual(optimization["diagnostics"], [])
+        self.assertEqual(optimization["steps"][1]["name"], "O1 常量折叠")
+        self.assertTrue(optimization["steps"][1]["changed"])
 
     def test_serialize_compilation_result_with_errors(self):
         from neko.viz_serializers import serialize_compilation_result
@@ -516,6 +540,7 @@ class TestCompilationResultSerializer(unittest.TestCase):
         serialized = serialize_compilation_result(result, backend="llvm")
         self.assertGreater(len(serialized["errors"]), 0)
         self.assertEqual(serialized["errors"][0]["phase"], "Semantic")
+        self.assertFalse(serialized["quadrupleOptimization"]["enabled"])
         # AST still available even with errors
         self.assertIsNotNone(serialized["ast"])
 

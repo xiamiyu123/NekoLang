@@ -59,7 +59,8 @@ from neko.ast_nodes import (
 )
 from neko.build_utils import CompilationResult, generate_code
 from neko.errors import NekoError, SUGGESTIONS
-from neko.semantic import Quadruple
+from neko.optimizer import optimize_ast_for_arm64
+from neko.semantic import Quadruple, SemanticAnalyzer
 from neko.symbol_table import SymbolEntry, SymbolTable
 from neko.tokens import Token
 
@@ -491,6 +492,104 @@ def serialize_quadruples(quads: list[Quadruple]) -> list[dict[str, str]]:
     return [serialize_quadruple(q) for q in quads]
 
 
+def _quadruple_rows_equal(left: list[Quadruple], right: list[Quadruple]) -> bool:
+    return [serialize_quadruple(q) for q in left] == [serialize_quadruple(q) for q in right]
+
+
+def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any]:
+    initial = serialize_quadruples(result.analyzer.quadruples)
+    base = {
+        "level": "O1",
+        "source": "ARM64 AST optimizer",
+        "enabled": not result.analyzer.errors,
+        "changed": False,
+        "beforeCount": len(result.analyzer.quadruples),
+        "afterCount": len(result.analyzer.quadruples),
+        "initial": initial,
+        "optimized": initial,
+        "initialConstants": dict(result.analyzer.symbol_table.const_table),
+        "optimizedConstants": dict(result.analyzer.symbol_table.const_table),
+        "steps": [],
+        "diagnostics": [],
+    }
+
+    if result.analyzer.errors:
+        base["steps"] = [
+            {
+                "name": "跳过优化",
+                "detail": "语义分析存在错误，优化结果可能不可靠。",
+                "beforeCount": len(result.analyzer.quadruples),
+                "afterCount": len(result.analyzer.quadruples),
+                "changed": False,
+            }
+        ]
+        return base
+
+    try:
+        optimized_ast = optimize_ast_for_arm64(result.ast, opt_level=1)
+        optimized_analyzer = SemanticAnalyzer()
+        optimized_analyzer.set_source(result.source)
+        optimized_analyzer.analyze(optimized_ast)
+    except Exception as exc:
+        base["enabled"] = False
+        base["diagnostics"] = [
+            {
+                "phase": "Optimization",
+                "message": str(exc),
+                "line": 0,
+                "column": 0,
+                "sourceLine": "",
+                "suggestion": "",
+            }
+        ]
+        base["steps"] = [
+            {
+                "name": "优化失败",
+                "detail": "O1 优化未能生成可展示的四元式结果。",
+                "beforeCount": len(result.analyzer.quadruples),
+                "afterCount": len(result.analyzer.quadruples),
+                "changed": False,
+            }
+        ]
+        return base
+
+    optimized = serialize_quadruples(optimized_analyzer.quadruples)
+    changed = not _quadruple_rows_equal(result.analyzer.quadruples, optimized_analyzer.quadruples)
+    base.update(
+        {
+            "changed": changed,
+            "afterCount": len(optimized_analyzer.quadruples),
+            "optimized": optimized,
+            "optimizedConstants": dict(optimized_analyzer.symbol_table.const_table),
+            "diagnostics": serialize_errors(optimized_analyzer.errors),
+            "steps": [
+                {
+                    "name": "读取初始四元式",
+                    "detail": "语义分析先生成未优化的线性中间表示。",
+                    "beforeCount": len(result.analyzer.quadruples),
+                    "afterCount": len(result.analyzer.quadruples),
+                    "changed": False,
+                },
+                {
+                    "name": "O1 常量折叠",
+                    "detail": "对字面量算术、比较和字符内建表达式先求值。",
+                    "beforeCount": len(result.analyzer.quadruples),
+                    "afterCount": len(optimized_analyzer.quadruples),
+                    "changed": changed,
+                },
+                {
+                    "name": "重新生成四元式",
+                    "detail": "用优化后的 AST 再跑语义分析，得到优化结果。",
+                    "beforeCount": len(result.analyzer.quadruples),
+                    "afterCount": len(optimized_analyzer.quadruples),
+                    "changed": changed,
+                },
+            ],
+        }
+    )
+    return base
+
+
 # ---------------------------------------------------------------------------
 # SymbolTable serialization
 # ---------------------------------------------------------------------------
@@ -536,6 +635,7 @@ def serialize_compilation_result(
         "ast": serialize_ast(result.ast),
         "symbols": serialize_symbol_table(result.analyzer.symbol_table),
         "quadruples": serialize_quadruples(result.analyzer.quadruples),
+        "quadrupleOptimization": serialize_quadruple_optimization(result),
         "assembly": assembly,
         "errors": serialize_errors(result.analyzer.errors),
         "backend": backend,

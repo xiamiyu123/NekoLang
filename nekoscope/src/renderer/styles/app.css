@@ -771,6 +771,7 @@ button {
 
 .overview-panel,
 .data-panel,
+.quad-panel,
 .token-grid,
 .assembly-panel,
 .ast-panel,
@@ -991,6 +992,130 @@ button {
   height: 100%;
   padding: 14px;
   overflow: auto;
+}
+
+.quad-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+.quad-toolbar {
+  display: flex;
+  min-height: 44px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.quad-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.quad-summary.changed {
+  border-left-color: var(--accent-strong);
+}
+
+.quad-summary span,
+.quad-summary strong {
+  display: block;
+}
+
+.quad-summary span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quad-summary strong {
+  margin-top: 3px;
+  font-size: 14px;
+}
+
+.quad-summary code,
+.quad-step code {
+  flex: 0 0 auto;
+  color: var(--amber);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.quad-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.quad-constants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quad-constants code {
+  max-width: 180px;
+  padding: 4px 7px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--panel);
+}
+
+.quad-step {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.quad-step-index {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--panel-2);
+}
+
+.quad-step-index.changed {
+  color: var(--panel);
+  background: var(--accent-strong);
+}
+
+.quad-step strong,
+.quad-step p {
+  display: block;
+}
+
+.quad-step strong {
+  font-size: 14px;
+}
+
+.quad-step p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .table-card {

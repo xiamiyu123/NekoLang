@@ -494,7 +494,12 @@ function ArtifactView({
     return <SymbolTablePanel symbols={result?.symbols ?? null} />;
   }
   if (activeStage === "quads") {
-    return <QuadruplePanel quadruples={result?.quadruples ?? null} />;
+    return (
+      <QuadruplePanel
+        quadruples={result?.quadruples ?? null}
+        optimization={result?.quadrupleOptimization ?? null}
+      />
+    );
   }
   return (
     <AssemblyPanel
@@ -517,7 +522,14 @@ function PipelineOverview({
     { stage: "tokens", name: "Tokens", detail: "带类别和位置的词法单元", value: `${result?.tokens.length ?? 0} 个` },
     { stage: "ast", name: "AST", detail: "表达程序结构的树", value: result?.ast?.nodeType ?? "等待编译" },
     { stage: "symbols", name: "符号表", detail: "变量、函数、常量的登记结果", value: `${result?.symbols.entries.length ?? 0} 项` },
-    { stage: "quads", name: "四元式", detail: "线性的中间表示", value: `${result?.quadruples.length ?? 0} 行` },
+    {
+      stage: "quads",
+      name: "四元式",
+      detail: "线性的中间表示",
+      value: result?.quadrupleOptimization
+        ? `${result.quadrupleOptimization.beforeCount} -> ${result.quadrupleOptimization.afterCount} 行`
+        : `${result?.quadruples.length ?? 0} 行`,
+    },
     { stage: "assembly", name: "目标代码", detail: "LLVM IR 或 ARM64 文本", value: result?.assembly ? `${result.assembly.split(/\r?\n/).length} 行` : "等待生成" },
   ];
 
