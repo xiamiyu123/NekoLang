@@ -47,8 +47,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${{ steps.version.outputs.release_name }}" >/dev/null 2>&1 || \
+          gh release view "${{ steps.version.outputs.release_name }}" \
+              --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 || \
             gh release create "${{ steps.version.outputs.release_name }}" \
+              --repo "${GITHUB_REPOSITORY}" \
               --target "${{ github.sha }}" \
               --title "${{ steps.version.outputs.release_name }}" \
               --notes "NekoScope release ${{ steps.version.outputs.release_name }}"
