@@ -20,3 +20,4 @@ nekoscope/out/
 nekoscope/release/
 nekoscope/resources/bin/
 .gitignore
+node_modules

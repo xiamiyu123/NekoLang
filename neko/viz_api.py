@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -52,6 +53,7 @@ class CompileRequest(BaseModel):
     backend: str = "auto"
     projectRoot: str | None = None
     sourcePath: str | None = None
+    editedFiles: dict[str, str] | None = None
 
 
 class SourceRequest(BaseModel):
@@ -69,6 +71,7 @@ class RunRequest(BaseModel):
     timeoutSeconds: float = 5.0
     projectRoot: str | None = None
     sourcePath: str | None = None
+    editedFiles: dict[str, str] | None = None
 
 
 class WorkspaceOpenRequest(BaseModel):
@@ -166,20 +169,36 @@ def _scan_directory(root_path: str) -> dict:
     }
 
 
-def _compile_project_source(source: str, project_root: str, source_path: str):
-    """Compile source with import resolution by writing to a temp file
-    adjacent to the original source file, then calling compile_file_with_imports."""
-    orig_dir = os.path.dirname(os.path.abspath(source_path))
-    fd, tmp_path = tempfile.mkstemp(suffix=".neko", dir=orig_dir)
+def _compile_project_source(
+    source: str,
+    project_root: str,
+    source_path: str,
+    edited_files: dict[str, str] | None = None,
+):
+    """Compile source with import resolution, using a temp directory that
+    mirrors the project structure so edited dependency files take priority
+    over their on-disk versions."""
+    project_root = os.path.abspath(project_root)
+    source_path = os.path.abspath(source_path)
+    edited_files = edited_files or {}
+
+    tmp_dir = tempfile.mkdtemp()
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(source)
+        # Write all edited files into the temp tree, preserving relative paths
+        rel_entry = os.path.relpath(source_path, project_root)
+        for rel_path, content in {**edited_files, rel_entry: source}.items():
+            tmp_path = os.path.join(tmp_dir, rel_path)
+            os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+        tmp_entry = os.path.join(tmp_dir, rel_entry)
         return compile_file_with_imports(
-            tmp_path,
-            import_roots=[os.path.abspath(project_root)],
+            tmp_entry,
+            import_roots=[tmp_dir, os.path.dirname(source_path), project_root],
         )
     finally:
-        os.unlink(tmp_path)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 # --- Endpoints ---
@@ -198,7 +217,12 @@ def root():
 @app.post("/api/compile")
 def api_compile(req: CompileRequest):
     if req.sourcePath and req.projectRoot:
-        result = _compile_project_source(req.source, req.projectRoot, req.sourcePath)
+        try:
+            result = _compile_project_source(
+                req.source, req.projectRoot, req.sourcePath, req.editedFiles
+            )
+        except SystemExit as e:
+            raise HTTPException(status_code=400, detail=str(e))
     else:
         result = _run_pipeline(req.source)
     return serialize_compilation_result(result, backend=req.backend)
@@ -231,7 +255,12 @@ def api_assembly(req: AssemblyRequest):
 @app.post("/api/run")
 def api_run(req: RunRequest):
     if req.sourcePath and req.projectRoot:
-        result = _compile_project_source(req.source, req.projectRoot, req.sourcePath)
+        try:
+            result = _compile_project_source(
+                req.source, req.projectRoot, req.sourcePath, req.editedFiles
+            )
+        except SystemExit as e:
+            raise HTTPException(status_code=400, detail=str(e))
     else:
         result = _run_pipeline(req.source)
     if result.analyzer.errors:

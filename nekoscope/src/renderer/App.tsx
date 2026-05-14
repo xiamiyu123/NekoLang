@@ -202,6 +202,7 @@ export default function App() {
   const [isNewFile, setIsNewFile] = useState(false);
   const [fileTreeVisible, setFileTreeVisible] = useState(false);
   const entrySourceRef = useRef(DEFAULT_SOURCE);
+  const fileContentsRef = useRef<Record<string, string>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -273,7 +274,8 @@ export default function App() {
         effectiveSource,
         nextBackend,
         workspaceRoot ?? undefined,
-        effectiveSourcePath ?? undefined
+        effectiveSourcePath ?? undefined,
+        fileContentsRef.current
       );
       if (requestId === requestIdRef.current) {
         setResult(nextResult);
@@ -310,7 +312,8 @@ export default function App() {
         effectiveSource,
         backend,
         workspaceRoot ?? undefined,
-        effectiveSourcePath ?? undefined
+        effectiveSourcePath ?? undefined,
+        fileContentsRef.current
       );
       setRunResult(nextRunResult);
     } catch (error) {
@@ -344,12 +347,15 @@ export default function App() {
     window.localStorage.setItem(THEME_STORAGE_KEY, themePreference);
   }, [resolvedTheme, themePreference]);
 
-  // Keep entry source cache in sync when editing the entry file
+  // Keep file contents cache in sync with editor
   useEffect(() => {
+    if (activeFilePath) {
+      fileContentsRef.current[activeFilePath] = source;
+    }
     if (workspaceEntryFile && activeFilePath === workspaceEntryFile) {
       entrySourceRef.current = source;
     }
-  }, [source, workspaceEntryFile, activeFilePath]);
+  }, [source, activeFilePath, workspaceEntryFile]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -396,6 +402,7 @@ export default function App() {
       setSource(content);
       setActiveExample(null);
       setActiveFilePath(filePath);
+      fileContentsRef.current[filePath] = content;
       setWorkspaceRoot(null);
       setWorkspaceTree(null);
       setWorkspaceEntryFile(null);
@@ -431,6 +438,7 @@ export default function App() {
           setActiveFilePath(entryAbsPath);
           setWorkspaceEntryFile(entryAbsPath);
           entrySourceRef.current = entrySource;
+          fileContentsRef.current[entryAbsPath] = entrySource;
         } catch {
           setWorkspaceEntryFile(null);
         }
@@ -453,6 +461,7 @@ export default function App() {
       setIsNewFile(false);
       setRunResult(null);
       setActiveStage("overview");
+      fileContentsRef.current[file.path] = fileSource;
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "无法读取文件");
     }
@@ -486,19 +495,39 @@ export default function App() {
     }
   }, [canSaveDirectly, activeFilePath, source]);
 
-  const handleNewFile = useCallback(() => {
-    setSource("(nya t\n  (nyan ())\n  (paw\n    (meow \"Hello, NekoLang!\")))");
-    setActiveExample(null);
-    setActiveFilePath(null);
-    setWorkspaceRoot(null);
-    setWorkspaceTree(null);
-    setWorkspaceEntryFile(null);
-    setFileTreeVisible(false);
+  const handleNewFile = useCallback(async () => {
+    const template = "(nya t\n  (nyan ())\n  (paw\n    (meow \"Hello, NekoLang!\")))";
     setRunResult(null);
     setCompileFailure(null);
     setActiveStage("overview");
-    setIsNewFile(true);
-  }, []);
+
+    if (workspaceRoot) {
+      const defaultDir = workspaceRoot;
+      const savePath = await window.nekoscope.saveFile(`${defaultDir}/untitled.neko`);
+      if (!savePath) return;
+      try {
+        await window.nekoscope.writeFile(savePath, template);
+        setSource(template);
+        setActiveExample(null);
+        setActiveFilePath(savePath);
+        setIsNewFile(true);
+        fileContentsRef.current[savePath] = template;
+        const info = await openWorkspace(workspaceRoot);
+        setWorkspaceTree(info.tree.children ?? []);
+      } catch (error) {
+        setApiError(error instanceof Error ? error.message : "创建文件失败");
+      }
+    } else {
+      setSource(template);
+      setActiveExample(null);
+      setActiveFilePath(null);
+      setWorkspaceRoot(null);
+      setWorkspaceTree(null);
+      setWorkspaceEntryFile(null);
+      setFileTreeVisible(false);
+      setIsNewFile(true);
+    }
+  }, [workspaceRoot]);
 
   const completedStages = useMemo(() => computeCompletedStages(result), [result]);
   const activeStageInfo = findStage(activeStage);

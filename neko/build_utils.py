@@ -87,7 +87,13 @@ def _candidate_import_paths(
 ) -> list[str]:
     """Return candidate filesystem paths for an import."""
     if import_path.startswith("./"):
-        return [os.path.abspath(os.path.join(base_dir, import_path[2:] + ".neko"))]
+        rel = import_path[2:] + ".neko"
+        candidates = [os.path.abspath(os.path.join(base_dir, rel))]
+        for root in import_roots or []:
+            alt = os.path.abspath(os.path.join(root, rel))
+            if alt not in candidates:
+                candidates.append(alt)
+        return candidates
 
     search_roots = [base_dir, *(import_roots or [])]
     unique_roots: list[str] = []

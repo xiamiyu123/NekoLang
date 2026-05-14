@@ -73,7 +73,8 @@ export async function compile(
   source: string,
   backend: string = "auto",
   projectRoot?: string,
-  sourcePath?: string
+  sourcePath?: string,
+  editedFiles?: Record<string, string>
 ): Promise<CompileResult> {
   try {
     return await request<CompileResult>("/api/compile", {
@@ -84,6 +85,7 @@ export async function compile(
         backend,
         ...(projectRoot ? { projectRoot } : {}),
         ...(sourcePath ? { sourcePath } : {}),
+        ...(editedFiles && Object.keys(editedFiles).length > 0 ? { editedFiles } : {}),
       }),
     });
   } catch (error) {
@@ -99,7 +101,8 @@ export async function runProgram(
   source: string,
   backend: string = "auto",
   projectRoot?: string,
-  sourcePath?: string
+  sourcePath?: string,
+  editedFiles?: Record<string, string>
 ): Promise<RunResult> {
   return request<RunResult>("/api/run", {
     method: "POST",
@@ -109,6 +112,7 @@ export async function runProgram(
       backend,
       ...(projectRoot ? { projectRoot } : {}),
       ...(sourcePath ? { sourcePath } : {}),
+      ...(editedFiles && Object.keys(editedFiles).length > 0 ? { editedFiles } : {}),
     }),
   });
 }
