@@ -199,6 +199,7 @@ export default function App() {
   const [workspaceTree, setWorkspaceTree] = useState<WorkspaceFile[] | null>(null);
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [workspaceEntryFile, setWorkspaceEntryFile] = useState<string | null>(null);
+  const [isNewFile, setIsNewFile] = useState(false);
   const [fileTreeVisible, setFileTreeVisible] = useState(false);
   const entrySourceRef = useRef(DEFAULT_SOURCE);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -366,6 +367,7 @@ export default function App() {
       setCompileFailure(null);
       setRunResult(null);
       setActiveExample(name);
+      setIsNewFile(false);
       setSource(nextSource);
       setActiveStage("overview");
     } catch (error) {
@@ -381,6 +383,7 @@ export default function App() {
     setActiveFilePath(null);
     setWorkspaceEntryFile(null);
     setFileTreeVisible(false);
+    setIsNewFile(false);
     setSource(DEFAULT_SOURCE);
     setActiveStage("overview");
   }, []);
@@ -397,6 +400,7 @@ export default function App() {
       setWorkspaceTree(null);
       setWorkspaceEntryFile(null);
       setFileTreeVisible(false);
+      setIsNewFile(false);
       setRunResult(null);
       setActiveStage("overview");
     } catch (error) {
@@ -414,6 +418,7 @@ export default function App() {
       setWorkspaceTree(info.tree.children ?? []);
       setFileTreeVisible(true);
       setActiveExample(null);
+      setIsNewFile(false);
       setRunResult(null);
       setActiveStage("overview");
       if (info.entryFile) {
@@ -445,12 +450,55 @@ export default function App() {
       setSource(fileSource);
       setActiveFilePath(file.path);
       setActiveExample(null);
+      setIsNewFile(false);
       setRunResult(null);
       setActiveStage("overview");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "无法读取文件");
     }
   }, [workspaceRoot]);
+
+  const canSaveDirectly = activeFilePath !== null && activeExample === null;
+
+  const handleSave = useCallback(async () => {
+    try {
+      setApiError(null);
+      if (canSaveDirectly && activeFilePath) {
+        await window.nekoscope.writeFile(activeFilePath, source);
+        setIsNewFile(false);
+      } else {
+        const defaultName = activeFilePath
+          ? activeFilePath.slice(activeFilePath.lastIndexOf("/") + 1)
+          : "untitled.neko";
+        const savePath = await window.nekoscope.saveFile(defaultName);
+        if (!savePath) return;
+        await window.nekoscope.writeFile(savePath, source);
+        setActiveFilePath(savePath);
+        setActiveExample(null);
+        setWorkspaceRoot(null);
+        setWorkspaceTree(null);
+        setWorkspaceEntryFile(null);
+        setFileTreeVisible(false);
+        setIsNewFile(false);
+      }
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "保存失败");
+    }
+  }, [canSaveDirectly, activeFilePath, source]);
+
+  const handleNewFile = useCallback(() => {
+    setSource("(nya t\n  (nyan ())\n  (paw\n    (meow \"Hello, NekoLang!\")))");
+    setActiveExample(null);
+    setActiveFilePath(null);
+    setWorkspaceRoot(null);
+    setWorkspaceTree(null);
+    setWorkspaceEntryFile(null);
+    setFileTreeVisible(false);
+    setRunResult(null);
+    setCompileFailure(null);
+    setActiveStage("overview");
+    setIsNewFile(true);
+  }, []);
 
   const completedStages = useMemo(() => computeCompletedStages(result), [result]);
   const activeStageInfo = findStage(activeStage);
@@ -523,6 +571,10 @@ export default function App() {
           onFileSelect={handleFileSelect}
           fileTreeVisible={fileTreeVisible}
           onToggleFileTree={() => setFileTreeVisible((v) => !v)}
+          onSave={handleSave}
+          onNewFile={handleNewFile}
+          isNewFile={isNewFile}
+          canSaveDirectly={canSaveDirectly}
         />
 
         <div

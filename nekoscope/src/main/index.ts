@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { spawn, ChildProcess } from "child_process";
-import { readFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import {
   handleActivate,
@@ -129,6 +129,24 @@ ipcMain.handle("dialog:openFolder", async () => {
 
 ipcMain.handle("fs:readFile", async (_event, filePath: string) => {
   return readFile(filePath, "utf-8");
+});
+
+ipcMain.handle("fs:writeFile", async (_event, filePath: string, content: string) => {
+  await writeFile(filePath, content, "utf-8");
+});
+
+ipcMain.handle("dialog:saveFile", async (_event, defaultPath?: string) => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (!win) return null;
+  const result = await dialog.showSaveDialog(win, {
+    title: "Save NekoLang File",
+    defaultPath,
+    filters: [
+      { name: "NekoLang Source", extensions: ["neko"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+  return result.canceled ? null : result.filePath ?? null;
 });
 
 const lifecycle: NekoScopeLifecycle = {

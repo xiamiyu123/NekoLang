@@ -23,6 +23,10 @@ const baseProps = {
   onFileSelect: noop,
   fileTreeVisible: false,
   onToggleFileTree: noop,
+  onSave: noop,
+  onNewFile: noop,
+  isNewFile: false,
+  canSaveDirectly: false,
 };
 
 describe("SourceWorkbench", () => {

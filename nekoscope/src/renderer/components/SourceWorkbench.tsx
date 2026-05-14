@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import { BookOpen, FileUp, FolderOpen, Hammer, PanelLeftOpen, Play, RotateCcw } from "lucide-react";
+import { BookOpen, FilePlus, FileUp, FolderOpen, Hammer, PanelLeftOpen, Play, RotateCcw, Save } from "lucide-react";
 import type { ResolvedTheme } from "../styles/theme";
 import type { Example } from "../types/compiler";
 import type { WorkspaceFile } from "../types/workspace";
@@ -26,6 +26,10 @@ interface Props {
   onFileSelect: (file: WorkspaceFile) => void;
   fileTreeVisible: boolean;
   onToggleFileTree: () => void;
+  onSave: () => void;
+  onNewFile: () => void;
+  isNewFile: boolean;
+  canSaveDirectly: boolean;
 }
 
 export function SourceWorkbench({
@@ -47,6 +51,10 @@ export function SourceWorkbench({
   onFileSelect,
   fileTreeVisible,
   onToggleFileTree,
+  onSave,
+  onNewFile,
+  isNewFile,
+  canSaveDirectly,
 }: Props) {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -153,6 +161,18 @@ export function SourceWorkbench({
               <PanelLeftOpen size={16} />
             </button>
           )}
+          <button className="icon-button" type="button" onClick={onNewFile} title="新建文件" aria-label="新建文件">
+            <FilePlus size={16} />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onSave}
+            title={canSaveDirectly ? "保存" : "另存为"}
+            aria-label={canSaveDirectly ? "保存" : "另存为"}
+          >
+            <Save size={16} />
+          </button>
           <button className="icon-button" type="button" onClick={onCompileNow} title="立即编译" aria-label="立即编译">
             <Hammer size={16} />
           </button>
