@@ -1,6 +1,13 @@
 import { app, BrowserWindow } from "electron";
 import { spawn, ChildProcess } from "child_process";
 import { join } from "path";
+import {
+  handleActivate,
+  handleBeforeQuit,
+  handleReady,
+  handleWindowAllClosed,
+  type NekoScopeLifecycle,
+} from "./lifecycle";
 
 const API_PORT = 8000;
 let apiProcess: ChildProcess | null = null;
@@ -30,7 +37,9 @@ function createBackendEnv(): NodeJS.ProcessEnv {
   };
 }
 
-function startFastAPI(): void {
+async function ensureFastAPIReady(): Promise<void> {
+  if (apiProcess) return;
+
   apiProcess = spawn(getUvCommand(), ["run", "uvicorn", "neko.viz_api:app", "--port", String(API_PORT)], {
     cwd: getBackendRoot(),
     env: createBackendEnv(),
@@ -54,6 +63,8 @@ function startFastAPI(): void {
     console.error(`[FastAPI] failed to start: ${error.message}`);
     apiProcess = null;
   });
+
+  await new Promise((resolve) => setTimeout(resolve, 1500));
 }
 
 function stopFastAPI(): void {
@@ -89,25 +100,27 @@ async function createWindow(): Promise<void> {
   }
 }
 
+const lifecycle: NekoScopeLifecycle = {
+  platform: process.platform,
+  getWindowCount: () => BrowserWindow.getAllWindows().length,
+  ensureFastAPIReady,
+  stopFastAPI,
+  createWindow,
+  quitApp: () => app.quit(),
+};
+
 app.whenReady().then(async () => {
-  startFastAPI();
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  await createWindow();
+  await handleReady(lifecycle);
 
   app.on("activate", async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      await createWindow();
-    }
+    await handleActivate(lifecycle);
   });
 });
 
 app.on("before-quit", () => {
-  stopFastAPI();
+  handleBeforeQuit(lifecycle);
 });
 
 app.on("window-all-closed", () => {
-  stopFastAPI();
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  handleWindowAllClosed(lifecycle);
 });
