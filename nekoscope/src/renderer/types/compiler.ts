@@ -29,7 +29,9 @@ export interface SymbolEntry {
   name: string;
   type: string;
   category: string;
-  address: number;
+  address: number | null;
+  addressName?: string;
+  scope?: string;
 }
 
 /** Symbol table snapshot emitted by semantic analysis */

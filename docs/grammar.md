@@ -266,8 +266,10 @@
 |------|------|------|
 | NAME | 标识符名 | `a`, `b` |
 | TYPE | 数据类型 | `int`, `float`, `char`, `bool`, `string`, `pointer`, `(array int 10)`, `(func (int) int)` |
-| CAT | 类别 | `v`(变量), `c`(常量), `f`(函数/lambda/extern) |
-| ADDR | 地址偏移 | 0, 4, 8 |
+| CAT | 类别 | `program`(程序), `v`(变量), `p`(参数), `f`(函数/lambda/extern) |
+| SCOPE | 所属作用域 | `global`, `function:add`, `lambda:__lambda_1` |
+| ADDR | IR 地址名 | `I1`, `I2`, `add`, `example` |
+| OFFSET | 作用域内字节偏移 | 0, 4, 8 |
 
 ## 七、四元式格式
 
@@ -277,8 +279,8 @@
 
 | 四元式 | 含义 |
 |--------|------|
-| `(program, I1, _, _)` | 程序入口 |
-| `(end, I1, _, _)` | 程序结束 |
+| `(program, name, _, _)` | 程序入口 |
+| `(end, name, _, _)` | 程序结束 |
 | `(:=, addr, _, target)` | 赋值 |
 | `(op, left, right, temp)` | 算术/比较运算 |
 | `(if_false, cond, _, label)` | 条件跳转 |
@@ -308,7 +310,7 @@
 | `(char-upcase, c, _, temp)` | 转大写 |
 | `(char-downcase, c, _, temp)` | 转小写 |
 
-地址命名：变量=`I{n}`, 常量=`C{n}`, 临时变量=`T{n}`, 标签=`L{n}`
+地址命名：变量/参数=`I{n}`, 常量=`C{n}`, 临时变量=`T{n}`, 标签=`L{n}`；程序和函数使用其标识符名。
 
 ## 八、示例程序与四元式
 
@@ -324,11 +326,11 @@
 
 **四元式输出：**
 ```
-1: (program, I1, _, _)
-2: (:=, C1, _, I2)      ; a := 2
-3: (*, C2, I2, T1)      ; T1 := 5 * a
+1: (program, example, _, _)
+2: (:=, C1, _, I1)      ; a := 2
+3: (*, C2, I1, T1)      ; T1 := 5 * a
 4: (+, T1, C1, T2)      ; T2 := T1 + 2
-5: (:=, T2, _, I3)      ; b := T2
-6: (print, I3, _, _)    ; print b
-7: (end, I1, _, _)      ; 程序结束
+5: (:=, T2, _, I2)      ; b := T2
+6: (print, I2, _, _)    ; print b
+7: (end, example, _, _) ; 程序结束
 ```

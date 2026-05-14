@@ -5,6 +5,7 @@ interface Props {
 }
 
 const categoryLabel: Record<string, string> = {
+  program: "程序",
   v: "变量",
   f: "函数",
   p: "参数",
@@ -30,16 +31,20 @@ export function SymbolTablePanel({ symbols }: Props) {
                 <th>名字</th>
                 <th>类型</th>
                 <th>类别</th>
+                <th>作用域</th>
                 <th>地址</th>
+                <th>偏移</th>
               </tr>
             </thead>
             <tbody>
               {symbols.entries.map((entry) => (
-                <tr key={`${entry.name}-${entry.address}`}>
+                <tr key={`${entry.scope ?? "global"}-${entry.name}-${entry.addressName ?? entry.address ?? "none"}`}>
                   <td className="mono-cell">{entry.name}</td>
                   <td>{entry.type}</td>
                   <td>{categoryLabel[entry.category] ?? entry.category}</td>
-                  <td className="mono-cell">{entry.address}</td>
+                  <td className="mono-cell">{entry.scope ?? "global"}</td>
+                  <td className="mono-cell">{entry.addressName || "-"}</td>
+                  <td className="mono-cell">{entry.address ?? "-"}</td>
                 </tr>
               ))}
             </tbody>

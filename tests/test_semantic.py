@@ -56,8 +56,7 @@ class TestQuadruples(unittest.TestCase):
         assigns = [q for q in analyzer.quadruples if q.op == ":="]
         self.assertGreaterEqual(len(assigns), 1)
         q = assigns[0]
-        # I1 is the program name, I2 is the first variable
-        self.assertEqual(q.t, "I2")
+        self.assertEqual(q.t, "I1")
 
     def test_arithmetic(self):
         analyzer = compile_source("(program t (var ((a int))) (begin (:= a (+ 1 2))))")
@@ -375,9 +374,44 @@ class TestAddressNaming(unittest.TestCase):
             "(program t (var ((a int) (b int))) (begin (:= a 1) (:= b 2)))"
         )
         assigns = [q for q in analyzer.quadruples if q.op == ":="]
-        # I1 = program, I2 = a, I3 = b
-        self.assertEqual(assigns[0].t, "I2")
-        self.assertEqual(assigns[1].t, "I3")
+        self.assertEqual(assigns[0].t, "I1")
+        self.assertEqual(assigns[1].t, "I2")
+
+    def test_program_is_not_allocated_as_variable(self):
+        analyzer = compile_source("(program t (var ((a int))) (begin (:= a 1)))")
+        program = analyzer.symbol_table.lookup("t")
+        variable = analyzer.symbol_table.lookup("a")
+
+        self.assertIsNotNone(program)
+        self.assertEqual(program.cat, "program")
+        self.assertEqual(program.addr_name, "t")
+        self.assertIsNone(program.addr)
+        self.assertEqual(variable.addr_name, "I1")
+        self.assertEqual(analyzer.quadruples[0].ob1, "t")
+        self.assertEqual(analyzer.quadruples[-1].ob1, "t")
+
+    def test_function_symbol_records_full_signature(self):
+        analyzer = compile_source(
+            "(program t (begin (function add ((a int) (b int)) int (return (+ a b)))))"
+        )
+        entry = analyzer.symbol_table.lookup("add")
+
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.cat, "f")
+        self.assertEqual(entry.type, "(func (int int) int)")
+        self.assertEqual(entry.addr_name, "add")
+        self.assertIsNone(entry.addr)
+
+    def test_parameter_entries_keep_function_scope(self):
+        analyzer = compile_source(
+            "(program t (begin "
+            "(function id ((x int)) int (return x)) "
+            "(function twice ((x int)) int (return (+ x x)))))"
+        )
+        scoped_params = [(e.name, e.scope, e.addr_name, e.addr) for e in analyzer.symbol_table.entries if e.cat == "p"]
+
+        self.assertEqual(scoped_params[0], ("x", "function:id", "I1", 0))
+        self.assertEqual(scoped_params[1], ("x", "function:twice", "I2", 0))
 
     def test_constant_addresses(self):
         analyzer = compile_source("(program t (var ((a int))) (begin (:= a 42) (:= a 99)))")

@@ -449,9 +449,19 @@ class TestSymbolTableSerializer(unittest.TestCase):
         from neko.symbol_table import SymbolEntry
         from neko.viz_serializers import serialize_symbol_entry
 
-        entry = SymbolEntry(name="x", type="int", cat="v", addr=0)
+        entry = SymbolEntry(name="x", type="int", cat="v", addr=0, scope="global", addr_name="I1")
         result = serialize_symbol_entry(entry)
-        self.assertEqual(result, {"name": "x", "type": "int", "category": "v", "address": 0})
+        self.assertEqual(
+            result,
+            {
+                "name": "x",
+                "type": "int",
+                "category": "v",
+                "address": 0,
+                "addressName": "I1",
+                "scope": "global",
+            },
+        )
 
     def test_serialize_symbol_table(self):
         from neko.viz_serializers import serialize_symbol_table
@@ -461,6 +471,9 @@ class TestSymbolTableSerializer(unittest.TestCase):
         self.assertIn("entries", result)
         self.assertIn("constants", result)
         self.assertGreater(len(result["entries"]), 0)
+        self.assertEqual(result["entries"][0]["category"], "program")
+        self.assertEqual(result["entries"][1]["addressName"], "I1")
+        self.assertEqual(result["entries"][1]["scope"], "global")
         self.assertIn("42", result["constants"])
 
     def test_serialize_empty_symbol_table(self):

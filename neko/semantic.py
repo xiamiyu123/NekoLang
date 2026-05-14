@@ -87,18 +87,21 @@ class SemanticAnalyzer:
         return self.quadruples
 
     def _analyze_program(self, node: ProgramNode):
-        prog_addr = self.symbol_table.enter(node.name, "program", "v")
+        prog_addr = self.symbol_table.enter(node.name, "program", "program")
         self._emit("program", prog_addr, "_", "_")
         self._collect_function_definitions(node.block.body)
         self._analyze_block(node.block)
         self._emit("end", prog_addr, "_", "_")
+
+    def _function_type(self, params: list[tuple[str, str]], return_type: str) -> str:
+        return f"(func ({' '.join(type_ for _, type_ in params)}) {return_type})"
 
     def _collect_function_definitions(self, node: ASTNode):
         if isinstance(node, FuncDefNode):
             if self.symbol_table.lookup_current(node.name):
                 self._error(node, f"函数 '{node.name}' 已经声明过了", "duplicate_var")
             else:
-                self.symbol_table.enter(node.name, node.return_type, "f")
+                self.symbol_table.enter(node.name, self._function_type(node.params, node.return_type), "f")
                 self.function_signatures[node.name] = FunctionSignature(
                     param_types=[type_ for _, type_ in node.params],
                     return_type=node.return_type,
@@ -110,7 +113,8 @@ class SemanticAnalyzer:
             if self.symbol_table.lookup_current(node.name):
                 self._error(node, f"函数 '{node.name}' 已经声明过了", "duplicate_var")
             else:
-                self.symbol_table.enter(node.name, node.return_type, "f")
+                func_type = f"(func ({' '.join(node.param_types)}) {node.return_type})"
+                self.symbol_table.enter(node.name, func_type, "f")
                 self.function_signatures[node.name] = FunctionSignature(
                     param_types=list(node.param_types),
                     return_type=node.return_type,
@@ -121,8 +125,7 @@ class SemanticAnalyzer:
         if isinstance(node, LambdaDefNode):
             self.lambda_counter += 1
             node.name = f"__lambda_{self.lambda_counter}"
-            func_type = f"(func ({' '.join(t for _, t in node.params)}) {node.return_type})"
-            self.symbol_table.enter(node.name, func_type, "f")
+            self.symbol_table.enter(node.name, self._function_type(node.params, node.return_type), "f")
             self.function_signatures[node.name] = FunctionSignature(
                 param_types=[type_ for _, type_ in node.params],
                 return_type=node.return_type,
@@ -263,7 +266,7 @@ class SemanticAnalyzer:
         self.current_function_name = node.name
         self.current_function_return_type = node.return_type
         self.current_function_has_return = False
-        self.symbol_table.push_scope()
+        self.symbol_table.push_scope(f"lambda:{node.name}")
 
         for param_name, param_type in node.params:
             if self.symbol_table.lookup_current(param_name):
@@ -290,7 +293,7 @@ class SemanticAnalyzer:
         self.current_function_name = node.name
         self.current_function_return_type = node.return_type
         self.current_function_has_return = False
-        self.symbol_table.push_scope()
+        self.symbol_table.push_scope(f"function:{node.name}")
 
         for param_name, param_type in node.params:
             if self.symbol_table.lookup_current(param_name):

@@ -497,7 +497,14 @@ def serialize_quadruples(quads: list[Quadruple]) -> list[dict[str, str]]:
 
 
 def serialize_symbol_entry(entry: SymbolEntry) -> dict[str, Any]:
-    return {"name": entry.name, "type": entry.type, "category": entry.cat, "address": entry.addr}
+    return {
+        "name": entry.name,
+        "type": entry.type,
+        "category": entry.cat,
+        "address": entry.addr,
+        "addressName": entry.addr_name,
+        "scope": entry.scope,
+    }
 
 
 def serialize_symbol_table(table: SymbolTable) -> dict[str, Any]:

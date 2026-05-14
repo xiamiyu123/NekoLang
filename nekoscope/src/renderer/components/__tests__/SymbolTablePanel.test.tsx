@@ -7,7 +7,7 @@ describe("SymbolTablePanel", () => {
     render(
       <SymbolTablePanel
         symbols={{
-          entries: [{ name: "a", type: "int", category: "v", address: 1 }],
+          entries: [{ name: "a", type: "int", category: "v", address: 0, addressName: "I1", scope: "global" }],
           constants: { "42": 2 },
         }}
       />
@@ -16,6 +16,8 @@ describe("SymbolTablePanel", () => {
     expect(screen.getByText("a")).toBeTruthy();
     expect(screen.getByText("int")).toBeTruthy();
     expect(screen.getByText("变量")).toBeTruthy();
+    expect(screen.getByText("global")).toBeTruthy();
+    expect(screen.getByText("I1")).toBeTruthy();
     expect(screen.getByText("42")).toBeTruthy();
   });
 

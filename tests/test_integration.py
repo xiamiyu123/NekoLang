@@ -39,12 +39,12 @@ class TestCourseExample(unittest.TestCase):
         self.assertEqual(quads[0].op, "program")
         self.assertEqual(quads[1].op, ":=")
         self.assertEqual(quads[1].ob1, "C1")  # constant 2
-        self.assertEqual(quads[1].t, "I2")    # variable a
+        self.assertEqual(quads[1].t, "I1")    # variable a
 
         mul_q = next(q for q in quads if q.op == "*")
         add_q = next(q for q in quads if q.op == "+")
         self.assertEqual(mul_q.ob1, "C2")  # constant 5
-        self.assertEqual(mul_q.ob2, "I2")  # variable a
+        self.assertEqual(mul_q.ob2, "I1")  # variable a
         self.assertEqual(add_q.ob2, "C1")  # constant 2
 
         self.assertEqual(quads[-1].op, "end")
