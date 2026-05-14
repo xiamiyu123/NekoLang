@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld("nekoscope", {
   readFile: (path: string) => ipcRenderer.invoke("fs:readFile", path),
   writeFile: (path: string, content: string) => ipcRenderer.invoke("fs:writeFile", path, content),
   saveFile: (defaultPath?: string) => ipcRenderer.invoke("dialog:saveFile", defaultPath),
+  openInTerminal: (executablePath: string) => ipcRenderer.invoke("terminal:open", executablePath),
 });

@@ -158,15 +158,6 @@ function computeCompletedStages(result: CompileResult | null): Set<string> {
   return completed;
 }
 
-function pipelineStats(result: CompileResult | null) {
-  return [
-    { label: "Tokens", value: result?.tokens.length ?? 0 },
-    { label: "Symbols", value: result?.symbols.entries.length ?? 0 },
-    { label: "Quads", value: result?.quadruples.length ?? 0 },
-    { label: "Errors", value: result?.errors.length ?? 0 },
-  ];
-}
-
 function getInitialThemePreference(): ThemePreference {
   if (typeof window === "undefined") return "system";
   const storedPreference = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -316,6 +307,13 @@ export default function App() {
         fileContentsRef.current
       );
       setRunResult(nextRunResult);
+      if (nextRunResult.executablePath) {
+        try {
+          await window.nekoscope.openInTerminal(nextRunResult.executablePath);
+        } catch {
+          // Terminal launch is best-effort
+        }
+      }
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "运行失败");
     } finally {
@@ -531,7 +529,6 @@ export default function App() {
 
   const completedStages = useMemo(() => computeCompletedStages(result), [result]);
   const activeStageInfo = findStage(activeStage);
-  const stats = pipelineStats(result);
   const errors = result?.errors ?? [];
   const ThemeIcon = themePreference === "light"
     ? Sun
@@ -560,14 +557,6 @@ export default function App() {
             <h1>NekoScope</h1>
             <p>NekoLang 编译管线可视化平台 · {themePreferenceLabels[themePreference]}</p>
           </div>
-        </div>
-        <div className="status-cluster">
-          {stats.map((item) => (
-            <div className="stat-pill" key={item.label}>
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-            </div>
-          ))}
         </div>
       </header>
 

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { spawn, ChildProcess } from "child_process";
-import { readFile, writeFile } from "fs/promises";
+import { chmod, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import {
   handleActivate,
@@ -133,6 +133,24 @@ ipcMain.handle("fs:readFile", async (_event, filePath: string) => {
 
 ipcMain.handle("fs:writeFile", async (_event, filePath: string, content: string) => {
   await writeFile(filePath, content, "utf-8");
+});
+
+ipcMain.handle("terminal:open", async (_event, executablePath: string) => {
+  if (process.platform === "darwin") {
+    const scriptPath = `${executablePath}.command`;
+    const script = `#!/bin/bash\nclear\n"${executablePath}"\necho\necho "--- 程序已结束 ---"\nread -p "按 Enter 关闭窗口..."\n`;
+    await writeFile(scriptPath, script, "utf-8");
+    await chmod(scriptPath, 0o755);
+    spawn("open", ["-a", "Terminal", scriptPath], { detached: true });
+  } else if (process.platform === "linux") {
+    const scriptPath = `${executablePath}.sh`;
+    const script = `#!/bin/sh\nclear\n"${executablePath}"\necho\necho "--- 程序已结束 ---"\nread -p "按 Enter 关闭窗口..."\n`;
+    await writeFile(scriptPath, script, "utf-8");
+    await chmod(scriptPath, 0o755);
+    spawn("x-terminal-emulator", ["-e", scriptPath], { detached: true });
+  } else if (process.platform === "win32") {
+    spawn("cmd", ["/k", executablePath], { detached: true });
+  }
 });
 
 ipcMain.handle("dialog:saveFile", async (_event, defaultPath?: string) => {

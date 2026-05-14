@@ -6,27 +6,17 @@ interface Props {
   running: boolean;
 }
 
-function visibleText(value: string): string {
-  return value.length > 0 ? value : "无输出";
-}
-
 export function RunOutputPanel({ result, running }: Props) {
   if (!result && !running) return null;
 
-  const status = running
-    ? "运行中"
-    : result?.timedOut
-      ? "运行超时"
-      : `退出码 ${result?.exitCode ?? "-"}`;
-
   return (
-    <section className={`run-output-panel ${result?.timedOut ? "timeout" : ""}`} aria-live="polite">
+    <section className="run-output-panel" aria-live="polite">
       <div className="run-output-head">
         <div>
           <Terminal size={16} />
           <strong>运行结果</strong>
         </div>
-        <code>{status}</code>
+        <code>{running ? "编译中" : result?.executablePath ? "已启动终端" : "编译失败"}</code>
       </div>
 
       {result?.compileError ? (
@@ -50,17 +40,10 @@ export function RunOutputPanel({ result, running }: Props) {
       ) : null}
 
       {running ? (
-        <div className="run-output-pending">正在编译并运行当前源码。</div>
-      ) : result && result.errors.length === 0 && !result.compileError ? (
-        <div className="run-output-grid">
-          <div>
-            <span>stdout</span>
-            <pre className="run-output-block">{visibleText(result.stdout)}</pre>
-          </div>
-          <div>
-            <span>stderr</span>
-            <pre className="run-output-block">{visibleText(result.stderr)}</pre>
-          </div>
+        <div className="run-output-pending">正在编译并在终端中启动程序。</div>
+      ) : result && result.errors.length === 0 && !result.compileError && result.executablePath ? (
+        <div className="run-output-pending" style={{ color: "var(--leaf)" }}>
+          程序已在系统终端中启动。
         </div>
       ) : null}
     </section>

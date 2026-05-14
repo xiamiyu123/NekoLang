@@ -265,37 +265,6 @@ button {
   font-size: 13px;
 }
 
-.status-cluster {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.stat-pill {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 92px;
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-}
-
-.stat-pill span {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.stat-pill strong {
-  justify-self: end;
-  color: var(--text);
-  font-size: 15px;
-}
-
 .workspace-grid {
   display: grid;
   grid-template-columns:
@@ -1421,10 +1390,6 @@ button {
     gap: 12px;
   }
 
-  .status-cluster {
-    flex-wrap: wrap;
-  }
-
   .workspace-grid {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(420px, 46vh) minmax(520px, 1fr);
@@ -1476,14 +1441,6 @@ button {
 @media (max-width: 720px) {
   .topbar {
     display: grid;
-  }
-
-  .status-cluster {
-    justify-content: flex-start;
-  }
-
-  .stat-pill {
-    min-width: 76px;
   }
 
   .example-strip {

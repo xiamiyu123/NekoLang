@@ -68,7 +68,6 @@ class AssemblyRequest(BaseModel):
 class RunRequest(BaseModel):
     source: str
     backend: str = "auto"
-    timeoutSeconds: float = 5.0
     projectRoot: str | None = None
     sourcePath: str | None = None
     editedFiles: dict[str, str] | None = None
@@ -221,6 +220,8 @@ def api_compile(req: CompileRequest):
             result = _compile_project_source(
                 req.source, req.projectRoot, req.sourcePath, req.editedFiles
             )
+        except NekoError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except SystemExit as e:
             raise HTTPException(status_code=400, detail=str(e))
     else:
@@ -252,6 +253,13 @@ def api_assembly(req: AssemblyRequest):
     return {"assembly": artifact.text}
 
 
+def _nekoscope_runs_dir() -> str:
+    """Ensure ~/.nekoscope/runs/ exists and return its path."""
+    runs_dir = os.path.join(os.path.expanduser("~"), ".nekoscope", "runs")
+    os.makedirs(runs_dir, exist_ok=True)
+    return runs_dir
+
+
 @app.post("/api/run")
 def api_run(req: RunRequest):
     if req.sourcePath and req.projectRoot:
@@ -259,16 +267,15 @@ def api_run(req: RunRequest):
             result = _compile_project_source(
                 req.source, req.projectRoot, req.sourcePath, req.editedFiles
             )
+        except NekoError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except SystemExit as e:
             raise HTTPException(status_code=400, detail=str(e))
     else:
         result = _run_pipeline(req.source)
     if result.analyzer.errors:
         return {
-            "stdout": "",
-            "stderr": "",
-            "exitCode": None,
-            "timedOut": False,
+            "executablePath": "",
             "errors": serialize_errors(result.analyzer.errors),
             "compileError": "",
         }
@@ -284,45 +291,29 @@ def api_run(req: RunRequest):
             except Exception:
                 pass
 
-    timeout = max(0.1, min(req.timeoutSeconds, 30.0))
-    with tempfile.TemporaryDirectory() as tmpdir:
-        output = os.path.join(tmpdir, "nekoscope-run")
-        compile_stderr = io.StringIO()
+    # Compile to a persistent location so the terminal can run it
+    runs_dir = _nekoscope_runs_dir()
+    # Clean old executables
+    for old in os.listdir(runs_dir):
         try:
-            with contextlib.redirect_stderr(compile_stderr):
-                compile_to_executable(result.ast, output, backend=req.backend, c_build_config=c_build_config)
-        except SystemExit:
-            return {
-                "stdout": "",
-                "stderr": compile_stderr.getvalue(),
-                "exitCode": None,
-                "timedOut": False,
-                "errors": [],
-                "compileError": compile_stderr.getvalue(),
-            }
+            os.unlink(os.path.join(runs_dir, old))
+        except Exception:
+            pass
 
-        try:
-            proc = subprocess.run(
-                [output],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-        except subprocess.TimeoutExpired as exc:
-            return {
-                "stdout": exc.stdout or "",
-                "stderr": exc.stderr or "",
-                "exitCode": None,
-                "timedOut": True,
-                "errors": [],
-                "compileError": "",
-            }
+    output = os.path.join(runs_dir, "nekoscope-run")
+    compile_stderr = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(compile_stderr):
+            compile_to_executable(result.ast, output, backend=req.backend, c_build_config=c_build_config)
+    except SystemExit:
+        return {
+            "executablePath": "",
+            "errors": [],
+            "compileError": compile_stderr.getvalue(),
+        }
 
     return {
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
-        "exitCode": proc.returncode,
-        "timedOut": False,
+        "executablePath": output,
         "errors": [],
         "compileError": "",
     }

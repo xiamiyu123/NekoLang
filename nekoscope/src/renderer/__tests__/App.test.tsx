@@ -7,6 +7,11 @@ vi.mock("@monaco-editor/react", () => ({
   default: () => <div data-testid="monaco-editor" />,
 }));
 
+Object.defineProperty(window, "nekoscope", {
+  value: { openInTerminal: vi.fn() },
+  writable: true,
+});
+
 function mockApi(
   compileResponse: Response = new Response(JSON.stringify({
     source: "(nya t)",
@@ -29,10 +34,7 @@ function mockApi(
     }
     if (url.endsWith("/api/run")) {
       return new Response(JSON.stringify({
-        stdout: "42\n",
-        stderr: "",
-        exitCode: 0,
-        timedOut: false,
+        executablePath: "/tmp/nekoscope-test-run",
         errors: [],
         compileError: "",
       }), { status: 200 });
@@ -106,7 +108,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByText("运行结果")).toBeTruthy();
     });
-    expect(screen.getByText("退出码 0")).toBeTruthy();
-    expect(screen.getByText("42")).toBeTruthy();
+    expect(screen.getByText("已启动终端")).toBeTruthy();
+    expect(screen.getByText("程序已在系统终端中启动。")).toBeTruthy();
   });
 });

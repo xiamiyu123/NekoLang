@@ -85,10 +85,7 @@ export interface CompileResult {
 }
 
 export interface RunResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-  timedOut: boolean;
+  executablePath: string;
   errors: CompileError[];
   compileError: string;
 }
