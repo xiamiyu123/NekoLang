@@ -149,7 +149,31 @@ ipcMain.handle("terminal:open", async (_event, executablePath: string) => {
     await chmod(scriptPath, 0o755);
     spawn("x-terminal-emulator", ["-e", scriptPath], { detached: true });
   } else if (process.platform === "win32") {
-    spawn("cmd", ["/k", executablePath], { detached: true });
+    const { existsSync } = await import("fs");
+    console.log(`[terminal:open] executablePath: ${executablePath}`);
+    console.log(`[terminal:open] file exists: ${existsSync(executablePath)}`);
+
+    const scriptPath = `${executablePath}.ps1`;
+    const BOM = "﻿";
+    const script = BOM + [
+      "Clear-Host",
+      `Write-Host '正在运行: ${executablePath}'`,
+      `& "${executablePath}"; exit $LASTEXITCODE`,
+      "",
+      "Write-Host '--- 程序已结束 ---'",
+      "Read-Host '按 Enter 关闭窗口'",
+    ].join("\r\n") + "\r\n";
+
+    await writeFile(scriptPath, script, "utf-8");
+    console.log(`[terminal:open] ps1 written: ${scriptPath}`);
+
+    const child = spawn(
+      "cmd",
+      ["/c", "start", "", "powershell", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
+      { detached: true }
+    );
+    child.on("error", (err) => console.error(`[terminal:open] spawn error: ${err.message}`));
+    child.unref();
   }
 });
 
