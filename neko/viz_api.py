@@ -10,6 +10,7 @@ import io
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from fastapi import FastAPI, HTTPException
@@ -301,6 +302,8 @@ def api_run(req: RunRequest):
             pass
 
     output = os.path.join(runs_dir, "nekoscope-run")
+    if sys.platform == "win32":
+        output += ".exe"
     compile_stderr = io.StringIO()
     try:
         with contextlib.redirect_stderr(compile_stderr):
