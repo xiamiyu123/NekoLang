@@ -543,6 +543,15 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertIn("b", names)
         self.assertIn("a", names)
 
+    def test_quadruple_dag_omits_blocks_without_nodes(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (paw (meow 1)))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+
+        self.assertEqual(serialized["quadrupleDag"]["blocks"], [])
+
     def test_serialize_compilation_result_includes_optimized_quadruples(self):
         from neko.viz_serializers import serialize_compilation_result
 
