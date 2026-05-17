@@ -1,0 +1,21 @@
+; 测试基本函数定义与调用
+; 运行: uv run neko run test_cases/01_func_basic.neko
+(program func_basic
+  (var ((a int) (b int) (c int)))
+  (begin
+    ; 无参函数
+    (function get_const () int
+      (return 42))
+    ; 单参函数
+    (function double ((x int)) int
+      (return (* x 2)))
+    ; 多参函数
+    (function add_three ((x int) (y int) (z int)) int
+      (return (+ (+ x y) z)))
+    ; 嵌套函数调用
+    (:= a (get_const))
+    (:= b (double a))
+    (:= c (add_three 1 2 3))
+    (print a)
+    (print b)
+    (print c)))

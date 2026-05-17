@@ -1,0 +1,18 @@
+; 测试字符操作
+; 运行: uv run neko run test_cases/13_char.neko
+(program char_demo
+  (var ((c char) (n int)))
+  (begin
+    (:= c 'a')
+    (:= n (char-to-int c))
+    (print n)
+    (:= c (int-to-char 65))
+    (print c)
+    (print (is-letter c))
+    (print (is-digit c))
+    (:= c '7')
+    (print (is-digit c))
+    (:= c (char-upcase 'x'))
+    (print c)
+    (:= c (char-downcase 'Z'))
+    (print c)))

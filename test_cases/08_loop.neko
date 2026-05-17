@@ -1,0 +1,21 @@
+; 测试循环语句（while）
+; 运行: uv run neko run test_cases/08_loop.neko
+(program loop
+  (var ((i int) (sum int) (fact int)))
+  (begin
+    ; 累加 1 到 10
+    (:= i 1)
+    (:= sum 0)
+    (while (<= i 10)
+      (begin
+        (:= sum (+ sum i))
+        (:= i (+ i 1))))
+    (print sum)
+    ; 计算 5!
+    (:= i 1)
+    (:= fact 1)
+    (while (<= i 5)
+      (begin
+        (:= fact (* fact i))
+        (:= i (+ i 1))))
+    (print fact)))

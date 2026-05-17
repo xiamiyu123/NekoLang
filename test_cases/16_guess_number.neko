@@ -1,0 +1,25 @@
+; 猜数字游戏（使用命令行参数传入猜测值）
+; 运行: uv run neko run test_cases/16_guess_number.neko -- 30 50 42
+; 输出: 1(太小) 2(太大) 0(猜中)
+(program guess_number
+  (var ((count int) (index int) (guess int) (secret int) (solved int)))
+  (begin
+    (:= count (argc))
+    (:= index 0)
+    (:= secret 42)
+    (:= solved 0)
+    (while (< index count)
+      (begin
+        (if (= solved 0)
+          (begin
+            (:= guess (argv-int index))
+            (if (< guess secret)
+              (print 1)
+              (if (> guess secret)
+                (print 2)
+                (begin
+                  (print 0)
+                  (:= solved 1)))))
+          (:= solved solved))
+        (:= index (+ index 1))))
+    (print solved)))

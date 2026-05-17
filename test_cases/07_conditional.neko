@@ -1,0 +1,27 @@
+; 测试条件语句（if 嵌套）
+; 运行: uv run neko run test_cases/07_conditional.neko
+(program conditional
+  (var ((score int) (grade int)))
+  (begin
+    (:= score 85)
+    (if (>= score 90)
+      (:= grade 1)
+      (if (>= score 80)
+        (:= grade 2)
+        (if (>= score 70)
+          (:= grade 3)
+          (if (>= score 60)
+            (:= grade 4)
+            (:= grade 5)))))
+    (print grade)
+    (:= score 55)
+    (if (>= score 90)
+      (:= grade 1)
+      (if (>= score 80)
+        (:= grade 2)
+        (if (>= score 70)
+          (:= grade 3)
+          (if (>= score 60)
+            (:= grade 4)
+            (:= grade 5)))))
+    (print grade)))

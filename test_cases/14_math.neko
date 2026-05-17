@@ -1,0 +1,27 @@
+; 测试数学运算与比较
+; 运行: uv run neko run test_cases/14_math.neko
+(program math_demo
+  (var ((a int) (b int) (c int) (x float) (y float) (z float)))
+  (begin
+    (:= a 17)
+    (:= b 5)
+    (:= c (+ a b))
+    (print c)
+    (:= c (- a b))
+    (print c)
+    (:= c (* a b))
+    (print c)
+    (:= c (/ a b))
+    (print c)
+    (print (< a b))
+    (print (> a b))
+    (print (= a b))
+    (print (<= a b))
+    (print (>= a b))
+    (print (!= a b))
+    (:= x 3.5)
+    (:= y 2.0)
+    (:= z (+ x y))
+    (print z)
+    (:= z (* x y))
+    (print z)))

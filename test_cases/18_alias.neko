@@ -1,0 +1,15 @@
+; 测试个性化关键字别名
+; 运行: uv run neko run test_cases/18_alias.neko
+(nya alias_demo
+  (nyan ((a int) (b int) (c int)))
+  (paw
+    (:= a 10)
+    (:= b 20)
+    (nyaa-def sum ((x int) (y int)) int
+      (return (+ x y)))
+    (:= c (sum a b))
+    (meow c)
+    (purr-while (> c 0)
+      (paw
+        (meow c)
+        (:= c (- c 1))))))

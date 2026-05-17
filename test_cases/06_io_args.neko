@@ -1,0 +1,15 @@
+; 测试命令行参数读取
+; 运行: uv run neko run test_cases/06_io_args.neko -- 42 3.14 hello true
+(program io_args
+  (var ((count int) (i int) (n int) (f float) (s string) (flag bool)))
+  (begin
+    (:= count (argc))
+    (print count)
+    (:= n (argv-int 0))
+    (:= f (argv-float 1))
+    (:= s (argv-string 2))
+    (:= flag (argv-bool 3))
+    (print n)
+    (print f)
+    (print s)
+    (print flag)))

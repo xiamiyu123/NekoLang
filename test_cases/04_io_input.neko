@@ -1,0 +1,12 @@
+; 测试标准输入读取
+; 运行: printf '10 20\n' | uv run neko run test_cases/04_io_input.neko
+(program io_input
+  (var ((a int) (b int) (f float) (ch char)))
+  (begin
+    (:= a (input-int))
+    (:= b (input-int))
+    (:= f (input-float))
+    (:= ch (input-char))
+    (print (+ a b))
+    (print f)
+    (print ch)))

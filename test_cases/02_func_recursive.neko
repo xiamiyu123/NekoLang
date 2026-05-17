@@ -1,0 +1,18 @@
+; 测试递归函数（阶乘与斐波那契）
+; 运行: uv run neko run test_cases/02_func_recursive.neko
+(program func_recursive
+  (var ((n int) (result int)))
+  (begin
+    (function factorial ((x int)) int
+      (if (<= x 1)
+        (return 1)
+        (return (* x (factorial (- x 1))))))
+    (function fibonacci ((x int)) int
+      (if (<= x 1)
+        (return x)
+        (return (+ (fibonacci (- x 1)) (fibonacci (- x 2))))))
+    (:= n 5)
+    (:= result (factorial n))
+    (print result)
+    (:= result (fibonacci 10))
+    (print result)))

@@ -1,0 +1,22 @@
+; 测试数组操作（array-print 只打印单个元素，需要循环）
+; 运行: uv run neko run test_cases/09_array.neko
+(program array_demo
+  (var ((arr (array int 5)) (i int)))
+  (begin
+    (:= i 0)
+    (while (< i 5)
+      (begin
+        (array-set arr i (* i i))
+        (:= i (+ i 1))))
+    (:= i 0)
+    (while (< i 5)
+      (begin
+        (array-print arr i)
+        (:= i (+ i 1))))
+    (array-set arr 2 99)
+    (:= i 0)
+    (while (< i 5)
+      (begin
+        (array-print arr i)
+        (:= i (+ i 1))))
+    (print 999)))

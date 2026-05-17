@@ -1,0 +1,22 @@
+; 测试布尔类型与比较运算
+; 运行: uv run neko run test_cases/15_bool.neko
+(program bool_demo
+  (var ((flag1 bool) (flag2 bool) (flag3 bool)))
+  (begin
+    (:= flag1 true)
+    (:= flag2 false)
+    (print flag1)
+    (print flag2)
+    ; 布尔值通过比较运算产生
+    (:= flag3 (= 1 1))
+    (print flag3)
+    (:= flag3 (!= 1 2))
+    (print flag3)
+    (:= flag3 (> 5 3))
+    (print flag3)
+    (:= flag3 (<= 2 2))
+    (print flag3)
+    (:= flag3 (< 3 7))
+    (print flag3)
+    (:= flag3 (>= 10 10))
+    (print flag3)))

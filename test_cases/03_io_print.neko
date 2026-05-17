@@ -1,0 +1,16 @@
+; 测试多种类型的输出
+; 运行: uv run neko run test_cases/03_io_print.neko
+(program io_print
+  (var ((x int) (y float) (flag bool) (c char)))
+  (begin
+    (:= x 42)
+    (:= y 3.14)
+    (:= flag true)
+    (:= c 'A')
+    (print x)
+    (print y)
+    (print flag)
+    (print c)
+    (print "Hello NekoLang")
+    (print (+ x 8))
+    (print (> x 10))))

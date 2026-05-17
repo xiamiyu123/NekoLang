@@ -1,0 +1,15 @@
+; 测试 import 导入其他 .neko 文件
+; 注意: import 只接受 identifier，文件必须与源文件同目录
+; 被导入文件: test_cases/math_utils.neko
+; 运行: uv run neko run test_cases/17_import.neko
+(import math_utils)
+
+(program import_demo
+  (var ((x int) (y int) (z int)))
+  (begin
+    (:= x (add 3 5))
+    (:= y (mul 4 7))
+    (:= z (max x y))
+    (print x)
+    (print y)
+    (print z)))

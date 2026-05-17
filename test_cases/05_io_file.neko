@@ -1,0 +1,18 @@
+; 测试文件读写（文件保存到运行目录）
+; Nekoscope: 文件写在 ~/test_out_*.txt
+; 终端: 文件写在当前目录 test_out_*.txt
+(program io_file
+  (var ((a int) (b float) (c char) (flag bool)))
+  (begin
+    (write-int "test_out_int.txt" 123)
+    (write-float "test_out_float.txt" 2.718)
+    (write-char "test_out_char.txt" 'Z')
+    (write-bool "test_out_bool.txt" true)
+    (:= a (read-int "test_out_int.txt"))
+    (:= b (read-float "test_out_float.txt"))
+    (:= c (read-char "test_out_char.txt"))
+    (:= flag (read-bool "test_out_bool.txt"))
+    (print a)
+    (print b)
+    (print c)
+    (print flag)))

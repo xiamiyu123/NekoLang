@@ -1,0 +1,22 @@
+; 测试 lambda 与高阶函数
+; 运行: uv run neko run test_cases/10_lambda.neko
+(program lambda_demo
+  (var ((double (func (int) int))
+        (add (func (int int) int))
+        (f (func (int) int))
+        (result int)))
+  (begin
+    (:= double (lambda ((n int)) int (return (* n 2))))
+    (function apply ((g (func (int) int)) (x int)) int
+      (return (g x)))
+    (function apply2 ((g (func (int int) int)) (a int) (b int)) int
+      (return (g a b)))
+    (function square ((n int)) int (return (* n n)))
+    (:= result (apply double 5))
+    (print result)
+    (:= add (lambda ((a int) (b int)) int (return (+ a b))))
+    (:= result (apply2 add 3 4))
+    (print result)
+    (:= f square)
+    (:= result (apply f 6))
+    (print result)))

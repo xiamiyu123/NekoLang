@@ -1,0 +1,12 @@
+; 测试随机数生成
+; 运行: uv run neko run test_cases/12_random.neko
+(program random_demo
+  (var ((a int) (b int) (c int)))
+  (begin
+    (rand-seed 42)
+    (:= a (rand-range 1 100))
+    (:= b (rand-range 1 100))
+    (:= c (rand-range 1 100))
+    (print a)
+    (print b)
+    (print c)))
