@@ -160,9 +160,15 @@ export async function getExamples(): Promise<Example[]> {
 }
 
 export async function getExampleSource(name: string): Promise<string> {
-  if (name === BUILTIN_DAG_EXAMPLE_NAME) return BUILTIN_DAG_EXAMPLE_SOURCE;
-  const data = await request<{ source: string }>(`/api/examples/${name}`);
-  return data.source;
+  try {
+    const data = await request<{ source: string }>(`/api/examples/${name}`);
+    return data.source;
+  } catch (error) {
+    if (name === BUILTIN_DAG_EXAMPLE_NAME && error instanceof ApiRequestError && error.status === 404) {
+      return BUILTIN_DAG_EXAMPLE_SOURCE;
+    }
+    throw error;
+  }
 }
 
 export async function openWorkspace(folderPath: string): Promise<WorkspaceInfo> {

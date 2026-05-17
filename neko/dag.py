@@ -178,15 +178,18 @@ def _format_quad(index: int, quad: Quadruple, labels: dict[str, str]) -> dict[st
 
 def build_quadruple_dags(quadruples: list[Quadruple], labels: dict[str, str] | None = None) -> dict[str, Any]:
     labels = labels or {}
-    blocks = _split_basic_blocks(quadruples)
-    dags = [DagBuilder(labels).build(block, index + 1) for index, block in enumerate(blocks)]
+    raw_blocks = _split_basic_blocks(quadruples)
+    dags = [
+        (block, DagBuilder(labels).build(block, index + 1))
+        for index, block in enumerate(raw_blocks)
+    ]
     return {
         "blocks": [
             {
                 "blockIndex": dag.block_index,
                 "startQuad": dag.start_quad,
                 "endQuad": dag.end_quad,
-                "statements": [_format_quad(quad_index, quad, labels) for quad_index, quad in blocks[index]],
+                "statements": [_format_quad(quad_index, quad, labels) for quad_index, quad in block],
                 "nodes": [
                     {
                         "id": node.id,
@@ -200,6 +203,7 @@ def build_quadruple_dags(quadruples: list[Quadruple], labels: dict[str, str] | N
                 "edges": list(dag.edges),
                 "skipped": list(dag.skipped),
             }
-            for index, dag in enumerate(dags)
+            for block, dag in dags
+            if dag.nodes
         ]
     }
