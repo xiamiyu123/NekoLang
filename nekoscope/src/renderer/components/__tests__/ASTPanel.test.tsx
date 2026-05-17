@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ASTPanel, astToFlow } from "../ASTPanel";
 import type { ASTNode } from "../../types/compiler";
 
@@ -66,5 +67,18 @@ describe("ASTPanel", () => {
     render(<ASTPanel ast={fnDef} theme="dark" />);
     // react-flow renders its container
     expect(document.querySelector(".react-flow")).toBeTruthy();
+  });
+
+  it("opens and closes the full AST overview", async () => {
+    const user = userEvent.setup();
+    render(<ASTPanel ast={fnDef} theme="dark" />);
+
+    expect(screen.queryByRole("dialog", { name: "语法树全貌" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "查看语法树全貌" }));
+    expect(screen.getByRole("dialog", { name: "语法树全貌" })).toBeTruthy();
+    expect(screen.getByText("FunctionDef")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "关闭语法树全貌" }));
+    expect(screen.queryByRole("dialog", { name: "语法树全貌" })).toBeNull();
   });
 });

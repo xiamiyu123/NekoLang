@@ -1,9 +1,14 @@
 import { useState } from "react";
-import type { Quadruple, QuadrupleOptimization } from "../types/compiler";
+import type { Quadruple, QuadrupleDag, QuadrupleOptimization } from "../types/compiler";
+import { QuadrupleDagPanel } from "./QuadrupleDagPanel";
+import type { ResolvedTheme } from "../styles/theme";
+import { buildQuadrupleDag } from "../quadrupleDag";
 
 interface Props {
   quadruples: Quadruple[] | null;
   optimization?: QuadrupleOptimization | null;
+  dag?: QuadrupleDag | null;
+  theme: ResolvedTheme;
 }
 
 type QuadView = "initial" | "process" | "optimized";
@@ -57,7 +62,7 @@ function ConstantMap({ constants }: { constants?: Record<string, string | number
   );
 }
 
-export function QuadruplePanel({ quadruples, optimization }: Props) {
+export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) {
   const [activeView, setActiveView] = useState<QuadView>("initial");
 
   if (!quadruples) {
@@ -71,6 +76,8 @@ export function QuadruplePanel({ quadruples, optimization }: Props) {
   const initialRows = optimization?.initial ?? quadruples;
   const optimizedRows = optimization?.optimized ?? quadruples;
   const steps = optimization?.steps ?? [];
+  const fallbackDag = buildQuadrupleDag(initialRows, optimization?.initialConstants);
+  const visibleDag = dag && dag.blocks.length > 0 ? dag : fallbackDag;
 
   return (
     <div className="quad-panel">
@@ -123,23 +130,26 @@ export function QuadruplePanel({ quadruples, optimization }: Props) {
         ) : null}
 
         {activeView === "process" ? (
-          <div className="quad-steps">
-            {steps.length === 0 ? (
-              <div className="empty-panel compact">当前编译结果没有提供优化过程。</div>
-            ) : (
-              steps.map((step, index) => (
-                <div className="quad-step" key={`${index}-${step.name}`}>
-                  <span className={`quad-step-index ${step.changed ? "changed" : ""}`}>
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <div>
-                    <strong>{step.name}</strong>
-                    <p>{step.detail}</p>
+          <div className="quad-process">
+            <QuadrupleDagPanel dag={visibleDag} theme={theme} />
+            <div className="quad-steps">
+              {steps.length === 0 ? (
+                <div className="empty-panel compact">当前编译结果没有提供优化过程。</div>
+              ) : (
+                steps.map((step, index) => (
+                  <div className="quad-step" key={`${index}-${step.name}`}>
+                    <span className={`quad-step-index ${step.changed ? "changed" : ""}`}>
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <strong>{step.name}</strong>
+                      <p>{step.detail}</p>
+                    </div>
+                    <code>{step.beforeCount}{" -> "}{step.afterCount}</code>
                   </div>
-                  <code>{step.beforeCount}{" -> "}{step.afterCount}</code>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         ) : null}
 

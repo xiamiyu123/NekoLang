@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { spawn, ChildProcess } from "child_process";
-import { chmod, readFile, writeFile } from "fs/promises";
+import { chmod, copyFile, readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import {
   handleActivate,
@@ -150,18 +150,31 @@ ipcMain.handle("terminal:open", async (_event, executablePath: string) => {
     spawn("x-terminal-emulator", ["-e", scriptPath], { detached: true });
   } else if (process.platform === "win32") {
     const { existsSync } = await import("fs");
+    let actualExecutablePath = executablePath;
+    if (!actualExecutablePath.toLowerCase().endsWith(".exe")) {
+      const exePath = `${actualExecutablePath}.exe`;
+      if (existsSync(exePath)) {
+        actualExecutablePath = exePath;
+      } else if (existsSync(actualExecutablePath)) {
+        await copyFile(actualExecutablePath, exePath);
+        actualExecutablePath = exePath;
+      }
+    }
     console.log(`[terminal:open] executablePath: ${executablePath}`);
-    console.log(`[terminal:open] file exists: ${existsSync(executablePath)}`);
+    console.log(`[terminal:open] actualExecutablePath: ${actualExecutablePath}`);
+    console.log(`[terminal:open] file exists: ${existsSync(actualExecutablePath)}`);
 
-    const scriptPath = `${executablePath}.ps1`;
+    const scriptPath = `${actualExecutablePath}.ps1`;
     const BOM = "﻿";
     const script = BOM + [
       "Clear-Host",
-      `Write-Host '正在运行: ${executablePath}'`,
-      `& "${executablePath}"; exit $LASTEXITCODE`,
+      `Write-Host '正在运行: ${actualExecutablePath}'`,
+      `& "${actualExecutablePath}"`,
+      "$exitCode = if ($LASTEXITCODE -is [int]) { $LASTEXITCODE } else { 0 }",
       "",
       "Write-Host '--- 程序已结束 ---'",
       "Read-Host '按 Enter 关闭窗口'",
+      "exit $exitCode",
     ].join("\r\n") + "\r\n";
 
     await writeFile(scriptPath, script, "utf-8");

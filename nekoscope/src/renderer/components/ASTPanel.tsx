@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Maximize2, X } from "lucide-react";
 import ReactFlow, {
   Node,
   Edge,
@@ -12,6 +13,8 @@ import "reactflow/dist/style.css";
 import dagre from "dagre";
 import type { ASTNode } from "../types/compiler";
 import { astThemeColors, type ResolvedTheme } from "../styles/theme";
+
+type AstThemeColors = (typeof astThemeColors)[ResolvedTheme];
 
 /** AST keys that are metadata, not children */
 const META_KEYS = new Set(["nodeType", "line", "column"]);
@@ -110,7 +113,41 @@ function ASTNodeDisplay({ data }: { data: { handleColor: string; label: string }
 
 const nodeTypes = { astNode: ASTNodeDisplay };
 
+function ASTCanvas({
+  nodes,
+  edges,
+  colors,
+  full = false,
+}: {
+  nodes: Node[];
+  edges: Edge[];
+  colors: AstThemeColors;
+  full?: boolean;
+}) {
+  return (
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      fitView
+      fitViewOptions={{ padding: full ? 0.14 : 0.24, maxZoom: full ? 1.1 : 0.9 }}
+      attributionPosition="bottom-left"
+      minZoom={0.06}
+      maxZoom={1.4}
+    >
+      <Background color={colors.background} gap={full ? 22 : 20} />
+      <Controls style={{ background: colors.controlBackground, borderRadius: 4 }} />
+      <MiniMap
+        style={{ background: colors.minimap, borderRadius: 4 }}
+        nodeColor={() => colors.minimapNode}
+        maskColor={colors.minimapMask}
+      />
+    </ReactFlow>
+  );
+}
+
 export function ASTPanel({ ast, theme }: Props) {
+  const [fullViewOpen, setFullViewOpen] = useState(false);
   const { nodes, edges } = useMemo(() => {
     if (!ast) return { nodes: [], edges: [] };
     return astToFlow(ast, theme);
@@ -127,21 +164,46 @@ export function ASTPanel({ ast, theme }: Props) {
 
   return (
     <div className="ast-panel">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        fitView
-        attributionPosition="bottom-left"
-      >
-        <Background color={themeColors.background} gap={20} />
-        <Controls style={{ background: themeColors.controlBackground, borderRadius: 4 }} />
-        <MiniMap
-          style={{ background: themeColors.minimap, borderRadius: 4 }}
-          nodeColor={() => themeColors.minimapNode}
-          maskColor={themeColors.minimapMask}
-        />
-      </ReactFlow>
+      <div className="ast-toolbar">
+        <button
+          className="dag-overview-button"
+          type="button"
+          onClick={() => setFullViewOpen(true)}
+          title="查看语法树全貌"
+          aria-label="查看语法树全貌"
+        >
+          <Maximize2 size={15} />
+          全貌
+        </button>
+      </div>
+      <div className="ast-canvas">
+        <ASTCanvas nodes={nodes} edges={edges} colors={themeColors} />
+      </div>
+
+      {fullViewOpen ? (
+        <div className="ast-modal" role="dialog" aria-modal="true" aria-label="语法树全貌">
+          <div className="ast-modal-panel">
+            <header className="ast-modal-head">
+              <div>
+                <span>语法树全貌</span>
+                <strong>{ast.nodeType}</strong>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setFullViewOpen(false)}
+                aria-label="关闭语法树全貌"
+                title="关闭"
+              >
+                <X size={16} />
+              </button>
+            </header>
+            <div className="ast-modal-canvas">
+              <ASTCanvas nodes={nodes} edges={edges} colors={themeColors} full />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

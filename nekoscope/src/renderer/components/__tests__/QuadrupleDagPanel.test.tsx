@@ -1,0 +1,85 @@
+import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QuadrupleDagPanel, dagToFlow } from "../QuadrupleDagPanel";
+import type { QuadrupleDagBlock } from "../../types/compiler";
+
+const block: QuadrupleDagBlock = {
+  blockIndex: 1,
+  startQuad: 2,
+  endQuad: 5,
+  statements: [
+    { index: 2, text: "(+, I1, I2, T1)", op: "+", ob1: "I1", ob2: "I2", t: "T1" },
+    { index: 3, text: "(+, I1, I2, T2)", op: "+", ob1: "I1", ob2: "I2", t: "T2" },
+  ],
+  nodes: [
+    { id: "n1", number: 1, op: "value", value: "I1", names: [] },
+    { id: "n2", number: 2, op: "value", value: "I2", names: [] },
+    { id: "n3", number: 3, op: "+", value: "", names: ["T1", "T2"] },
+  ],
+  edges: [
+    { source: "n3", target: "n1", role: "left" },
+    { source: "n3", target: "n2", role: "right" },
+  ],
+  skipped: [],
+};
+
+describe("dagToFlow", () => {
+  it("converts DAG nodes and edges to react-flow data", () => {
+    const { nodes, edges } = dagToFlow(block);
+
+    expect(nodes).toHaveLength(3);
+    expect(edges).toHaveLength(2);
+    expect(nodes.find((node) => node.id === "n3")?.data.names).toBe("T1, T2");
+    expect(nodes.find((node) => node.id === "n3")?.sourcePosition).toBe("bottom");
+    expect(nodes.find((node) => node.id === "n3")?.targetPosition).toBe("top");
+    expect(nodes.find((node) => node.id === "n3")?.position.y).toBeLessThan(
+      nodes.find((node) => node.id === "n1")?.position.y ?? 0
+    );
+  });
+});
+
+describe("QuadrupleDagPanel", () => {
+  it("renders DAG node labels", () => {
+    render(
+      <QuadrupleDagPanel
+        dag={{
+          blocks: [
+            {
+              ...block,
+              skipped: [{ index: 4, op: "print", ob1: "T1", ob2: "_", t: "_", reason: "ignored" }],
+            },
+          ],
+        }}
+        theme="dark"
+      />
+    );
+
+    expect(screen.getByText("B1")).toBeTruthy();
+    expect(screen.getByText("四元式序列")).toBeTruthy();
+    expect(screen.getByText("(+, I1, I2, T1)")).toBeTruthy();
+    expect(screen.getByText("+")).toBeTruthy();
+    expect(screen.getByText("T1, T2")).toBeTruthy();
+    expect(screen.queryByText(/未纳入 DAG/)).toBeNull();
+    expect(document.querySelector(".react-flow")).toBeTruthy();
+  });
+
+  it("shows placeholder when there is no DAG block", () => {
+    render(<QuadrupleDagPanel dag={{ blocks: [] }} theme="dark" />);
+
+    expect(screen.getByText(/没有可构造 DAG 的基本块/)).toBeTruthy();
+  });
+
+  it("opens and closes the full DAG overview", async () => {
+    const user = userEvent.setup();
+    render(<QuadrupleDagPanel dag={{ blocks: [block] }} theme="dark" />);
+
+    expect(screen.queryByRole("dialog", { name: "DAG 全貌" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "查看 DAG 全貌" }));
+    expect(screen.getByRole("dialog", { name: "DAG 全貌" })).toBeTruthy();
+    expect(screen.getByText("B1 · 四元式 2-5")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "关闭 DAG 全貌" }));
+    expect(screen.queryByRole("dialog", { name: "DAG 全貌" })).toBeNull();
+  });
+});
