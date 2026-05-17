@@ -100,8 +100,28 @@ describe("API client", () => {
     );
 
     const examples = await getExamples();
-    expect(examples).toHaveLength(2);
-    expect(examples[0].name).toBe("demo");
+    expect(examples).toHaveLength(3);
+    expect(examples[0].name).toBe("dag_optimization_demo");
+    expect(examples[0].description).toBe("DAG 优化示例");
+    expect(examples[1].name).toBe("demo");
+  });
+
+  it("getExamples does not duplicate backend DAG sample", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          examples: [
+            { name: "demo", description: "Demo" },
+            { name: "dag_optimization_demo", description: "DAG 优化示例" },
+          ],
+        }),
+        { status: 200 }
+      )
+    );
+
+    const examples = await getExamples();
+    expect(examples.filter((example) => example.name === "dag_optimization_demo")).toHaveLength(1);
+    expect(examples[0].name).toBe("dag_optimization_demo");
   });
 
   it("getExampleSource returns source string", async () => {
@@ -111,6 +131,15 @@ describe("API client", () => {
 
     const source = await getExampleSource("demo");
     expect(source).toContain("nya");
+  });
+
+  it("getExampleSource returns built-in DAG sample without fetching", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const source = await getExampleSource("dag_optimization_demo");
+    expect(source).toContain("dag_optimization_demo");
+    expect(source).toContain("(+ a b)");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("throws request error with backend detail on non-ok response", async () => {

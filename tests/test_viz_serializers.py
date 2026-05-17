@@ -498,6 +498,7 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertIn("ast", serialized)
         self.assertIn("symbols", serialized)
         self.assertIn("quadruples", serialized)
+        self.assertIn("quadrupleDag", serialized)
         self.assertIn("quadrupleOptimization", serialized)
         self.assertIn("assembly", serialized)
         self.assertIn("errors", serialized)
@@ -512,6 +513,35 @@ class TestCompilationResultSerializer(unittest.TestCase):
         )
         self.assertIsInstance(serialized["assembly"], str)
         self.assertEqual(serialized["errors"], [])
+
+    def test_serialize_compilation_result_includes_quadruple_dag(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int) (c int))) (paw (:= a (+ b c)) (:= b (+ b c))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        dag = serialized["quadrupleDag"]["blocks"][0]
+
+        plus_nodes = [node for node in dag["nodes"] if node["op"] == "+"]
+        self.assertEqual(len(plus_nodes), 1)
+        self.assertIn("T1", plus_nodes[0]["names"])
+        self.assertIn("T2", plus_nodes[0]["names"])
+        self.assertEqual(len(dag["edges"]), 2)
+
+    def test_quadruple_dag_uses_source_names_and_constant_values(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int))) (paw (:= b 5) (:= a (+ b 3))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        dag = serialized["quadrupleDag"]["blocks"][0]
+        values = {node["value"] for node in dag["nodes"] if node["op"] == "value"}
+        names = {name for node in dag["nodes"] for name in node["names"]}
+
+        self.assertIn("5", values)
+        self.assertIn("3", values)
+        self.assertIn("b", names)
+        self.assertIn("a", names)
 
     def test_serialize_compilation_result_includes_optimized_quadruples(self):
         from neko.viz_serializers import serialize_compilation_result

@@ -11,6 +11,7 @@ describe("QuadruplePanel", () => {
           { op: ":=", ob1: "C1", ob2: "_", t: "I2" },
           { op: "print", ob1: "I2", ob2: "_", t: "_" },
         ]}
+        theme="dark"
       />
     );
 
@@ -58,11 +59,13 @@ describe("QuadruplePanel", () => {
           ],
           diagnostics: [],
         }}
+        theme="dark"
       />
     );
 
     expect(screen.getByText("C1 = 2")).toBeTruthy();
     await user.click(screen.getByRole("tab", { name: "优化过程" }));
+    expect(screen.getByText("四元式序列")).toBeTruthy();
     expect(screen.getByText("O1 常量折叠")).toBeTruthy();
     expect(screen.getByText("3 -> 2")).toBeTruthy();
     await user.click(screen.getByRole("tab", { name: "优化结果" }));
@@ -70,7 +73,64 @@ describe("QuadruplePanel", () => {
   });
 
   it("renders placeholder before compile", () => {
-    render(<QuadruplePanel quadruples={null} />);
+    render(<QuadruplePanel quadruples={null} theme="dark" />);
     expect(screen.getByText(/运行编译后可以看到四元式/)).toBeTruthy();
+  });
+
+  it("shows the DAG inside the optimization process", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuadruplePanel
+        quadruples={[
+          { op: "+", ob1: "I1", ob2: "I2", t: "T1" },
+          { op: "+", ob1: "I1", ob2: "I2", t: "T2" },
+        ]}
+        dag={{
+          blocks: [
+            {
+              blockIndex: 1,
+              startQuad: 1,
+              endQuad: 2,
+              statements: [
+                { index: 1, text: "(+, I1, I2, T1)", op: "+", ob1: "I1", ob2: "I2", t: "T1" },
+                { index: 2, text: "(+, I1, I2, T2)", op: "+", ob1: "I1", ob2: "I2", t: "T2" },
+              ],
+              nodes: [
+                { id: "n1", number: 1, op: "value", value: "I1", names: [] },
+                { id: "n2", number: 2, op: "value", value: "I2", names: [] },
+                { id: "n3", number: 3, op: "+", value: "", names: ["T1", "T2"] },
+              ],
+              edges: [
+                { source: "n3", target: "n1", role: "left" },
+                { source: "n3", target: "n2", role: "right" },
+              ],
+              skipped: [],
+            },
+          ],
+        }}
+        theme="dark"
+      />
+    );
+
+    expect(screen.queryByRole("tab", { name: "DAG 图" })).toBeNull();
+    await user.click(screen.getByRole("tab", { name: "优化过程" }));
+    expect(screen.getByText("T1, T2")).toBeTruthy();
+  });
+
+  it("builds a DAG from quadruples when backend DAG data is missing", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuadruplePanel
+        quadruples={[
+          { op: "+", ob1: "I1", ob2: "I2", t: "T1" },
+          { op: "+", ob1: "I1", ob2: "I2", t: "T2" },
+        ]}
+        theme="dark"
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "优化过程" }));
+    expect(screen.queryByText(/没有可构造 DAG/)).toBeNull();
+    expect(screen.getByText("T1, T2")).toBeTruthy();
   });
 });

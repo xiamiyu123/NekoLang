@@ -1083,8 +1083,23 @@ button {
 }
 
 .ast-panel {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   background: var(--ast-bg);
+}
+
+.ast-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.ast-canvas {
+  min-height: 0;
 }
 
 .ast-flow-node {
@@ -1164,6 +1179,313 @@ button {
   overflow: hidden;
 }
 
+.dag-panel {
+  display: grid;
+  grid-template-rows: auto minmax(240px, 1fr);
+  gap: 10px;
+  min-height: 480px;
+  height: 100%;
+}
+
+.dag-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dag-block-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dag-block-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.dag-block-button.active,
+.dag-block-button:hover {
+  color: var(--text);
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.dag-block-button span {
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.dag-overview-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.dag-overview-button:hover {
+  color: var(--text);
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
+.dag-workspace {
+  display: grid;
+  grid-template-columns: minmax(230px, 32%) minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+.dag-sequence {
+  min-width: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.dag-section-title {
+  margin-bottom: 10px;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dag-statement {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dag-statement:last-child {
+  border-bottom: 0;
+}
+
+.dag-statement span {
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.dag-statement strong {
+  overflow: hidden;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dag-canvas {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ast-bg);
+}
+
+.dag-flow-node {
+  min-width: 92px;
+  max-width: 136px;
+  padding: 5px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  background: var(--ast-node-bg);
+  box-shadow: var(--shadow-soft);
+}
+
+.ast-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+}
+
+.ast-modal-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1120px, 96vw);
+  height: min(760px, 92vh);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  color: var(--muted);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.ast-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ast-modal-head div {
+  display: grid;
+  gap: 2px;
+}
+
+.ast-modal-head span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ast-modal-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.ast-modal-canvas {
+  min-height: 0;
+  background: var(--ast-bg);
+}
+
+.dag-flow-node.value {
+  background: var(--panel-2);
+}
+
+.dag-flow-node.operator {
+  border-color: color-mix(in srgb, var(--accent-strong) 56%, var(--line-strong));
+  background: var(--pending-bg);
+}
+
+.dag-node-main {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dag-node-number {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--panel);
+  font-size: 10px;
+}
+
+.dag-node-main strong {
+  overflow: hidden;
+  flex: 0 0 auto;
+  min-width: 0;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dag-node-operator {
+  min-width: 12px;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.dag-node-inline-names {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dag-flow-node .react-flow__handle {
+  width: 5px;
+  height: 5px;
+  border: 0;
+}
+
+.dag-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+}
+
+.dag-modal-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1120px, 96vw);
+  height: min(760px, 92vh);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  color: var(--muted);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.dag-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dag-modal-head div {
+  display: grid;
+  gap: 2px;
+}
+
+.dag-modal-head span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dag-modal-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.dag-modal-canvas {
+  min-height: 0;
+  background: var(--ast-bg);
+}
+
 .quad-toolbar {
   display: flex;
   min-height: 44px;
@@ -1215,6 +1537,12 @@ button {
 .quad-steps {
   display: grid;
   gap: 10px;
+}
+
+.quad-process {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
 }
 
 .quad-constants {

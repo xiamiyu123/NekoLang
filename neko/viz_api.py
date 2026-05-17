@@ -45,6 +45,16 @@ app.add_middleware(
 
 EXAMPLES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples")
 
+EXAMPLE_LABELS = {
+    "dag_optimization_demo": "DAG 优化示例",
+}
+
+EXAMPLE_ORDER = {
+    "demo": 10,
+    "dag_optimization_demo": 20,
+    "fibonacci": 30,
+}
+
 
 # --- Request models ---
 
@@ -102,7 +112,11 @@ def _discover_examples() -> list[dict[str, str]]:
     for f in sorted(os.listdir(EXAMPLES_DIR)):
         if f.endswith(".neko"):
             name = f[:-5]
-            examples.append({"name": name, "description": name.replace("_", " ").title()})
+            examples.append({
+                "name": name,
+                "description": EXAMPLE_LABELS.get(name, name.replace("_", " ").title()),
+            })
+    examples.sort(key=lambda item: (EXAMPLE_ORDER.get(item["name"], 1000), item["description"]))
     return examples
 
 

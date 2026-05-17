@@ -71,6 +71,52 @@ export interface QuadrupleOptimization {
   diagnostics: CompileError[];
 }
 
+export interface QuadrupleDagNode {
+  id: string;
+  number: number;
+  op: string;
+  value: string;
+  names: string[];
+}
+
+export interface QuadrupleDagEdge {
+  source: string;
+  target: string;
+  role: "left" | "right" | string;
+}
+
+export interface QuadrupleDagSkipped {
+  index: number;
+  op: string;
+  ob1: string;
+  ob2: string;
+  t: string;
+  reason: string;
+}
+
+export interface QuadrupleDagStatement {
+  index: number;
+  text: string;
+  op: string;
+  ob1: string;
+  ob2: string;
+  t: string;
+}
+
+export interface QuadrupleDagBlock {
+  blockIndex: number;
+  startQuad: number;
+  endQuad: number;
+  statements: QuadrupleDagStatement[];
+  nodes: QuadrupleDagNode[];
+  edges: QuadrupleDagEdge[];
+  skipped: QuadrupleDagSkipped[];
+}
+
+export interface QuadrupleDag {
+  blocks: QuadrupleDagBlock[];
+}
+
 /** Full compilation result from POST /api/compile */
 export interface CompileResult {
   source: string;
@@ -78,6 +124,7 @@ export interface CompileResult {
   ast: ASTNode;
   symbols: SymbolTableSnapshot;
   quadruples: Quadruple[];
+  quadrupleDag?: QuadrupleDag;
   quadrupleOptimization?: QuadrupleOptimization;
   assembly: string;
   errors: CompileError[];
