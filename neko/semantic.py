@@ -520,6 +520,7 @@ class SemanticAnalyzer:
         self._emit("rand-seed", seed_addr, "_", "_")
 
     def _parse_func_type(self, type_str: str) -> FunctionSignature | None:
+        # 硬编码的格式解析 函数的参数类型和返回类型
         """
         从 NekoLang 函数类型字符串解析出 FunctionSignature。
 
@@ -584,37 +585,79 @@ class SemanticAnalyzer:
         """
         分析函数定义——在第二遍遍历时分析函数体。
 
-        第一遍 _collect_function_definitions 已经登记了函数签名，
-        这里只在符号表中为新作用域推入栈帧，分析函数体中的语句。
+        函数体分析在逻辑上需要完成四件事：
+          A. 建立函数自己的作用域——函数内声明的变量和参数不能污染外层
+          B. 登记参数到当前作用域——让函数体可以引用参数
+          C. 分析函数体中的语句——类型检查 + 四元式生成
+          D. 检查 return 完整性——有返回值的函数必须有 return
 
-        分析流程：
-          1. 保存当前所在的函数上下文（递归场景中嵌套函数需要）
-          2. 推入新作用域 "function:{name}"
-          3. 登记参数到符号表
-          4. 分析函数体（body 是一个语句节点）
-          5. 检查函数是否包含 return
-          6. 弹出作用域，恢复外部函数上下文
+        第一遍 _collect_function_definitions 已登记了函数签名，
+        所以这里只分析函数体，不再重复登记函数名。
+
+        作用域管理详解（面向符号表）：
+          进入函数时 push_scope("function:{name}")
+            符号表从:
+              全局层: x → I1(int)
+            变成:
+              全局层: x → I1(int)
+              function:foo 层:  ← 新推入的空层
+
+          登记参数后:
+              全局层: x → I1(int)
+              function:foo 层: n → I2(int)
+                                |
+                            参数 n 存在这一层，
+                            不干扰全局的 x。
+                            lookup("n") 在当前层找到；
+                            lookup("x") 向上找到全局层。
+
+          退出时 pop_scope()
+            符号表回到进入前的状态，function:foo 层所有变量消失。
+
+        上下文保存/恢复（current_function_name 等）：
+          三个实例变量 current_function_name / return_type / has_return
+          标识"当前正在分析哪个函数"。
+          需要保存恢复是因为函数可以嵌套：
+            (function outer ((a int)) int        ← 设置 ctx = outer
+              (function inner ((b int)) int      ← 递归进入 inner，ctx 变为 inner
+                (return (+ b a))
+              )                                   ← inner 分析完毕
+              (return (inner 10))
+            )                                     ← 恢复 ctx = outer
+          如果不恢复，分析完 inner 后 ctx 还停留在 "inner"，
+          后续的 return 检查会以为是 inner 的 return。
         """
+        # ── 保存外部函数上下文（用于嵌套函数的场合） ──
         previous_name = self.current_function_name
         previous_return_type = self.current_function_return_type
         previous_has_return = self.current_function_has_return
 
+        # ── 设置当前函数上下文 ──
         self.current_function_name = node.name
         self.current_function_return_type = node.return_type
         self.current_function_has_return = False
+
+        # ── 推入新作用域，让函数内变量不污染外部 ──
         self.symbol_table.push_scope(f"function:{node.name}")
 
+        # ── 登记参数到当前作用域 ──
+        # 参数类型标为 "p"，和变量 "v" 区分
         for param_name, param_type in node.params:
             if self.symbol_table.lookup_current(param_name):
                 self._error(node, f"参数 '{param_name}' 已经声明过了", "duplicate_var")
             else:
-                self.symbol_table.enter(param_name, param_type, "p")  # "p" = 参数
+                self.symbol_table.enter(param_name, param_type, "p")
 
+        # ── 分析函数体（产生函数体内的四元式） ──
         self._analyze_statement(node.body)
 
+        # ── 检查函数是否包含 return 语句 ──
+        # 如果函数应有返回值（void 类型由语言定义决定）
+        # 但 body 中没有出现 return，报缺少 return
         if not self.current_function_has_return:
             self._error(node, f"函数 '{node.name}' 缺少 return 语句")
 
+        # ── 弹出函数作用域，恢复到外层函数状态 ──
         self.symbol_table.pop_scope()
         self.current_function_name = previous_name
         self.current_function_return_type = previous_return_type
@@ -631,10 +674,12 @@ class SemanticAnalyzer:
           4. 发射 return 四元式
           5. 标记当前函数已有 return（用于检测缺少 return）
         """
+        # 确认当前在函数体内 （current_function_name 和 current_function_return_type 已设置）
         if not self.current_function_name or not self.current_function_return_type:
             self._error(node, "return 只能出现在函数体内")
             return
 
+        # 检查return表达式类型是否与函数返回类型兼容
         value_type = self._infer_expression_type(node.value)
         if value_type and not self._assignment_compatible(self.current_function_return_type, node.value, value_type):
             self._error(
@@ -645,12 +690,13 @@ class SemanticAnalyzer:
             )
             return
 
+        # 生成返回值的求值指令，并发射 return 四元式
         addr = self._analyze_expression(node.value)
         self._emit("return", addr, "_", "_")
+        # 标记当前函数已有 return 语句，供缺少 return 检测使用
         self.current_function_has_return = True
 
     # ── 数组操作分析 ──────────────────────────────────────────
-
     def _analyze_array_assign(self, node: ArrayAssignNode):
         """
         分析数组元素赋值 (array-set name index value)。
@@ -672,6 +718,7 @@ class SemanticAnalyzer:
         注意第三行的 (T2) 带括号——括号表示"间接访问"（指针解引用），
         不是直接赋值给 T2 变量，而是赋值到 T2 指向的内存位置。
         """
+        # 在符号表中寻找数组变量，检查存在且类型正确
         entry = self.symbol_table.lookup(node.name)
         if not entry:
             self._error(node, f"未定义的数组 '{node.name}'", "undefined_var")
@@ -685,7 +732,7 @@ class SemanticAnalyzer:
         if index_type and index_type != "int":
             self._error(node.index, "数组下标必须是 int 类型", "type_mismatch")
 
-        # 值类型检查
+        # 值类型检查 处理异常赋值
         elem_type = self._array_element_type(entry.type)
         value_type = self._infer_expression_type(node.value)
         if value_type and not self._assignment_compatible(elem_type, node.value, value_type):
@@ -702,7 +749,7 @@ class SemanticAnalyzer:
         elem_size = self._array_element_size(entry.type)
         size_addr = self.symbol_table.get_const_addr(elem_size)
         temp1 = self.symbol_table.alloc_temp()
-        self._emit("*", index_addr, size_addr, temp1)          # T1 = index * elem_size
+        self._emit("*", index_addr, size_addr, temp1)          # T1 = index * elem_size ，这个是offset
         base_addr = self.symbol_table.get_var_addr(node.name)
         temp2 = self.symbol_table.alloc_temp()
         self._emit("+", base_addr, temp1, temp2)               # T2 = base + offset
@@ -734,7 +781,7 @@ class SemanticAnalyzer:
         base_addr = self.symbol_table.get_var_addr(node.name)
         temp2 = self.symbol_table.alloc_temp()
         self._emit("+", base_addr, temp1, temp2)
-        self._emit("print", f"({temp2})", "_", "_")
+        self._emit("print", f"({temp2})", "_", "_") # 打印 *(T2) 位置的值，这是主要区别与 array-set 的地方
 
     def _analyze_file_write(self, node: FileWriteNode):
         """
@@ -744,11 +791,13 @@ class SemanticAnalyzer:
           - 路径必须是字符串
           - 值的类型必须与 write-int/float/char/bool 匹配
         """
+        # 检查路径是否为字符串字面量（或能隐式转换为字符串的类型）
         path_type = self._infer_expression_type(node.path)
         if path_type != "string":
             self._error(node.path, "文件路径必须是字符串字面量", "type_mismatch")
             return
 
+        # 检查赋值类型是否与 write-指令要求的类型兼容
         value_type = self._infer_expression_type(node.value)
         if value_type and not self._assignment_compatible(node.value_type, node.value, value_type):
             self._error(
@@ -760,7 +809,7 @@ class SemanticAnalyzer:
 
         path_addr = self._analyze_expression(node.path)
         value_addr = self._analyze_expression(node.value)
-        self._emit(f"write-{node.value_type}", path_addr, value_addr, "_")
+        self._emit(f"write-{node.value_type}", path_addr, value_addr, "_") # 生成写文件的四元式
 
     def _validate_extern_signature(self, node: ExternDeclNode):
         """
@@ -771,6 +820,7 @@ class SemanticAnalyzer:
           函数指针类型：(func (...))，且函数指针内部的参数类型也需支持
         不支持的类型：void、可变参数、数组参数
         """
+        # 检查每个 参数类型 是否被支持
         for index, type_name in enumerate(node.param_types, start=1):
             if not self._is_supported_extern_type(type_name):
                 self._error(
@@ -778,6 +828,7 @@ class SemanticAnalyzer:
                     f"extern '{node.name}' 的第 {index} 个参数类型 '{type_name}' 暂不支持",
                     "type_mismatch",
                 )
+        # 检查 返回类型 是否被支持
         if not self._is_supported_extern_type(node.return_type):
             self._error(
                 node,
@@ -789,12 +840,13 @@ class SemanticAnalyzer:
         """检查一个类型是否被 extern 支持（即能否在 C 函数签名中使用）。"""
         if type_name in {"int", "float", "char", "bool", "string", "pointer"}:
             return True
+        # 函数指针类型需要递归检查其参数和返回类型是否支持
         if type_name.startswith("(func"):  # 函数指针类型需要递归检查
-            signature = self._parse_func_type(type_name)
+            signature = self._parse_func_type(type_name) # 从类型字符串解析出 FunctionSignature 包括 参数类型 和 返回类型
             if signature is None:
-                return False
+                return False # 这个if是为了防止 _parse_func_type 解析失败返回 None 的情况，虽然理论上只要 type_name.startswith("(func") 就应该能成功解析，但加个保险
             return all(self._is_supported_extern_type(param) for param in signature.param_types) and (
-                self._is_supported_extern_type(signature.return_type)
+                self._is_supported_extern_type(signature.return_type) # 递归检查函数，因为这里extern可以嵌套
             )
         return False
 
@@ -841,29 +893,29 @@ class SemanticAnalyzer:
             if not entry:
                 self._error(node, f"未定义的变量 '{node.name}'", "undefined_var")
                 return "_"
-            return self.symbol_table.get_var_addr(node.name)
+            return self.symbol_table.get_var_addr(node.name) # 返回变量地址，例如 "I1"
 
         # ── 二元运算 (op left right) ──
         if isinstance(node, BinOpNode):
             left_addr = self._analyze_expression(node.left)
             right_addr = self._analyze_expression(node.right)
             temp = self.symbol_table.alloc_temp()
-            self._emit(node.op, left_addr, right_addr, temp)
-            return temp
+            self._emit(node.op, left_addr, right_addr, temp) # 需要生成四元式
+            return temp # 返回存放结果的临时变量地址，例如 "T1"
 
         # ── Lambda 定义（作为表达式） ──
         if isinstance(node, LambdaDefNode):
             self._analyze_lambda_def(node)
-            temp = self.symbol_table.alloc_temp()
+            temp = self.symbol_table.alloc_temp() # 为 lambda 引用分配一个临时变量地址，例如 "T2"
             self._emit("lambda_ref", node.name, "_", temp)  # 发射 lambda 引用
-            return temp
+            return temp # 返回 lambda 引用的地址
 
         # ── 函数调用 ──
         if isinstance(node, FuncCallNode):
             # 先查函数签名表
             signature = self.function_signatures.get(node.name)
 
-            # 间接调用：函数名不在签名表中，但在符号表中是 (func ...) 类型
+            # 间接调用：函数名不在签名表中，但在符号表中是 (func ...) 类型 的变量，说明是函数指针变量
             if not signature:
                 entry = self.symbol_table.lookup(node.name)
                 if entry and entry.type.startswith("(func"):
@@ -908,27 +960,28 @@ class SemanticAnalyzer:
         # ── 数组访问（作为表达式） ──
         if isinstance(node, ArrayAccessNode):
             entry = self.symbol_table.lookup(node.name)
+            # 先检查数组变量存在且类型正确
             if not entry:
                 self._error(node, f"未定义的数组 '{node.name}'", "undefined_var")
                 return "_"
             index_addr = self._analyze_expression(node.index)
             elem_size = self._array_element_size(entry.type)
             size_addr = self.symbol_table.get_const_addr(elem_size)
-            temp1 = self.symbol_table.alloc_temp()
+            temp1 = self.symbol_table.alloc_temp() # 计算偏移量的临时变量地址，例如 "T3"
             self._emit("*", index_addr, size_addr, temp1)
             base_addr = self.symbol_table.get_var_addr(node.name)
-            temp2 = self.symbol_table.alloc_temp()
+            temp2 = self.symbol_table.alloc_temp() # 计算目标地址的临时变量地址，例如 "T4"
             self._emit("+", base_addr, temp1, temp2)
             return f"({temp2})"  # 返回间接地址
 
         # ── 内建操作：命令行参数 ──
         if isinstance(node, ArgcNode):
             temp = self.symbol_table.alloc_temp()
-            self._emit("argc", "_", "_", temp)
+            self._emit("argc", "_", "_", temp) # 生成获取 argc 的四元式，argc 返回的是命令行参数的总个数
             return temp
         if isinstance(node, ArgvNode):
             index_type = self._infer_expression_type(node.index)
-            if index_type and index_type != "int":
+            if index_type and index_type != "int": # argv-int/float/char/bool/string 是按指定类型解析某个具体的命令行参数值，所以下标必须是 int 类型
                 self._error(node.index, "命令行参数下标必须是 int 类型", "type_mismatch")
                 return "_"
             index_addr = self._analyze_expression(node.index)
@@ -946,6 +999,7 @@ class SemanticAnalyzer:
         if isinstance(node, RandomRangeNode):
             low_type = self._infer_expression_type(node.low)
             high_type = self._infer_expression_type(node.high)
+            # 检查下界和上界的类型必须是 int，因为 rand-range 生成整数随机数，范围边界必须是整数
             if low_type and low_type != "int":
                 self._error(node.low, "rand-range 的下界必须是 int 类型", "type_mismatch")
                 return "_"
@@ -969,107 +1023,150 @@ class SemanticAnalyzer:
             self._emit(f"read-{node.value_type}", path_addr, "_", temp)
             return temp
 
-        # ── 内建操作：字符串操作 ──
+        # ════════════════════════════════════════════════════════
+        # 内建操作：字符串操作
+        # ════════════════════════════════════════════════════════
+        #
+        # 这些操作的共同模式：
+        #   1. 类型检查——确认操作数的类型是 string 或 int（视具体操作而定）
+        #   2. str_addr / left_addr / right_addr — 用 _analyze_expression 计算操作数，
+        #      返回存放该操作数值的寄存器/地址字符串（如 "I1" 或 "T1"）
+        #   3. temp — 用 alloc_temp() 分配一个临时变量地址（如 "T5"），
+        #      用于存放这个操作的**结果**
+        #   4. _emit("操作名", ...) — 发射一条四元式，
+        #      运行时就会调用 C 运行时中对应的函数执行实际操作
+        #   5. return temp — 返回结果地址，供上层（赋值/打印/传参）使用
+        #
+        # 以 (string-length "hello") 为例：
+        #   str_addr = "C1_"hello""  ← "hello" 这个字符串常量的地址
+        #   temp     = "T5"          ← 存放结果的临时变量
+        #   发射: (string-length, C1_"hello", _, T5)
+        #   运行时效果: T5 = strlen("hello") → 5
+        # ──
+
         if isinstance(node, StringLengthNode):
             self._check_expr_type(node, node.string_expr, "string", "string-length")
-            str_addr = self._analyze_expression(node.string_expr)
-            temp = self.symbol_table.alloc_temp()
+            str_addr = self._analyze_expression(node.string_expr) # 源字符串的地址
+            temp = self.symbol_table.alloc_temp()                 # 分配临时变量存放结果（int 类型）
             self._emit("string-length", str_addr, "_", temp)
             return temp
+
         if isinstance(node, StringAtNode):
             self._check_expr_type(node, node.string_expr, "string", "string-at")
             self._check_expr_type(node, node.index, "int", "string-at")
-            str_addr = self._analyze_expression(node.string_expr)
-            idx_addr = self._analyze_expression(node.index)
-            temp = self.symbol_table.alloc_temp()
+            str_addr = self._analyze_expression(node.string_expr) # 源字符串的地址
+            idx_addr = self._analyze_expression(node.index)       # 下标表达式的地址（int）
+            temp = self.symbol_table.alloc_temp()                 # 存放结果的临时变量（char 类型）
             self._emit("string-at", str_addr, idx_addr, temp)
             return temp
+
         if isinstance(node, StringSubNode):
             self._check_expr_type(node, node.string_expr, "string", "string-sub")
             self._check_expr_type(node, node.start, "int", "string-sub")
             self._check_expr_type(node, node.length, "int", "string-sub")
-            str_addr = self._analyze_expression(node.string_expr)
-            start_addr = self._analyze_expression(node.start)
-            len_addr = self._analyze_expression(node.length)
-            temp = self.symbol_table.alloc_temp()
+            str_addr = self._analyze_expression(node.string_expr)   # 源字符串的地址
+            start_addr = self._analyze_expression(node.start)       # 起始位置的地址（int）
+            len_addr = self._analyze_expression(node.length)        # 子串长度的地址（int）
+            temp = self.symbol_table.alloc_temp()                  # 存放结果的临时变量（string 类型）
             self._emit("string-sub", str_addr, f"{start_addr},{len_addr}", temp)
             return temp
+
         if isinstance(node, StringCmpNode):
             self._check_expr_type(node, node.left, "string", "string-cmp")
             self._check_expr_type(node, node.right, "string", "string-cmp")
-            left_addr = self._analyze_expression(node.left)
-            right_addr = self._analyze_expression(node.right)
-            temp = self.symbol_table.alloc_temp()
+            left_addr = self._analyze_expression(node.left)   # 左比较字符串的地址
+            right_addr = self._analyze_expression(node.right) # 右比较字符串的地址
+            temp = self.symbol_table.alloc_temp()             # 存放比较结果（int：-1/0/1）
             self._emit("string-cmp", left_addr, right_addr, temp)
             return temp
+
         if isinstance(node, StringContainsNode):
             self._check_expr_type(node, node.haystack, "string", "string-contains")
             self._check_expr_type(node, node.needle, "string", "string-contains")
-            hay_addr = self._analyze_expression(node.haystack)
-            needle_addr = self._analyze_expression(node.needle)
-            temp = self.symbol_table.alloc_temp()
+            hay_addr = self._analyze_expression(node.haystack)    # 被搜索的字符串地址
+            needle_addr = self._analyze_expression(node.needle)   # 要查找的子串地址
+            temp = self.symbol_table.alloc_temp()                 # 存放结果（bool：true/false）
             self._emit("string-contains", hay_addr, needle_addr, temp)
             return temp
+
         if isinstance(node, IntToStringNode):
             self._check_expr_type(node, node.int_expr, "int", "int-to-string")
-            int_addr = self._analyze_expression(node.int_expr)
-            temp = self.symbol_table.alloc_temp()
+            int_addr = self._analyze_expression(node.int_expr) # 要转换的整数的值地址
+            temp = self.symbol_table.alloc_temp()              # 存放结果字符串地址（string 类型）
             self._emit("int-to-string", int_addr, "_", temp)
             return temp
+
         if isinstance(node, StringToIntNode):
             self._check_expr_type(node, node.string_expr, "string", "string-to-int")
-            str_addr = self._analyze_expression(node.string_expr)
-            temp = self.symbol_table.alloc_temp()
+            str_addr = self._analyze_expression(node.string_expr) # 要解析的字符串地址
+            temp = self.symbol_table.alloc_temp()                 # 存放解析结果（int 类型）
             self._emit("string-to-int", str_addr, "_", temp)
             return temp
+
         if isinstance(node, ArgvStringNode):
             self._check_expr_type(node, node.index, "int", "argv-string")
-            index_addr = self._analyze_expression(node.index)
-            temp = self.symbol_table.alloc_temp()
+            index_addr = self._analyze_expression(node.index) # 命令行参数的下标地址
+            temp = self.symbol_table.alloc_temp()             # 存放参数字符串（string 类型）
             self._emit("argv-string", index_addr, "_", temp)
             return temp
 
-        # ── 内建操作：字符操作 ──
+        # ════════════════════════════════════════════════════════
+        # 内建操作：字符操作
+        # ════════════════════════════════════════════════════════
+        #
+        # 字符操作的共同模式和字符串操作完全一样：
+        #   char_addr — 字符操作数的地址
+        #   int_addr  — 整数操作数的地址
+        #   temp      — 存放结果的临时变量
+        #   发射一条四元式 → 运行时调用 C 函数
+        # ──
+
         if isinstance(node, CharToIntNode):
             self._check_expr_type(node, node.char_expr, "char", "char-to-int")
-            char_addr = self._analyze_expression(node.char_expr)
-            temp = self.symbol_table.alloc_temp()
+            char_addr = self._analyze_expression(node.char_expr) # 源字符的地址
+            temp = self.symbol_table.alloc_temp()                # 存放 ASCII 码结果（int）
             self._emit("char-to-int", char_addr, "_", temp)
             return temp
+
         if isinstance(node, IntToCharNode):
             self._check_expr_type(node, node.int_expr, "int", "int-to-char")
-            int_addr = self._analyze_expression(node.int_expr)
-            temp = self.symbol_table.alloc_temp()
+            int_addr = self._analyze_expression(node.int_expr)   # ASCII 码整数的地址
+            temp = self.symbol_table.alloc_temp()                # 存放转换后的字符（char）
             self._emit("int-to-char", int_addr, "_", temp)
             return temp
+
         if isinstance(node, CharToStringNode):
             self._check_expr_type(node, node.char_expr, "char", "char-to-string")
-            char_addr = self._analyze_expression(node.char_expr)
-            temp = self.symbol_table.alloc_temp()
+            char_addr = self._analyze_expression(node.char_expr) # 源字符的地址
+            temp = self.symbol_table.alloc_temp()                # 存放结果字符串（string，长度为1）
             self._emit("char-to-string", char_addr, "_", temp)
             return temp
+
         if isinstance(node, IsLetterNode):
             self._check_expr_type(node, node.char_expr, "char", "is-letter")
-            char_addr = self._analyze_expression(node.char_expr)
-            temp = self.symbol_table.alloc_temp()
+            char_addr = self._analyze_expression(node.char_expr) # 要判断的字符地址
+            temp = self.symbol_table.alloc_temp()                # 存放判断结果（bool）
             self._emit("is-letter", char_addr, "_", temp)
             return temp
+
         if isinstance(node, IsDigitNode):
             self._check_expr_type(node, node.char_expr, "char", "is-digit")
-            char_addr = self._analyze_expression(node.char_expr)
-            temp = self.symbol_table.alloc_temp()
+            char_addr = self._analyze_expression(node.char_expr) # 要判断的字符地址
+            temp = self.symbol_table.alloc_temp()                # 存放判断结果（bool）
             self._emit("is-digit", char_addr, "_", temp)
             return temp
+
         if isinstance(node, CharUpcaseNode):
             self._check_expr_type(node, node.char_expr, "char", "char-upcase")
-            char_addr = self._analyze_expression(node.char_expr)
-            temp = self.symbol_table.alloc_temp()
+            char_addr = self._analyze_expression(node.char_expr) # 源字符地址
+            temp = self.symbol_table.alloc_temp()                # 存放转换后的字符（char）
             self._emit("char-upcase", char_addr, "_", temp)
             return temp
+
         if isinstance(node, CharDowncaseNode):
             self._check_expr_type(node, node.char_expr, "char", "char-downcase")
-            char_addr = self._analyze_expression(node.char_expr)
-            temp = self.symbol_table.alloc_temp()
+            char_addr = self._analyze_expression(node.char_expr) # 源字符地址
+            temp = self.symbol_table.alloc_temp()                # 存放转换后的字符（char）
             self._emit("char-downcase", char_addr, "_", temp)
             return temp
 
@@ -1107,19 +1204,23 @@ class SemanticAnalyzer:
         if isinstance(node, CharLiteralNode):
             return "char"
         if isinstance(node, IdentifierNode):
-            entry = self.symbol_table.lookup(node.name)
+            entry = self.symbol_table.lookup(node.name) # 先查符号表获取标识符的声明信息
             if entry:
                 if entry.cat == "f" and entry.name in self.function_signatures:
-                    sig = self.function_signatures[entry.name]
+                    #如果获取到f,并且这个f在函数签名表里有记录，就从函数签名表里获取这个函数的参数类型和返回类型，
+                    # 构造出一个字符串形式的函数类型返回，例如 (func (int float) string) 
+                    sig = self.function_signatures[entry.name] 
                     return f"(func ({' '.join(sig.param_types)}) {sig.return_type})"
                 return entry.type
             return None
+        # 对于lambda定义节点，构造一个字符串形式的函数类型返回，例如 (func (int float) string)，
         if isinstance(node, LambdaDefNode):
             return f"(func ({' '.join(t for _, t in node.params)}) {node.return_type})"
+        # 对于函数调用节点，先查函数签名表获取返回类型，如果找不到，再检查是否是函数指针变量（符号表中类型为 (func ...)），从中解析出返回类型
         if isinstance(node, FuncCallNode):
             signature = self.function_signatures.get(node.name)
             if signature:
-                return signature.return_type
+                return signature.return_type # 直接调用：从函数签名表获取返回类型
             # 间接调用：从变量类型恢复返回类型
             entry = self.symbol_table.lookup(node.name)
             if entry and entry.type.startswith("(func"):
@@ -1127,6 +1228,7 @@ class SemanticAnalyzer:
                 if sig:
                     return sig.return_type
             return None
+        # 对于数组访问节点，返回数组元素的类型，例如 int、float、char 等
         if isinstance(node, ArrayAccessNode):
             entry = self.symbol_table.lookup(node.name)
             if entry and entry.type.startswith("(array"):
@@ -1175,6 +1277,7 @@ class SemanticAnalyzer:
             return "char"
         # ── 二元运算的类型推断 ──
         if isinstance(node, BinOpNode):
+            # 先推断左右表达式的类型
             left_type = self._infer_expression_type(node.left)
             right_type = self._infer_expression_type(node.right)
             if not left_type or not right_type:
@@ -1224,7 +1327,6 @@ class SemanticAnalyzer:
         return None
 
     # ── 类型系统（类型兼容性检查） ────────────────────────────
-
     def _types_compatible(self, expected: str, actual: str) -> bool:
         """
         检查两种类型是否兼容（用于二元运算的操作数类型匹配）。
@@ -1238,6 +1340,7 @@ class SemanticAnalyzer:
         在 NekoLang 中，类型提升是隐式的，
         不需要程序员手动写类型转换（区别于更严格的类型系统）。
         """
+        # 这里actual是实际类型，expected是期望类型，判断实际类型能否隐式转换为期望类型
         if expected == actual:
             return True
         if expected == "float" and actual in ("int", "char"):
@@ -1294,6 +1397,7 @@ class SemanticAnalyzer:
         """
         actual = self._infer_expression_type(expr)
         if actual and not self._types_compatible(expected, actual):
+            # 对于不兼容的类型，报告错误，但继续分析（返回 False）以便发现更多错误，而不是因为一个错误就停止检查
             self._error(expr, f"{op_name} 需要 {expected} 类型，但得到 {actual}", "type_mismatch")
             return False
         return True
