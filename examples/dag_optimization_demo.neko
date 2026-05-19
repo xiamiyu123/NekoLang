@@ -1,0 +1,32 @@
+; NekoLang DAG optimization demo
+; 这个示例故意重复计算相同表达式，用来观察四元式 DAG 如何合并公共子表达式。
+(nya dag_optimization_demo
+  (nyan ((a int) (b int) (c int) (d int) (e int) (f int) (g int)
+         (h int) (i int) (j int) (k int) (m int) (n int) (p int)))
+  (paw
+    ; 基础操作数。
+    (:= a 6)
+    (:= b 4)
+    (:= c 3)
+
+    ; a+b 和 (a+b)*c 被重复使用，DAG 中应该共用 + 和 * 节点。
+    (:= d (+ a b))
+    (:= e (+ a b))
+    (:= f (* d c))
+    (:= g (* e c))
+
+    ; 同一个子表达式在一条较长表达式里出现两次。
+    (:= h (+ (* a b) (* a b)))
+
+    ; 再制造一组可合并的表达式，并混入减法/除法作为对照。
+    (:= i (- f g))
+    (:= j (+ d e))
+    (:= k (+ d e))
+    (:= m (* j k))
+    (:= n (/ m c))
+    (:= p (+ n (+ d e)))
+
+    (meow d)
+    (meow f)
+    (meow h)
+    (meow p)))

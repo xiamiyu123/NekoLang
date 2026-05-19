@@ -58,6 +58,7 @@ from neko.ast_nodes import (
     WhileNode,
 )
 from neko.build_utils import CompilationResult, generate_code
+from neko.dag import build_quadruple_dags
 from neko.errors import NekoError, SUGGESTIONS
 from neko.optimizer import optimize_ast_for_arm64
 from neko.semantic import Quadruple, SemanticAnalyzer
@@ -613,6 +614,16 @@ def serialize_symbol_table(table: SymbolTable) -> dict[str, Any]:
     }
 
 
+def _dag_operand_labels(table: SymbolTable) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for entry in table.entries:
+        if entry.addr_name:
+            labels[entry.addr_name] = entry.name
+    for value, address in table.const_table.items():
+        labels[str(address)] = str(value)
+    return labels
+
+
 # ---------------------------------------------------------------------------
 # Full compilation result serialization
 # ---------------------------------------------------------------------------
@@ -635,6 +646,10 @@ def serialize_compilation_result(
         "ast": serialize_ast(result.ast),
         "symbols": serialize_symbol_table(result.analyzer.symbol_table),
         "quadruples": serialize_quadruples(result.analyzer.quadruples),
+        "quadrupleDag": build_quadruple_dags(
+            result.analyzer.quadruples,
+            labels=_dag_operand_labels(result.analyzer.symbol_table),
+        ),
         "quadrupleOptimization": serialize_quadruple_optimization(result),
         "assembly": assembly,
         "errors": serialize_errors(result.analyzer.errors),

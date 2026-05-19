@@ -3,6 +3,42 @@ import type { WorkspaceInfo } from "../types/workspace";
 
 let BASE_URL = "http://127.0.0.1:8000";
 
+const BUILTIN_DAG_EXAMPLE_NAME = "dag_optimization_demo";
+
+const BUILTIN_DAG_EXAMPLE_SOURCE = `; NekoLang DAG optimization demo
+; 这个示例故意重复计算相同表达式，用来观察四元式 DAG 如何合并公共子表达式。
+(nya dag_optimization_demo
+  (nyan ((a int) (b int) (c int) (d int) (e int) (f int) (g int)
+         (h int) (i int) (j int) (k int) (m int) (n int) (p int)))
+  (paw
+    (:= a 6)
+    (:= b 4)
+    (:= c 3)
+
+    (:= d (+ a b))
+    (:= e (+ a b))
+    (:= f (* d c))
+    (:= g (* e c))
+
+    (:= h (+ (* a b) (* a b)))
+
+    (:= i (- f g))
+    (:= j (+ d e))
+    (:= k (+ d e))
+    (:= m (* j k))
+    (:= n (/ m c))
+    (:= p (+ n (+ d e)))
+
+    (meow d)
+    (meow f)
+    (meow h)
+    (meow p)))`;
+
+const BUILTIN_DAG_EXAMPLE: Example = {
+  name: BUILTIN_DAG_EXAMPLE_NAME,
+  description: "DAG 优化示例",
+};
+
 export function setBaseUrl(url: string) {
   BASE_URL = url;
 }
@@ -119,10 +155,12 @@ export async function runProgram(
 
 export async function getExamples(): Promise<Example[]> {
   const data = await request<{ examples: Example[] }>("/api/examples");
-  return data.examples;
+  const withoutBuiltin = data.examples.filter((example) => example.name !== BUILTIN_DAG_EXAMPLE_NAME);
+  return [BUILTIN_DAG_EXAMPLE, ...withoutBuiltin];
 }
 
 export async function getExampleSource(name: string): Promise<string> {
+  if (name === BUILTIN_DAG_EXAMPLE_NAME) return BUILTIN_DAG_EXAMPLE_SOURCE;
   const data = await request<{ source: string }>(`/api/examples/${name}`);
   return data.source;
 }

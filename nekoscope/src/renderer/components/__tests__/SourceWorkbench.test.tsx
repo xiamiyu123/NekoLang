@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { SourceWorkbench } from "../SourceWorkbench";
 
 const editorMock = vi.hoisted(() => ({
@@ -72,5 +73,31 @@ describe("SourceWorkbench", () => {
 
     expect(screen.getByRole("button", { name: "立即编译" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "运行" })).toBeTruthy();
+  });
+
+  it("renders the DAG optimization sample in the example strip", async () => {
+    const user = userEvent.setup();
+    const onExampleLoad = vi.fn();
+    render(
+      <SourceWorkbench
+        source="(nya t (paw))"
+        examples={[{ name: "dag_optimization_demo", description: "DAG 优化示例" }]}
+        activeExample="dag_optimization_demo"
+        loading={false}
+        running={false}
+        theme="light"
+        onSourceChange={() => {}}
+        onExampleLoad={onExampleLoad}
+        onCompileNow={() => {}}
+        onRunNow={() => {}}
+        onReset={() => {}}
+        {...baseProps}
+      />
+    );
+
+    const sampleButton = screen.getByRole("button", { name: "DAG 优化示例" });
+    expect(sampleButton.className).toContain("active");
+    await user.click(sampleButton);
+    expect(onExampleLoad).toHaveBeenCalledWith("dag_optimization_demo");
   });
 });
