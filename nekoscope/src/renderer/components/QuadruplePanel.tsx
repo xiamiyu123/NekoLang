@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Quadruple, QuadrupleDag, QuadrupleOptimization } from "../types/compiler";
+import type { Quadruple, QuadrupleDag, QuadrupleOptimization, QuadrupleOptimizationStep } from "../types/compiler";
 import { QuadrupleDagPanel } from "./QuadrupleDagPanel";
 import type { ResolvedTheme } from "../styles/theme";
 import { buildQuadrupleDag } from "../quadrupleDag";
@@ -22,7 +22,15 @@ function explainOperand(value: string): string {
   return "值";
 }
 
-function QuadTable({ rows, label }: { rows: Quadruple[]; label: string }) {
+function QuadTable({
+  rows,
+  label,
+  tone = "normal",
+}: {
+  rows: Quadruple[];
+  label: string;
+  tone?: "normal" | "removed";
+}) {
   return (
     <table className="teaching-table dense" aria-label={label}>
       <thead>
@@ -36,7 +44,7 @@ function QuadTable({ rows, label }: { rows: Quadruple[]; label: string }) {
       </thead>
       <tbody>
         {rows.map((quad, index) => (
-          <tr key={`${index}-${quad.op}-${quad.t}`}>
+          <tr className={tone === "removed" ? "quad-row-removed" : undefined} key={`${index}-${quad.op}-${quad.t}`}>
             <td className="mono-cell muted">{index}</td>
             <td><span className="op-pill">{quad.op}</span></td>
             <td className="mono-cell" title={explainOperand(quad.ob1)}>{quad.ob1}</td>
@@ -46,6 +54,27 @@ function QuadTable({ rows, label }: { rows: Quadruple[]; label: string }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+function StepQuadTables({ step }: { step: QuadrupleOptimizationStep }) {
+  const removedRows = step.removedRows ?? [];
+  const afterRows = step.afterRows ?? [];
+  if (removedRows.length === 0 && afterRows.length === 0) return null;
+
+  return (
+    <div className="quad-step-body">
+      {removedRows.length > 0 ? (
+        <div className="quad-step-table">
+          <div className="quad-step-table-title">本阶段已优化掉</div>
+          <QuadTable rows={removedRows} label={`${step.name} 已优化掉的四元式`} tone="removed" />
+        </div>
+      ) : null}
+      <div className="quad-step-table">
+        <div className="quad-step-table-title">本阶段优化后</div>
+        <QuadTable rows={afterRows} label={`${step.name} 优化后四元式`} />
+      </div>
+    </div>
   );
 }
 
@@ -146,6 +175,7 @@ export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) 
                       <p>{step.detail}</p>
                     </div>
                     <code>{step.beforeCount}{" -> "}{step.afterCount}</code>
+                    <StepQuadTables step={step} />
                   </div>
                 ))
               )}

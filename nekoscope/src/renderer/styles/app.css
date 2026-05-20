@@ -1609,6 +1609,39 @@ button {
   line-height: 1.45;
 }
 
+.quad-step-body {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.quad-step-table {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quad-step-table-title {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quad-row-removed td {
+  color: var(--danger-code-text);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
+  background: var(--danger-code-bg);
+}
+
+.quad-row-removed .op-pill {
+  color: var(--danger-code-text);
+  border-color: var(--danger-line);
+  background: var(--danger-card-bg);
+}
+
 .table-card {
   min-width: 0;
 }
