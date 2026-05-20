@@ -80,6 +80,18 @@ describe("buildQuadrupleDag", () => {
     expect(secondEdges.right?.names).toContain("T1");
   });
 
+  it("orders node aliases by named variables before temporaries", () => {
+    const dag = buildQuadrupleDag([
+      { op: "+", ob1: "I1", ob2: "I2", t: "T1" },
+      { op: ":=", ob1: "T1", ob2: "_", t: "I3" },
+      { op: "+", ob1: "I2", ob2: "I1", t: "T2" },
+      { op: ":=", ob1: "T2", ob2: "_", t: "I4" },
+    ]);
+    const plusNode = dag.blocks[0].nodes.find((node) => node.op === "+");
+
+    expect(plusNode?.names).toEqual(["I3", "I4", "T1", "T2"]);
+  });
+
   it("shares not-equal commutativity with the backend DAG", () => {
     const dag = buildQuadrupleDag([
       { op: "!=", ob1: "I2", ob2: "I1", t: "T1" },

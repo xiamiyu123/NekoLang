@@ -622,6 +622,17 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual(second_edges["right"]["op"], "+")
         self.assertIn("T1", second_edges["right"]["names"])
 
+    def test_quadruple_dag_orders_node_names_by_kind(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int) (f int) (g int))) (paw (:= f (+ a b)) (:= g (+ a b))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        dag = serialized["quadrupleDag"]["blocks"][0]
+        plus_node = next(node for node in dag["nodes"] if node["op"] == "+")
+
+        self.assertEqual(plus_node["names"], ["f", "g", "T1", "T2"])
+
     def test_serialize_compilation_result_reports_incremental_optimization_counts(self):
         from neko.viz_serializers import serialize_compilation_result
 

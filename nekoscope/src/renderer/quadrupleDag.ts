@@ -11,6 +11,7 @@ interface DagBuildState {
   valueNodes: Map<string, string>;
   exprNodes: Map<string, string>;
   currentDef: Map<string, string>;
+  nameSortKeys: Map<string, OperandSortKey>;
 }
 
 function createState(): DagBuildState {
@@ -20,6 +21,7 @@ function createState(): DagBuildState {
     valueNodes: new Map(),
     exprNodes: new Map(),
     currentDef: new Map(),
+    nameSortKeys: new Map(),
   };
 }
 
@@ -80,12 +82,21 @@ function attachName(state: DagBuildState, id: string, name: string, labels: Reco
   if (name === "_") return;
   const label = labelOperand(name, labels);
   const oldId = state.currentDef.get(name);
+  state.nameSortKeys.set(label, operandSortKey(name));
   if (oldId && oldId !== id) {
     const oldNode = nodeById(state, oldId);
     oldNode.names = oldNode.names.filter((item) => item !== label);
   }
   const node = nodeById(state, id);
-  if (!node.names.includes(label)) node.names.push(label);
+  if (!node.names.includes(label)) {
+    node.names.push(label);
+    node.names.sort((left, right) => (
+      compareOperandSortKey(
+        state.nameSortKeys.get(left) ?? operandSortKey(left),
+        state.nameSortKeys.get(right) ?? operandSortKey(right),
+      )
+    ));
+  }
   state.currentDef.set(name, id);
 }
 
