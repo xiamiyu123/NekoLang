@@ -75,6 +75,33 @@ export interface QuadrupleOptimization {
   diagnostics: CompileError[];
 }
 
+export interface QuadrupleLivenessOperand {
+  value: string;
+  label: string;
+  live: boolean | null;
+}
+
+export interface QuadrupleLivenessRow {
+  index: number;
+  op: string;
+  ob1: QuadrupleLivenessOperand;
+  ob2: QuadrupleLivenessOperand;
+  t: QuadrupleLivenessOperand;
+}
+
+export interface QuadrupleLivenessBlock {
+  blockIndex: number;
+  startQuad: number;
+  endQuad: number;
+  rows: QuadrupleLivenessRow[];
+}
+
+export interface QuadrupleLiveness {
+  source: "optimized" | string;
+  rows: QuadrupleLivenessRow[];
+  blocks: QuadrupleLivenessBlock[];
+}
+
 export interface QuadrupleDagNode {
   id: string;
   number: number;
@@ -130,6 +157,7 @@ export interface CompileResult {
   quadruples: Quadruple[];
   quadrupleDag?: QuadrupleDag;
   quadrupleOptimization?: QuadrupleOptimization;
+  quadrupleLiveness?: QuadrupleLiveness;
   assembly: string;
   errors: CompileError[];
   backend: string;

@@ -153,4 +153,79 @@ describe("QuadruplePanel", () => {
     expect(screen.queryByText(/没有可构造 DAG/)).toBeNull();
     expect(screen.getByText("T1, T2")).toBeTruthy();
   });
+
+  it("renders optimized quadruple liveness annotations", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuadruplePanel
+        quadruples={[
+          { op: "+", ob1: "I1", ob2: "I2", t: "T1" },
+          { op: "+", ob1: "T1", ob2: "I3", t: "I4" },
+        ]}
+        liveness={{
+          source: "optimized",
+          rows: [
+            {
+              index: 1,
+              op: "+",
+              ob1: { value: "I1", label: "a", live: true },
+              ob2: { value: "I2", label: "b", live: true },
+              t: { value: "T1", label: "T1", live: true },
+            },
+            {
+              index: 2,
+              op: "+",
+              ob1: { value: "T1", label: "T1", live: false },
+              ob2: { value: "I3", label: "c", live: true },
+              t: { value: "I4", label: "x", live: true },
+            },
+          ],
+          blocks: [
+            {
+              blockIndex: 1,
+              startQuad: 1,
+              endQuad: 2,
+              rows: [
+                {
+                  index: 1,
+                  op: "+",
+                  ob1: { value: "I1", label: "a", live: true },
+                  ob2: { value: "I2", label: "b", live: true },
+                  t: { value: "T1", label: "T1", live: true },
+                },
+                {
+                  index: 2,
+                  op: "+",
+                  ob1: { value: "T1", label: "T1", live: false },
+                  ob2: { value: "I3", label: "c", live: true },
+                  t: { value: "I4", label: "x", live: true },
+                },
+              ],
+            },
+          ],
+        }}
+        theme="dark"
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "活跃信息" }));
+    const table = screen.getByRole("table", { name: "B1 活跃信息" });
+    expect(within(table).getByText("a")).toBeTruthy();
+    expect(within(table).getAllByText("(y)").length).toBeGreaterThan(0);
+    expect(within(table).getAllByText("T1")).toHaveLength(2);
+    expect(within(table).getByText("(n)")).toBeTruthy();
+  });
+
+  it("shows an empty liveness state when backend data is missing", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuadruplePanel
+        quadruples={[{ op: "program", ob1: "t", ob2: "_", t: "_" }]}
+        theme="dark"
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "活跃信息" }));
+    expect(screen.getByText(/没有可展示的活跃信息/)).toBeTruthy();
+  });
 });

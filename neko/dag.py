@@ -149,7 +149,7 @@ def _skipped_quad(index: int, quad: Quadruple, reason: str) -> dict[str, Any]:
     }
 
 
-def _split_basic_blocks(quadruples: list[Quadruple]) -> list[list[tuple[int, Quadruple]]]:
+def split_basic_blocks(quadruples: list[Quadruple]) -> list[list[tuple[int, Quadruple]]]:
     blocks: list[list[tuple[int, Quadruple]]] = []
     current: list[tuple[int, Quadruple]] = []
 
@@ -191,7 +191,7 @@ def _format_quad(index: int, quad: Quadruple, labels: dict[str, str]) -> dict[st
 
 def build_quadruple_dags(quadruples: list[Quadruple], labels: dict[str, str] | None = None) -> dict[str, Any]:
     labels = labels or {}
-    raw_blocks = _split_basic_blocks(quadruples)
+    raw_blocks = split_basic_blocks(quadruples)
     dags = [
         (block, DagBuilder(labels).build(block, index + 1))
         for index, block in enumerate(raw_blocks)

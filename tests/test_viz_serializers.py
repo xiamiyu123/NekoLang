@@ -36,6 +36,7 @@ from neko.ast_nodes import (
     WhileNode,
 )
 from neko.lexer import Lexer
+from neko.semantic import Quadruple
 from neko.tokens import Token, TokenType
 
 
@@ -500,6 +501,7 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertIn("quadruples", serialized)
         self.assertIn("quadrupleDag", serialized)
         self.assertIn("quadrupleOptimization", serialized)
+        self.assertIn("quadrupleLiveness", serialized)
         self.assertIn("assembly", serialized)
         self.assertIn("errors", serialized)
         self.assertEqual(serialized["backend"], "llvm")
@@ -670,6 +672,55 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertGreater(len(steps[3]["removedRows"]), 0)
         self.assertEqual(len(steps[3]["afterRows"]), 16)
         self.assertEqual(steps[3]["afterRows"], optimization["optimized"])
+
+    def test_quadruple_liveness_marks_rows_by_reverse_scan(self):
+        from neko.quadruple_liveness import build_quadruple_liveness
+
+        quads = [
+            Quadruple("+", "I1", "I2", "T1"),
+            Quadruple("-", "I3", "I4", "T2"),
+            Quadruple("*", "T1", "T2", "T3"),
+            Quadruple("-", "I1", "T3", "T4"),
+            Quadruple("/", "T1", "C1", "T5"),
+            Quadruple("+", "T4", "T5", "I5"),
+        ]
+
+        rows = build_quadruple_liveness(quads, {"I1": "a", "I2": "b", "I5": "x"})["blocks"][0]["rows"]
+
+        self.assertEqual((rows[0]["ob1"]["live"], rows[0]["ob2"]["live"], rows[0]["t"]["live"]), (True, True, True))
+        self.assertEqual((rows[2]["ob1"]["live"], rows[2]["ob2"]["live"], rows[2]["t"]["live"]), (True, False, True))
+        self.assertEqual((rows[4]["ob1"]["live"], rows[4]["ob2"]["live"], rows[4]["t"]["live"]), (False, None, True))
+        self.assertEqual((rows[5]["ob1"]["live"], rows[5]["ob2"]["live"], rows[5]["t"]["live"]), (False, False, True))
+        self.assertEqual(rows[0]["ob1"]["label"], "a")
+        self.assertEqual(rows[0]["ob2"]["label"], "b")
+
+    def test_quadruple_liveness_uses_optimized_rows(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int))) (paw (:= a (+ 2 3)) (meow a)))"
+        serialized = serialize_compilation_result(compile_source(source), backend="llvm")
+
+        self.assertEqual(
+            len(serialized["quadrupleLiveness"]["rows"]),
+            len(serialized["quadrupleOptimization"]["optimized"]),
+        )
+        self.assertEqual([row["op"] for row in serialized["quadrupleLiveness"]["rows"]], ["program", ":=", "print", "end"])
+
+    def test_quadruple_liveness_keeps_basic_blocks_independent(self):
+        from neko.quadruple_liveness import build_quadruple_liveness
+
+        quads = [
+            Quadruple("+", "I1", "I2", "T1"),
+            Quadruple("if_false", "T1", "_", "L1"),
+            Quadruple("+", "T1", "I3", "T2"),
+        ]
+
+        blocks = build_quadruple_liveness(quads)["blocks"]
+
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0]["rows"][0]["t"]["live"], True)
+        self.assertEqual(blocks[1]["rows"][0]["ob1"]["live"], False)
+        self.assertEqual(blocks[1]["rows"][0]["ob2"]["live"], True)
 
     def test_quadruple_dag_and_optimizer_share_commutative_rules(self):
         from neko.viz_serializers import serialize_compilation_result

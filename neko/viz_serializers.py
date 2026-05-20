@@ -61,6 +61,7 @@ from neko.ast_nodes import (
 from neko.build_utils import CompilationResult, generate_code
 from neko.dag import build_quadruple_dags
 from neko.errors import NekoError, SUGGESTIONS
+from neko.quadruple_liveness import build_quadruple_liveness
 from neko.quadruple_optimizer import optimize_quadruples
 from neko.semantic import Quadruple
 from neko.symbol_table import SymbolEntry, SymbolTable
@@ -658,6 +659,19 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
     return base
 
 
+def _optimized_quadruples_for_liveness(result: CompilationResult) -> tuple[list[Quadruple], dict[str, str]]:
+    if result.analyzer.errors:
+        return result.analyzer.quadruples, dict(result.analyzer.symbol_table.const_table)
+    try:
+        optimized_result = optimize_quadruples(
+            result.analyzer.quadruples,
+            result.analyzer.symbol_table.const_table,
+        )
+        return optimized_result.quadruples, dict(optimized_result.constants)
+    except Exception:
+        return result.analyzer.quadruples, dict(result.analyzer.symbol_table.const_table)
+
+
 # ---------------------------------------------------------------------------
 # SymbolTable serialization
 # ---------------------------------------------------------------------------
@@ -681,12 +695,12 @@ def serialize_symbol_table(table: SymbolTable) -> dict[str, Any]:
     }
 
 
-def _dag_operand_labels(table: SymbolTable) -> dict[str, str]:
+def _dag_operand_labels(table: SymbolTable, constants: dict[str, str] | None = None) -> dict[str, str]:
     labels: dict[str, str] = {}
     for entry in table.entries:
         if entry.addr_name:
             labels[entry.addr_name] = entry.name
-    for value, address in table.const_table.items():
+    for value, address in (constants or table.const_table).items():
         labels[str(address)] = str(value)
     return labels
 
@@ -707,6 +721,8 @@ def serialize_compilation_result(
         except Exception:
             assembly = ""
 
+    liveness_quadruples, liveness_constants = _optimized_quadruples_for_liveness(result)
+
     return {
         "source": result.source,
         "tokens": serialize_tokens(result.tokens),
@@ -718,6 +734,10 @@ def serialize_compilation_result(
             labels=_dag_operand_labels(result.analyzer.symbol_table),
         ),
         "quadrupleOptimization": serialize_quadruple_optimization(result),
+        "quadrupleLiveness": build_quadruple_liveness(
+            liveness_quadruples,
+            labels=_dag_operand_labels(result.analyzer.symbol_table, liveness_constants),
+        ),
         "assembly": assembly,
         "errors": serialize_errors(result.analyzer.errors),
         "backend": backend,
