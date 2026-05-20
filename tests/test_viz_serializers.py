@@ -662,8 +662,12 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual((steps[3]["beforeCount"], steps[3]["afterCount"], steps[3]["changed"]), (21, 16, True))
         self.assertEqual(len(steps[1]["beforeRows"]), 21)
         self.assertEqual(len(steps[1]["afterRows"]), 21)
-        self.assertGreater(len(steps[1]["removedRows"]), 0)
-        self.assertIn({"op": "+", "ob1": "C2", "ob2": "C3", "t": "T2"}, steps[1]["removedRows"])
+        self.assertEqual(steps[1]["removedRows"], [])
+        self.assertIn(
+            {"op": "+", "ob1": "C2", "ob2": "C3", "t": "T2"},
+            [row["before"] for row in steps[1]["rewrittenRows"]],
+        )
+        self.assertGreater(len(steps[3]["removedRows"]), 0)
         self.assertEqual(len(steps[3]["afterRows"]), 16)
         self.assertEqual(steps[3]["afterRows"], optimization["optimized"])
 

@@ -6,6 +6,7 @@ plain dicts suitable for JSON encoding. Used by the NekoScope API layer.
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 from typing import Any, Callable
 
 from neko.ast_nodes import (
@@ -497,15 +498,42 @@ def _quadruple_rows_equal(left: list[Quadruple], right: list[Quadruple]) -> bool
     return [serialize_quadruple(q) for q in left] == [serialize_quadruple(q) for q in right]
 
 
-def _removed_quadruples(before: list[Quadruple], after: list[Quadruple]) -> list[dict[str, str]]:
-    remaining = [serialize_quadruple(q) for q in after]
+def _quadruple_row_key(row: dict[str, str]) -> tuple[str, str, str, str]:
+    return (row["op"], row["ob1"], row["ob2"], row["t"])
+
+
+def _step_row_changes(
+    before: list[Quadruple],
+    after: list[Quadruple],
+) -> tuple[list[dict[str, str]], list[dict[str, dict[str, str]]]]:
+    before_rows = serialize_quadruples(before)
+    after_rows = serialize_quadruples(after)
+    matcher = SequenceMatcher(
+        None,
+        [_quadruple_row_key(row) for row in before_rows],
+        [_quadruple_row_key(row) for row in after_rows],
+        autojunk=False,
+    )
     removed: list[dict[str, str]] = []
-    for quad in serialize_quadruples(before):
-        if quad in remaining:
-            remaining.remove(quad)
-        else:
-            removed.append(quad)
-    return removed
+    rewritten: list[dict[str, dict[str, str]]] = []
+
+    for tag, before_start, before_end, after_start, after_end in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        if tag == "delete":
+            removed.extend(before_rows[before_start:before_end])
+            continue
+        if tag == "replace":
+            before_slice = before_rows[before_start:before_end]
+            after_slice = after_rows[after_start:after_end]
+            pair_count = min(len(before_slice), len(after_slice))
+            rewritten.extend(
+                {"before": before_slice[index], "after": after_slice[index]}
+                for index in range(pair_count)
+            )
+            removed.extend(before_slice[pair_count:])
+
+    return removed, rewritten
 
 
 def _optimization_step(
@@ -515,6 +543,7 @@ def _optimization_step(
     after: list[Quadruple],
     changed: bool,
 ) -> dict[str, Any]:
+    removed_rows, rewritten_rows = _step_row_changes(before, after)
     return {
         "name": name,
         "detail": detail,
@@ -523,7 +552,8 @@ def _optimization_step(
         "changed": changed,
         "beforeRows": serialize_quadruples(before),
         "afterRows": serialize_quadruples(after),
-        "removedRows": _removed_quadruples(before, after),
+        "removedRows": removed_rows,
+        "rewrittenRows": rewritten_rows,
     }
 
 
