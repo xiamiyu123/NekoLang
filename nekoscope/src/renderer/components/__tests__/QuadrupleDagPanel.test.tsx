@@ -24,6 +24,16 @@ const block: QuadrupleDagBlock = {
   skipped: [],
 };
 
+const emptyBlock: QuadrupleDagBlock = {
+  blockIndex: 2,
+  startQuad: 6,
+  endQuad: 6,
+  statements: [{ index: 6, text: "(print, T1, _, _)", op: "print", ob1: "T1", ob2: "_", t: "_" }],
+  nodes: [],
+  edges: [],
+  skipped: [{ index: 6, op: "print", ob1: "T1", ob2: "_", t: "_", reason: "ignored" }],
+};
+
 describe("dagToFlow", () => {
   it("converts DAG nodes and edges to react-flow data", () => {
     const { nodes, edges } = dagToFlow(block);
@@ -68,6 +78,34 @@ describe("QuadrupleDagPanel", () => {
     render(<QuadrupleDagPanel dag={{ blocks: [] }} theme="dark" />);
 
     expect(screen.getByText(/没有可构造 DAG 的基本块/)).toBeTruthy();
+  });
+
+  it("ignores empty backend DAG blocks", () => {
+    render(<QuadrupleDagPanel dag={{ blocks: [emptyBlock] }} theme="dark" />);
+
+    expect(screen.getByText(/没有可构造 DAG 的基本块/)).toBeTruthy();
+    expect(document.querySelector(".react-flow")).toBeNull();
+  });
+
+  it("clamps the selected block when DAG blocks shrink", async () => {
+    const user = userEvent.setup();
+    const secondBlock: QuadrupleDagBlock = {
+      ...block,
+      blockIndex: 2,
+      startQuad: 8,
+      endQuad: 9,
+      statements: [{ index: 8, text: "(*, I1, I2, T3)", op: "*", ob1: "I1", ob2: "I2", t: "T3" }],
+      nodes: block.nodes.map((node) => node.id === "n3" ? { ...node, op: "*", names: ["T3"] } : node),
+    };
+    const { rerender } = render(<QuadrupleDagPanel dag={{ blocks: [block, secondBlock] }} theme="dark" />);
+
+    await user.click(screen.getByText("B2"));
+    expect(screen.getByText("(*, I1, I2, T3)")).toBeTruthy();
+
+    rerender(<QuadrupleDagPanel dag={{ blocks: [block] }} theme="dark" />);
+    expect(screen.getByText("B1")).toBeTruthy();
+    expect(screen.getByText("(+, I1, I2, T1)")).toBeTruthy();
+    expect(screen.queryByText("(*, I1, I2, T3)")).toBeNull();
   });
 
   it("opens and closes the full DAG overview", async () => {

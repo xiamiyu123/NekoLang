@@ -133,13 +133,24 @@ describe("API client", () => {
     expect(source).toContain("nya");
   });
 
-  it("getExampleSource returns built-in DAG sample without fetching", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+  it("getExampleSource prefers backend DAG sample", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ source: "; backend version\n(nya dag_optimization_demo (paw))" }), { status: 200 })
+    );
+
+    const source = await getExampleSource("dag_optimization_demo");
+    expect(source).toContain("backend version");
+    expect(fetchSpy).toHaveBeenCalledWith("http://localhost:8000/api/examples/dag_optimization_demo", undefined);
+  });
+
+  it("getExampleSource falls back to built-in DAG sample when backend is missing it", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response('{"detail":"Not Found"}', { status: 404 })
+    );
 
     const source = await getExampleSource("dag_optimization_demo");
     expect(source).toContain("dag_optimization_demo");
     expect(source).toContain("(+ a b)");
-    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("throws request error with backend detail on non-ok response", async () => {
