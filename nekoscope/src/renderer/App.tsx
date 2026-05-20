@@ -709,6 +709,7 @@ function ArtifactView({
       <QuadruplePanel
         quadruples={result?.quadruples ?? null}
         optimization={result?.quadrupleOptimization ?? null}
+        liveness={result?.quadrupleLiveness ?? null}
         dag={result?.quadrupleDag ?? null}
         theme={theme}
       />

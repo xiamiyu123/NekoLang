@@ -1,5 +1,12 @@
 import { useState } from "react";
-import type { Quadruple, QuadrupleDag, QuadrupleOptimization, QuadrupleOptimizationStep } from "../types/compiler";
+import type {
+  Quadruple,
+  QuadrupleDag,
+  QuadrupleLiveness,
+  QuadrupleLivenessOperand,
+  QuadrupleOptimization,
+  QuadrupleOptimizationStep,
+} from "../types/compiler";
 import { QuadrupleDagPanel } from "./QuadrupleDagPanel";
 import type { ResolvedTheme } from "../styles/theme";
 import { buildQuadrupleDag } from "../quadrupleDag";
@@ -7,11 +14,12 @@ import { buildQuadrupleDag } from "../quadrupleDag";
 interface Props {
   quadruples: Quadruple[] | null;
   optimization?: QuadrupleOptimization | null;
+  liveness?: QuadrupleLiveness | null;
   dag?: QuadrupleDag | null;
   theme: ResolvedTheme;
 }
 
-type QuadView = "initial" | "process" | "optimized";
+type QuadView = "initial" | "process" | "optimized" | "liveness";
 type QuadRowTone = "normal" | "removed" | "rewritten-before" | "rewritten-after";
 
 function explainOperand(value: string): string {
@@ -140,7 +148,64 @@ function ConstantMap({ constants }: { constants?: Record<string, string | number
   );
 }
 
-export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) {
+function LivenessCell({ operand }: { operand: QuadrupleLivenessOperand }) {
+  if (operand.value === "_") {
+    return <span className="mono-cell muted">_</span>;
+  }
+  if (operand.live === null) {
+    return <span className="mono-cell">{operand.label}</span>;
+  }
+  return (
+    <span className={`quad-live-cell ${operand.live ? "live" : "dead"}`}>
+      <span className="mono-cell">{operand.label}</span>
+      <span className="quad-live-mark">({operand.live ? "y" : "n"})</span>
+    </span>
+  );
+}
+
+function QuadrupleLivenessPanel({ liveness }: { liveness?: QuadrupleLiveness | null }) {
+  if (!liveness || liveness.rows.length === 0) {
+    return <div className="empty-panel compact">当前四元式没有可展示的活跃信息。</div>;
+  }
+
+  const blocks = liveness.blocks.length > 0
+    ? liveness.blocks
+    : [{ blockIndex: 1, startQuad: 1, endQuad: liveness.rows.length, rows: liveness.rows }];
+
+  return (
+    <div className="quad-liveness">
+      {blocks.map((block) => (
+        <section className="quad-live-block" key={`${block.blockIndex}-${block.startQuad}`}>
+          <div className="quad-step-table-title">B{block.blockIndex} · 四元式 {block.startQuad}-{block.endQuad}</div>
+          <table className="teaching-table dense quad-live-table" aria-label={`B${block.blockIndex} 活跃信息`}>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>操作</th>
+                <th>参数 1</th>
+                <th>参数 2</th>
+                <th>结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row) => (
+                <tr key={row.index}>
+                  <td className="mono-cell muted">{row.index}</td>
+                  <td><span className="op-pill">{row.op}</span></td>
+                  <td><LivenessCell operand={row.ob1} /></td>
+                  <td><LivenessCell operand={row.ob2} /></td>
+                  <td><LivenessCell operand={row.t} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+export function QuadruplePanel({ quadruples, optimization, liveness, dag, theme }: Props) {
   const [activeView, setActiveView] = useState<QuadView>("initial");
 
   if (!quadruples) {
@@ -186,6 +251,15 @@ export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) 
           onClick={() => setActiveView("optimized")}
         >
           优化结果
+        </button>
+        <button
+          className={`tab-button ${activeView === "liveness" ? "active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={activeView === "liveness"}
+          onClick={() => setActiveView("liveness")}
+        >
+          活跃信息
         </button>
       </div>
 
@@ -237,6 +311,10 @@ export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) 
             <ConstantMap constants={optimization?.optimizedConstants} />
             <QuadTable rows={optimizedRows} label="优化后四元式" />
           </>
+        ) : null}
+
+        {activeView === "liveness" ? (
+          <QuadrupleLivenessPanel liveness={liveness} />
         ) : null}
       </div>
     </div>

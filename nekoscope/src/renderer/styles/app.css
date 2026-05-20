@@ -1665,6 +1665,42 @@ button {
   background: transparent;
 }
 
+.quad-liveness {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.quad-live-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quad-live-table td {
+  vertical-align: middle;
+}
+
+.quad-live-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.quad-live-cell.live {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.quad-live-cell.dead {
+  color: var(--faint);
+}
+
+.quad-live-mark {
+  font-weight: 900;
+}
+
 .table-card {
   min-width: 0;
 }
