@@ -70,7 +70,6 @@ NEKOSCOPE_RELEASE_VERSION=202605132305 npm run dist
 - `examples/`
 - `runtime/`
 - `pyproject.toml`
-- `uv.lock`
 
 `npm run pack` / `npm run dist` 会先从当前 `PATH` 找到 `uv`，复制到 `nekoscope/resources/bin/`，再由 electron-builder 放入 Electron 的 `resources/bin/`。
 
