@@ -565,8 +565,8 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual(optimization["afterCount"], 4)
         self.assertEqual([q["op"] for q in optimization["initial"]], ["program", "+", ":=", "print", "end"])
         self.assertEqual([q["op"] for q in optimization["optimized"]], ["program", ":=", "print", "end"])
-        self.assertEqual(optimization["optimized"][1]["ob1"], "C1")
-        self.assertEqual(optimization["optimizedConstants"], {"5": "C1"})
+        folded_const = optimization["optimized"][1]["ob1"]
+        self.assertEqual(optimization["optimizedConstants"]["5"], folded_const)
         self.assertEqual(optimization["diagnostics"], [])
         self.assertEqual(optimization["steps"][1]["name"], "O1 常量折叠")
         self.assertTrue(optimization["steps"][1]["changed"])
@@ -623,6 +623,22 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertGreater(len(steps[1]["removedRows"]), 0)
         self.assertIn({"op": "+", "ob1": "C2", "ob2": "C3", "t": "T2"}, steps[1]["removedRows"])
         self.assertEqual(len(steps[3]["afterRows"]), 16)
+        self.assertEqual(steps[3]["afterRows"], optimization["optimized"])
+
+    def test_quadruple_dag_and_optimizer_share_commutative_rules(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int) (x bool) (y bool))) (paw (:= x (!= a b)) (:= y (!= b a))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+
+        dag = serialized["quadrupleDag"]["blocks"][0]
+        not_equal_nodes = [node for node in dag["nodes"] if node["op"] == "!="]
+        optimization = serialized["quadrupleOptimization"]
+
+        self.assertEqual(len(not_equal_nodes), 1)
+        self.assertTrue(optimization["steps"][2]["changed"])
+        self.assertEqual([q["op"] for q in optimization["optimized"]], ["program", "!=", ":=", ":=", "end"])
 
     def test_serialize_compilation_result_with_errors(self):
         from neko.viz_serializers import serialize_compilation_result

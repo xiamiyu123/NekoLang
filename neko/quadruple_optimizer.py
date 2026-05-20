@@ -6,15 +6,13 @@ import ast as py_ast
 import re
 from dataclasses import dataclass
 
+from .quadruple_rules import COMMUTATIVE_OPS, SUPPORTED_BINARY_OPS
 from .semantic import Quadruple
 
 
-SUPPORTED_BINARY_OPS = {"+", "-", "*", "/", "<", ">", "=", "<=", ">=", "!="}
-COMMUTATIVE_OPS = {"+", "*", "=", "!="}
 CONTROL_BOUNDARY_OPS = {"program", "end", "label", "goto", "if_false", "return"}
 SIDE_EFFECT_BARRIER_OPS = {"call"}
 
-CONST_RE = re.compile(r"\bC\d+\b")
 INT_RE = re.compile(r"^-?\d+$")
 TEMP_RE = re.compile(r"\bT\d+\b")
 
@@ -279,11 +277,10 @@ def optimize_quadruples(
         enable_cse=True,
     )
     pruned = _remove_dead_temp_defs(cse)
-    compacted, compacted_constants = _compact_constants(pruned, cse_state.const_by_addr)
     removed_temp_count = len(cse) - len(pruned)
     return QuadrupleOptimizationResult(
-        quadruples=compacted,
-        constants=compacted_constants,
+        quadruples=pruned,
+        constants=_constants_by_value(cse_state.const_by_addr),
         folded_quadruples=folded,
         cse_quadruples=cse,
         pruned_quadruples=pruned,
@@ -340,36 +337,6 @@ def _used_temps(quad: Quadruple) -> set[str]:
 
 def _is_pure_temp_def(quad: Quadruple) -> bool:
     return quad.op == ":=" or quad.op in SUPPORTED_BINARY_OPS
-
-
-def _compact_constants(
-    quadruples: list[Quadruple],
-    const_by_addr: dict[str, str],
-) -> tuple[list[Quadruple], dict[str, str]]:
-    value_to_addr: dict[str, str] = {}
-
-    def rewrite_operand(operand: str) -> str:
-        def replace(match: re.Match[str]) -> str:
-            addr = match.group(0)
-            value = const_by_addr.get(addr)
-            if value is None:
-                return addr
-            if value not in value_to_addr:
-                value_to_addr[value] = f"C{len(value_to_addr) + 1}"
-            return value_to_addr[value]
-
-        return CONST_RE.sub(replace, operand)
-
-    rewritten = [
-        Quadruple(
-            quad.op,
-            rewrite_operand(quad.ob1),
-            rewrite_operand(quad.ob2),
-            rewrite_operand(quad.t),
-        )
-        for quad in quadruples
-    ]
-    return rewritten, value_to_addr
 
 
 def _next_const_index(const_by_addr: dict[str, str]) -> int:

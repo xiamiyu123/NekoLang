@@ -5,12 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .quadruple_rules import COMMUTATIVE_OPS, SUPPORTED_BINARY_OPS
 from .semantic import Quadruple
 
 
 VALUE_OP = "value"
-SUPPORTED_BINARY_OPS = {"+", "-", "*", "/", "<", ">", "=", "<=", ">=", "!="}
-COMMUTATIVE_OPS = {"+", "*", "="}
 BOUNDARY_OPS = {"program", "end", "label", "goto", "if_false", "param", "call", "return", "print"}
 
 
