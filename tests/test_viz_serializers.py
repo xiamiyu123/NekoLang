@@ -618,6 +618,11 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual((steps[1]["beforeCount"], steps[1]["afterCount"], steps[1]["changed"]), (21, 21, True))
         self.assertEqual((steps[2]["beforeCount"], steps[2]["afterCount"], steps[2]["changed"]), (21, 21, True))
         self.assertEqual((steps[3]["beforeCount"], steps[3]["afterCount"], steps[3]["changed"]), (21, 16, True))
+        self.assertEqual(len(steps[1]["beforeRows"]), 21)
+        self.assertEqual(len(steps[1]["afterRows"]), 21)
+        self.assertGreater(len(steps[1]["removedRows"]), 0)
+        self.assertIn({"op": "+", "ob1": "C2", "ob2": "C3", "t": "T2"}, steps[1]["removedRows"])
+        self.assertEqual(len(steps[3]["afterRows"]), 16)
 
     def test_serialize_compilation_result_with_errors(self):
         from neko.viz_serializers import serialize_compilation_result

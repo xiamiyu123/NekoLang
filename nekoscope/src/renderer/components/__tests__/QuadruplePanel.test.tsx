@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QuadruplePanel } from "../QuadruplePanel";
 
@@ -55,6 +55,19 @@ describe("QuadruplePanel", () => {
               beforeCount: 3,
               afterCount: 2,
               changed: true,
+              beforeRows: [
+                { op: "program", ob1: "t", ob2: "_", t: "_" },
+                { op: "+", ob1: "C1", ob2: "C2", t: "T1" },
+                { op: ":=", ob1: "T1", ob2: "_", t: "I1" },
+              ],
+              afterRows: [
+                { op: "program", ob1: "t", ob2: "_", t: "_" },
+                { op: ":=", ob1: "C3", ob2: "_", t: "I1" },
+              ],
+              removedRows: [
+                { op: "+", ob1: "C1", ob2: "C2", t: "T1" },
+                { op: ":=", ob1: "T1", ob2: "_", t: "I1" },
+              ],
             },
           ],
           diagnostics: [],
@@ -68,6 +81,10 @@ describe("QuadruplePanel", () => {
     expect(screen.getByText("四元式序列")).toBeTruthy();
     expect(screen.getByText("O1 常量折叠")).toBeTruthy();
     expect(screen.getByText("3 -> 2")).toBeTruthy();
+    const removedTable = screen.getByRole("table", { name: "O1 常量折叠 已优化掉的四元式" });
+    expect(within(removedTable).getByText("+")).toBeTruthy();
+    expect(within(removedTable).getByText("C2")).toBeTruthy();
+    expect(screen.getByRole("table", { name: "O1 常量折叠 优化后四元式" })).toBeTruthy();
     await user.click(screen.getByRole("tab", { name: "优化结果" }));
     expect(screen.getByText("C1 = 5")).toBeTruthy();
   });

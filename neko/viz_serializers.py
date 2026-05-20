@@ -497,6 +497,36 @@ def _quadruple_rows_equal(left: list[Quadruple], right: list[Quadruple]) -> bool
     return [serialize_quadruple(q) for q in left] == [serialize_quadruple(q) for q in right]
 
 
+def _removed_quadruples(before: list[Quadruple], after: list[Quadruple]) -> list[dict[str, str]]:
+    remaining = [serialize_quadruple(q) for q in after]
+    removed: list[dict[str, str]] = []
+    for quad in serialize_quadruples(before):
+        if quad in remaining:
+            remaining.remove(quad)
+        else:
+            removed.append(quad)
+    return removed
+
+
+def _optimization_step(
+    name: str,
+    detail: str,
+    before: list[Quadruple],
+    after: list[Quadruple],
+    changed: bool,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "detail": detail,
+        "beforeCount": len(before),
+        "afterCount": len(after),
+        "changed": changed,
+        "beforeRows": serialize_quadruples(before),
+        "afterRows": serialize_quadruples(after),
+        "removedRows": _removed_quadruples(before, after),
+    }
+
+
 def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any]:
     initial = serialize_quadruples(result.analyzer.quadruples)
     base = {
@@ -564,34 +594,34 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
             "optimizedConstants": dict(optimized_result.constants),
             "diagnostics": [],
             "steps": [
-                {
-                    "name": "读取初始四元式",
-                    "detail": "语义分析先生成未优化的线性中间表示。",
-                    "beforeCount": len(result.analyzer.quadruples),
-                    "afterCount": len(result.analyzer.quadruples),
-                    "changed": False,
-                },
-                {
-                    "name": "O1 常量折叠",
-                    "detail": "在四元式上折叠常量算术、比较和等值判断。",
-                    "beforeCount": len(result.analyzer.quadruples),
-                    "afterCount": len(optimized_result.folded_quadruples),
-                    "changed": optimized_result.folded_count > 0,
-                },
-                {
-                    "name": "O1 公共子表达式消除",
-                    "detail": "按基本块的 DAG 值编号复用重复计算结果。",
-                    "beforeCount": len(optimized_result.folded_quadruples),
-                    "afterCount": len(optimized_result.cse_quadruples),
-                    "changed": optimized_result.cse_count > 0,
-                },
-                {
-                    "name": "删除死临时赋值",
-                    "detail": "移除折叠和复用后不再被读取的临时结果。",
-                    "beforeCount": len(optimized_result.cse_quadruples),
-                    "afterCount": len(optimized_result.pruned_quadruples),
-                    "changed": optimized_result.removed_temp_count > 0,
-                },
+                _optimization_step(
+                    "读取初始四元式",
+                    "语义分析先生成未优化的线性中间表示。",
+                    result.analyzer.quadruples,
+                    result.analyzer.quadruples,
+                    False,
+                ),
+                _optimization_step(
+                    "O1 常量折叠",
+                    "在四元式上折叠常量算术、比较和等值判断。",
+                    result.analyzer.quadruples,
+                    optimized_result.folded_quadruples,
+                    optimized_result.folded_count > 0,
+                ),
+                _optimization_step(
+                    "O1 公共子表达式消除",
+                    "按基本块的 DAG 值编号复用重复计算结果。",
+                    optimized_result.folded_quadruples,
+                    optimized_result.cse_quadruples,
+                    optimized_result.cse_count > 0,
+                ),
+                _optimization_step(
+                    "删除死临时赋值",
+                    "移除折叠和复用后不再被读取的临时结果。",
+                    optimized_result.cse_quadruples,
+                    optimized_result.pruned_quadruples,
+                    optimized_result.removed_temp_count > 0,
+                ),
             ],
         }
     )
