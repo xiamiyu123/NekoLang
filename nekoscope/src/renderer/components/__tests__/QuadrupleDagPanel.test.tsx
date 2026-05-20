@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QuadrupleDagPanel, dagToFlow } from "../QuadrupleDagPanel";
+import { buildQuadrupleDag } from "../../quadrupleDag";
 import type { QuadrupleDagBlock } from "../../types/compiler";
 
 const block: QuadrupleDagBlock = {
@@ -46,6 +47,46 @@ describe("dagToFlow", () => {
     expect(nodes.find((node) => node.id === "n3")?.position.y).toBeLessThan(
       nodes.find((node) => node.id === "n1")?.position.y ?? 0
     );
+  });
+});
+
+describe("buildQuadrupleDag", () => {
+  it("orders commutative fallback operands by constant, named variable, then temporary", () => {
+    const dag = buildQuadrupleDag(
+      [
+        { op: "+", ob1: "I1", ob2: "C1", t: "T1" },
+        { op: "+", ob1: "T1", ob2: "I1", t: "T2" },
+      ],
+      { "3": "C1" },
+    );
+    const block = dag.blocks[0];
+    const nodesById = new Map(block.nodes.map((node) => [node.id, node]));
+    const plusNodes = block.nodes.filter((node) => node.op === "+");
+    const firstEdges = Object.fromEntries(
+      block.edges
+        .filter((edge) => edge.source === plusNodes[0].id)
+        .map((edge) => [edge.role, nodesById.get(edge.target)])
+    );
+    const secondEdges = Object.fromEntries(
+      block.edges
+        .filter((edge) => edge.source === plusNodes[1].id)
+        .map((edge) => [edge.role, nodesById.get(edge.target)])
+    );
+
+    expect(firstEdges.left?.value).toBe("3");
+    expect(firstEdges.right?.value).toBe("I1");
+    expect(secondEdges.left?.value).toBe("I1");
+    expect(secondEdges.right?.op).toBe("+");
+    expect(secondEdges.right?.names).toContain("T1");
+  });
+
+  it("shares not-equal commutativity with the backend DAG", () => {
+    const dag = buildQuadrupleDag([
+      { op: "!=", ob1: "I2", ob2: "I1", t: "T1" },
+      { op: "!=", ob1: "I1", ob2: "I2", t: "T2" },
+    ]);
+
+    expect(dag.blocks[0].nodes.filter((node) => node.op === "!=")).toHaveLength(1);
   });
 });
 

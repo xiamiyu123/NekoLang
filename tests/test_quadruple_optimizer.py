@@ -19,7 +19,7 @@ class TestQuadrupleOptimizer(unittest.TestCase):
 
         self.assertEqual(result.cse_count, 1)
         self.assertEqual([q.op for q in result.quadruples], ["program", "+", ":=", ":=", "end"])
-        self.assertEqual(result.quadruples[3], Quadruple(":=", "T1", "_", "I4"))
+        self.assertEqual(result.quadruples[3], Quadruple(":=", "I3", "_", "I4"))
 
     def test_does_not_reuse_expression_after_operand_reassignment(self):
         quads = [
@@ -52,7 +52,21 @@ class TestQuadrupleOptimizer(unittest.TestCase):
 
         self.assertEqual(result.cse_count, 1)
         self.assertEqual([q.op for q in result.quadruples], ["program", "!=", ":=", ":=", "end"])
-        self.assertEqual(result.quadruples[3], Quadruple(":=", "T1", "_", "I4"))
+        self.assertEqual(result.quadruples[3], Quadruple(":=", "I3", "_", "I4"))
+
+    def test_orders_commutative_operands_by_constant_named_temp(self):
+        quads = [
+            Quadruple("program", "t"),
+            Quadruple("+", "I1", "C1", "T1"),
+            Quadruple("+", "T1", "I1", "T2"),
+            Quadruple(":=", "T2", "_", "I2"),
+            Quadruple("end", "t"),
+        ]
+
+        result = optimize_quadruples(quads, {"7": "C1"})
+
+        self.assertEqual(result.quadruples[1], Quadruple("+", "C1", "I1", "T1"))
+        self.assertEqual(result.quadruples[2], Quadruple("+", "I1", "T1", "T2"))
 
 
 if __name__ == "__main__":
