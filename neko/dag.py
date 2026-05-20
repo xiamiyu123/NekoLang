@@ -41,6 +41,7 @@ class DagBuilder:
         self.value_nodes: dict[str, str] = {}
         self.expr_nodes: dict[tuple[str, str, str], str] = {}
         self.current_def: dict[str, str] = {}
+        self.name_sort_keys: dict[str, tuple[int, int, str]] = {}
         self.labels = labels or {}
 
     def build(self, quads: list[tuple[int, Quadruple]], block_index: int) -> BasicBlockDag:
@@ -118,6 +119,7 @@ class DagBuilder:
             return
         old_node_id = self.current_def.get(name)
         label = self._label(name)
+        self.name_sort_keys[label] = operand_sort_key(name)
         if old_node_id and old_node_id != node_id:
             old_node = self._get_node(old_node_id)
             old_node.names = [item for item in old_node.names if item != label]
@@ -125,6 +127,7 @@ class DagBuilder:
         node = self._get_node(node_id)
         if label not in node.names:
             node.names.append(label)
+            node.names.sort(key=lambda item: self.name_sort_keys.get(item, operand_sort_key(item)))
         self.current_def[name] = node_id
 
     def _label(self, name: str) -> str:
