@@ -128,6 +128,7 @@ class TestExamplesEndpoint(unittest.TestCase):
         self.assertGreater(len(data["examples"]), 0)
         names = [e["name"] for e in data["examples"]]
         self.assertIn("demo", names)
+        self.assertIn("optimization_steps_demo", names)
 
     def test_get_example_source(self):
         client = _get_client()

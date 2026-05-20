@@ -591,6 +591,34 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual(optimization["optimized"][3]["t"], "I4")
         self.assertTrue(optimization["steps"][2]["changed"])
 
+    def test_serialize_compilation_result_reports_incremental_optimization_counts(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = """(nya optimization_steps_demo
+          (nyan ((seed int) (base int) (offset int) (x int) (y int) (z int)
+                 (folded int) (total int)))
+          (paw
+            (:= seed (argv-int 0))
+            (:= base (+ 2 3))
+            (:= offset (+ 40 2))
+            (:= x (+ seed base))
+            (:= y (+ seed base))
+            (:= z (+ seed base))
+            (:= folded (+ offset 8))
+            (:= total (+ (+ x y) z))
+            (meow total)
+            (meow folded)))"""
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        optimization = serialized["quadrupleOptimization"]
+        steps = optimization["steps"]
+
+        self.assertEqual(optimization["beforeCount"], 21)
+        self.assertEqual(optimization["afterCount"], 16)
+        self.assertEqual((steps[1]["beforeCount"], steps[1]["afterCount"], steps[1]["changed"]), (21, 21, True))
+        self.assertEqual((steps[2]["beforeCount"], steps[2]["afterCount"], steps[2]["changed"]), (21, 21, True))
+        self.assertEqual((steps[3]["beforeCount"], steps[3]["afterCount"], steps[3]["changed"]), (21, 16, True))
+
     def test_serialize_compilation_result_with_errors(self):
         from neko.viz_serializers import serialize_compilation_result
 

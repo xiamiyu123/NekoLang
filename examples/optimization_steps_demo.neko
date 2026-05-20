@@ -1,0 +1,22 @@
+; NekoLang optimization steps demo
+; 这个示例让 O1 的每个优化阶段都发生变化：
+; 1. 常量折叠：base/offset/folded 中的字面量计算会提前求值。
+; 2. 公共子表达式消除：(+ seed base) 重复出现，会复用同一个结果。
+; 3. 死临时删除：折叠和复用后产生的无用 T 临时值会被移除。
+(nya optimization_steps_demo
+  (nyan ((seed int) (base int) (offset int) (x int) (y int) (z int)
+         (folded int) (total int)))
+  (paw
+    (:= seed (argv-int 0))
+    (:= base (+ 2 3))
+    (:= offset (+ 40 2))
+
+    (:= x (+ seed base))
+    (:= y (+ seed base))
+    (:= z (+ seed base))
+
+    (:= folded (+ offset 8))
+    (:= total (+ (+ x y) z))
+
+    (meow total)
+    (meow folded)))
