@@ -38,6 +38,22 @@ class TestQuadrupleOptimizer(unittest.TestCase):
         self.assertEqual([q.op for q in result.quadruples].count("+"), 2)
         self.assertEqual(result.quadruples[4], Quadruple("+", "C1", "I2", "T2"))
 
+    def test_reuses_commuted_not_equal_expression(self):
+        quads = [
+            Quadruple("program", "t"),
+            Quadruple("!=", "I1", "I2", "T1"),
+            Quadruple(":=", "T1", "_", "I3"),
+            Quadruple("!=", "I2", "I1", "T2"),
+            Quadruple(":=", "T2", "_", "I4"),
+            Quadruple("end", "t"),
+        ]
+
+        result = optimize_quadruples(quads)
+
+        self.assertEqual(result.cse_count, 1)
+        self.assertEqual([q.op for q in result.quadruples], ["program", "!=", ":=", ":=", "end"])
+        self.assertEqual(result.quadruples[3], Quadruple(":=", "T1", "_", "I4"))
+
 
 if __name__ == "__main__":
     unittest.main()
