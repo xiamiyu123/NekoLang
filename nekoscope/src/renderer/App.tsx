@@ -699,7 +699,7 @@ function ArtifactView({
     return <TokenPanel tokens={result?.tokens ?? null} theme={theme} />;
   }
   if (activeStage === "ast") {
-    return <ASTPanel ast={result?.ast ?? null} theme={theme} />;
+    return <ASTPanel ast={result?.ast ?? null} syntaxTree={result?.syntaxTree ?? null} theme={theme} />;
   }
   if (activeStage === "symbols") {
     return <SymbolTablePanel symbols={result?.symbols ?? null} />;

@@ -64,6 +64,7 @@ from neko.errors import NekoError, SUGGESTIONS
 from neko.quadruple_liveness import build_quadruple_liveness
 from neko.quadruple_optimizer import optimize_quadruples
 from neko.semantic import Quadruple
+from neko.syntax_tree import build_syntax_tree
 from neko.symbol_table import SymbolEntry, SymbolTable
 from neko.tokens import Token
 
@@ -727,6 +728,7 @@ def serialize_compilation_result(
         "source": result.source,
         "tokens": serialize_tokens(result.tokens),
         "ast": serialize_ast(result.ast),
+        "syntaxTree": build_syntax_tree(result.tokens),
         "symbols": serialize_symbol_table(result.analyzer.symbol_table),
         "quadruples": serialize_quadruples(result.analyzer.quadruples),
         "quadrupleDag": build_quadruple_dags(

@@ -40,6 +40,15 @@ from neko.semantic import Quadruple
 from neko.tokens import Token, TokenType
 
 
+def _collect_terminals(node):
+    terminals = []
+    if node.get("nodeType") == "Terminal":
+        terminals.append(node)
+    for child in node.get("children", []):
+        terminals.extend(_collect_terminals(child))
+    return terminals
+
+
 class TestTokenSerializer(unittest.TestCase):
     def test_serialize_single_token(self):
         from neko.viz_serializers import serialize_token
@@ -497,6 +506,7 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertIn("source", serialized)
         self.assertIn("tokens", serialized)
         self.assertIn("ast", serialized)
+        self.assertIn("syntaxTree", serialized)
         self.assertIn("symbols", serialized)
         self.assertIn("quadruples", serialized)
         self.assertIn("quadrupleDag", serialized)
@@ -515,6 +525,25 @@ class TestCompilationResultSerializer(unittest.TestCase):
         )
         self.assertIsInstance(serialized["assembly"], str)
         self.assertEqual(serialized["errors"], [])
+
+    def test_serialize_compilation_result_includes_concrete_syntax_tree(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (paw (:= a (+ b 1))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+
+        terminals = _collect_terminals(serialized["syntaxTree"])
+        values = [terminal["value"] for terminal in terminals]
+        token_types = [terminal["tokenType"] for terminal in terminals]
+
+        for value in ["(", ")", "nya", "paw", ":=", "+", "a", "b", "1"]:
+            self.assertIn(value, values)
+        self.assertNotIn("EOF", token_types)
+        nya = next(terminal for terminal in terminals if terminal["value"] == "nya")
+        self.assertEqual(nya["tokenType"], "program")
+        self.assertEqual(nya["line"], 1)
+        self.assertEqual(nya["column"], 2)
 
     def test_serialize_compilation_result_includes_quadruple_dag(self):
         from neko.viz_serializers import serialize_compilation_result
