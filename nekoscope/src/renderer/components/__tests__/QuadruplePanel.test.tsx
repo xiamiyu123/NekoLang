@@ -32,7 +32,7 @@ describe("QuadruplePanel", () => {
         ]}
         optimization={{
           level: "O1",
-          source: "ARM64 AST optimizer",
+          source: "Quadruple DAG optimizer",
           enabled: true,
           changed: true,
           beforeCount: 3,
