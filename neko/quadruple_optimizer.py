@@ -23,16 +23,27 @@ TEMP_RE = re.compile(r"\bT\d+\b")
 class QuadrupleOptimizationResult:
     quadruples: list[Quadruple]
     constants: dict[str, str]
+    folded_quadruples: list[Quadruple]
+    cse_quadruples: list[Quadruple]
+    pruned_quadruples: list[Quadruple]
     folded_count: int = 0
     cse_count: int = 0
     removed_temp_count: int = 0
 
 
 class _ValueState:
-    def __init__(self, constants: dict[str, str]) -> None:
+    def __init__(
+        self,
+        constants: dict[str, str],
+        *,
+        enable_folding: bool,
+        enable_cse: bool,
+    ) -> None:
         self.const_by_addr = {addr: value for value, addr in constants.items()}
         self.addr_by_const = {value: addr for value, addr in constants.items()}
         self.next_const = _next_const_index(self.const_by_addr)
+        self.enable_folding = enable_folding
+        self.enable_cse = enable_cse
         self.current_def: dict[str, str] = {}
         self.value_holders: dict[str, list[str]] = {}
         self.expr_values: dict[tuple[str, str, str], str] = {}
@@ -88,18 +99,19 @@ class _ValueState:
         left_id = self._value_for_operand(quad.ob1)
         right_id = self._value_for_operand(quad.ob2)
 
-        folded = self._try_fold(quad.op, left_id, right_id)
-        if folded is not None:
-            self.folded_count += 1
-            const_addr = self._const_addr(folded)
-            self._set_holder(quad.t, _const_value_id(folded))
-            return [Quadruple(":=", const_addr, "_", quad.t)]
+        if self.enable_folding:
+            folded = self._try_fold(quad.op, left_id, right_id)
+            if folded is not None:
+                self.folded_count += 1
+                const_addr = self._const_addr(folded)
+                self._set_holder(quad.t, _const_value_id(folded))
+                return [Quadruple(":=", const_addr, "_", quad.t)]
 
         key_left, key_right = left_id, right_id
         if quad.op in COMMUTATIVE_OPS and key_right < key_left:
             key_left, key_right = key_right, key_left
         key = (quad.op, key_left, key_right)
-        if key in self.expr_values:
+        if self.enable_cse and key in self.expr_values:
             value_id = self.expr_values[key]
             source = self._canonical_operand(value_id)
             if source is not None:
@@ -110,7 +122,8 @@ class _ValueState:
         left = self._canonical_operand(left_id, quad.ob1)
         right = self._canonical_operand(right_id, quad.ob2)
         value_id = self._new_expr_value_id()
-        self.expr_values[key] = value_id
+        if self.enable_cse:
+            self.expr_values[key] = value_id
         self._set_holder(quad.t, value_id)
         return [Quadruple(quad.op, left, right, quad.t)]
 
@@ -253,23 +266,49 @@ def optimize_quadruples(
     constants: dict[str, str] | None = None,
 ) -> QuadrupleOptimizationResult:
     """Return optimized quadruples plus the constants used by the optimized rows."""
-    state = _ValueState(constants or {})
-    optimized: list[Quadruple] = []
-    for quad in quadruples:
-        optimized.extend(state.optimize_row(quad))
-
-    compacted, compacted_constants = _compact_constants(
-        _remove_dead_temp_defs(optimized),
-        state.const_by_addr,
+    folded, folded_state = _run_value_pass(
+        quadruples,
+        constants or {},
+        enable_folding=True,
+        enable_cse=False,
     )
-    removed_temp_count = len(optimized) - len(compacted)
+    cse, cse_state = _run_value_pass(
+        folded,
+        _constants_by_value(folded_state.const_by_addr),
+        enable_folding=False,
+        enable_cse=True,
+    )
+    pruned = _remove_dead_temp_defs(cse)
+    compacted, compacted_constants = _compact_constants(pruned, cse_state.const_by_addr)
+    removed_temp_count = len(cse) - len(pruned)
     return QuadrupleOptimizationResult(
         quadruples=compacted,
         constants=compacted_constants,
-        folded_count=state.folded_count,
-        cse_count=state.cse_count,
+        folded_quadruples=folded,
+        cse_quadruples=cse,
+        pruned_quadruples=pruned,
+        folded_count=folded_state.folded_count,
+        cse_count=cse_state.cse_count,
         removed_temp_count=removed_temp_count,
     )
+
+
+def _run_value_pass(
+    quadruples: list[Quadruple],
+    constants: dict[str, str],
+    *,
+    enable_folding: bool,
+    enable_cse: bool,
+) -> tuple[list[Quadruple], _ValueState]:
+    state = _ValueState(
+        constants,
+        enable_folding=enable_folding,
+        enable_cse=enable_cse,
+    )
+    optimized: list[Quadruple] = []
+    for quad in quadruples:
+        optimized.extend(state.optimize_row(quad))
+    return optimized, state
 
 
 def _remove_dead_temp_defs(quadruples: list[Quadruple]) -> list[Quadruple]:
@@ -336,6 +375,10 @@ def _compact_constants(
 def _next_const_index(const_by_addr: dict[str, str]) -> int:
     indexes = [int(addr[1:]) for addr in const_by_addr if addr.startswith("C") and addr[1:].isdigit()]
     return max(indexes, default=0) + 1
+
+
+def _constants_by_value(const_by_addr: dict[str, str]) -> dict[str, str]:
+    return {value: addr for addr, value in const_by_addr.items()}
 
 
 def _const_value_id(value: str) -> str:
