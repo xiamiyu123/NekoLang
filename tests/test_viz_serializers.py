@@ -587,9 +587,40 @@ class TestCompilationResultSerializer(unittest.TestCase):
             [q["op"] for q in optimization["optimized"]],
             ["program", "+", ":=", ":=", "end"],
         )
-        self.assertEqual(optimization["optimized"][3]["ob1"], "T1")
+        self.assertEqual(optimization["optimized"][3]["ob1"], "I3")
         self.assertEqual(optimization["optimized"][3]["t"], "I4")
         self.assertTrue(optimization["steps"][2]["changed"])
+
+    def test_quadruple_dag_orders_commutative_operands_by_kind(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (y int))) (paw (:= y (+ (+ a 3) a))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        dag = serialized["quadrupleDag"]["blocks"][0]
+        nodes_by_id = {node["id"]: node for node in dag["nodes"]}
+        plus_nodes = [node for node in dag["nodes"] if node["op"] == "+"]
+
+        first_plus = plus_nodes[0]
+        first_edges = {
+            edge["role"]: nodes_by_id[edge["target"]]
+            for edge in dag["edges"]
+            if edge["source"] == first_plus["id"]
+        }
+
+        self.assertEqual(first_edges["left"]["value"], "3")
+        self.assertEqual(first_edges["right"]["value"], "a")
+
+        second_plus = plus_nodes[1]
+        second_edges = {
+            edge["role"]: nodes_by_id[edge["target"]]
+            for edge in dag["edges"]
+            if edge["source"] == second_plus["id"]
+        }
+
+        self.assertEqual(second_edges["left"]["value"], "a")
+        self.assertEqual(second_edges["right"]["op"], "+")
+        self.assertIn("T1", second_edges["right"]["names"])
 
     def test_serialize_compilation_result_reports_incremental_optimization_counts(self):
         from neko.viz_serializers import serialize_compilation_result

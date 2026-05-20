@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .quadruple_rules import COMMUTATIVE_OPS, SUPPORTED_BINARY_OPS
+from .quadruple_rules import COMMUTATIVE_OPS, SUPPORTED_BINARY_OPS, operand_sort_key
 from .semantic import Quadruple
 
 
@@ -62,7 +62,7 @@ class DagBuilder:
                     continue
                 left_id = self._node_for_operand(quad.ob1)
                 right_id = self._node_for_operand(quad.ob2)
-                expr_id = self._node_for_expression(quad.op, left_id, right_id)
+                expr_id = self._node_for_expression(quad.op, left_id, right_id, quad.ob1, quad.ob2)
                 self._attach_name(expr_id, quad.t)
                 continue
             skipped.append(_skipped_quad(quad_index, quad, "该四元式不参与表达式 DAG 构造"))
@@ -93,13 +93,24 @@ class DagBuilder:
             self.value_nodes[operand] = self._new_node(VALUE_OP, value=self._label(operand))
         return self.value_nodes[operand]
 
-    def _node_for_expression(self, op: str, left_id: str, right_id: str) -> str:
+    def _node_for_expression(
+        self,
+        op: str,
+        left_id: str,
+        right_id: str,
+        left_operand: str,
+        right_operand: str,
+    ) -> str:
         key_left, key_right = left_id, right_id
-        if op in COMMUTATIVE_OPS and key_right < key_left:
-            key_left, key_right = key_right, key_left
+        if op in COMMUTATIVE_OPS:
+            left_key = (operand_sort_key(left_operand), left_id)
+            right_key = (operand_sort_key(right_operand), right_id)
+            if right_key < left_key:
+                key_left, key_right = right_id, left_id
+
         key = (op, key_left, key_right)
         if key not in self.expr_nodes:
-            self.expr_nodes[key] = self._new_node(op, left=left_id, right=right_id)
+            self.expr_nodes[key] = self._new_node(op, left=key_left, right=key_right)
         return self.expr_nodes[key]
 
     def _attach_name(self, node_id: str, name: str) -> None:

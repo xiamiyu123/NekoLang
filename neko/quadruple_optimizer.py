@@ -6,7 +6,7 @@ import ast as py_ast
 import re
 from dataclasses import dataclass
 
-from .quadruple_rules import COMMUTATIVE_OPS, SUPPORTED_BINARY_OPS
+from .quadruple_rules import COMMUTATIVE_OPS, SUPPORTED_BINARY_OPS, operand_sort_key
 from .semantic import Quadruple
 
 
@@ -106,8 +106,13 @@ class _ValueState:
                 return [Quadruple(":=", const_addr, "_", quad.t)]
 
         key_left, key_right = left_id, right_id
-        if quad.op in COMMUTATIVE_OPS and key_right < key_left:
-            key_left, key_right = key_right, key_left
+        left_fallback, right_fallback = quad.ob1, quad.ob2
+        if quad.op in COMMUTATIVE_OPS:
+            left_key = self._sort_key_for_value(left_id, quad.ob1)
+            right_key = self._sort_key_for_value(right_id, quad.ob2)
+            if right_key < left_key:
+                key_left, key_right = right_id, left_id
+                left_fallback, right_fallback = quad.ob2, quad.ob1
         key = (quad.op, key_left, key_right)
         if self.enable_cse and key in self.expr_values:
             value_id = self.expr_values[key]
@@ -117,8 +122,8 @@ class _ValueState:
                 self._set_holder(quad.t, value_id)
                 return [Quadruple(":=", source, "_", quad.t)]
 
-        left = self._canonical_operand(left_id, quad.ob1)
-        right = self._canonical_operand(right_id, quad.ob2)
+        left = self._canonical_operand(key_left, left_fallback)
+        right = self._canonical_operand(key_right, right_fallback)
         value_id = self._new_expr_value_id()
         if self.enable_cse:
             self.expr_values[key] = value_id
@@ -179,10 +184,27 @@ class _ValueState:
         if const_value is not None:
             return self._const_addr(const_value)
 
-        for holder in self.value_holders.get(value_id, []):
-            if self.current_def.get(holder) == value_id:
-                return holder
+        holders = self._valid_holders(value_id)
+        if holders:
+            return min(holders, key=operand_sort_key)
         return fallback or "_"
+
+    def _sort_key_for_value(self, value_id: str, fallback: str) -> tuple[tuple[int, int, str], str]:
+        const_value = _const_from_value_id(value_id)
+        if const_value is not None:
+            return (operand_sort_key(f"const:{const_value}"), value_id)
+
+        holders = self._valid_holders(value_id)
+        if holders:
+            return (min(operand_sort_key(holder) for holder in holders), value_id)
+        return (operand_sort_key(fallback), value_id)
+
+    def _valid_holders(self, value_id: str) -> list[str]:
+        return [
+            holder
+            for holder in self.value_holders.get(value_id, [])
+            if self.current_def.get(holder) == value_id
+        ]
 
     def _set_holder(self, operand: str, value_id: str) -> None:
         if not _is_plain_operand(operand):
