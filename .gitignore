@@ -21,3 +21,4 @@ nekoscope/release/
 nekoscope/resources/bin/
 .gitignore
 node_modules
+uv.lock
