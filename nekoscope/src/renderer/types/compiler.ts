@@ -57,6 +57,7 @@ export interface QuadrupleOptimizationStep {
   beforeRows?: Quadruple[];
   afterRows?: Quadruple[];
   removedRows?: Quadruple[];
+  rewrittenRows?: Array<{ before: Quadruple; after: Quadruple }>;
 }
 
 export interface QuadrupleOptimization {

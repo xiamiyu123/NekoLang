@@ -12,6 +12,7 @@ interface Props {
 }
 
 type QuadView = "initial" | "process" | "optimized";
+type QuadRowTone = "normal" | "removed" | "rewritten-before" | "rewritten-after";
 
 function explainOperand(value: string): string {
   if (value === "_") return "空";
@@ -29,7 +30,7 @@ function QuadTable({
 }: {
   rows: Quadruple[];
   label: string;
-  tone?: "normal" | "removed";
+  tone?: QuadRowTone;
 }) {
   return (
     <table className="teaching-table dense" aria-label={label}>
@@ -44,7 +45,7 @@ function QuadTable({
       </thead>
       <tbody>
         {rows.map((quad, index) => (
-          <tr className={tone === "removed" ? "quad-row-removed" : undefined} key={`${index}-${quad.op}-${quad.t}`}>
+          <tr className={tone === "normal" ? undefined : `quad-row-${tone}`} key={`${index}-${quad.op}-${quad.t}`}>
             <td className="mono-cell muted">{index}</td>
             <td><span className="op-pill">{quad.op}</span></td>
             <td className="mono-cell" title={explainOperand(quad.ob1)}>{quad.ob1}</td>
@@ -57,17 +58,65 @@ function QuadTable({
   );
 }
 
+function RewrittenQuadTable({ step }: { step: QuadrupleOptimizationStep }) {
+  const rows = step.rewrittenRows ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <table className="teaching-table dense" aria-label={`${step.name} 改写的四元式`}>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>改写前</th>
+          <th>改写后</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={`${index}-${row.before.op}-${row.after.op}`}>
+            <td className="mono-cell muted">{index}</td>
+            <td>
+              <QuadInlineRow quad={row.before} tone="rewritten-before" />
+            </td>
+            <td>
+              <QuadInlineRow quad={row.after} tone="rewritten-after" />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function QuadInlineRow({ quad, tone }: { quad: Quadruple; tone: QuadRowTone }) {
+  return (
+    <span className={`quad-inline-row quad-row-${tone}`}>
+      <span className="op-pill">{quad.op}</span>
+      <code>{quad.ob1}</code>
+      <code>{quad.ob2}</code>
+      <code>{quad.t}</code>
+    </span>
+  );
+}
+
 function StepQuadTables({ step }: { step: QuadrupleOptimizationStep }) {
   const removedRows = step.removedRows ?? [];
+  const rewrittenRows = step.rewrittenRows ?? [];
   const afterRows = step.afterRows ?? [];
-  if (removedRows.length === 0 && afterRows.length === 0) return null;
+  if (removedRows.length === 0 && rewrittenRows.length === 0 && afterRows.length === 0) return null;
 
   return (
     <div className="quad-step-body">
+      {rewrittenRows.length > 0 ? (
+        <div className="quad-step-table">
+          <div className="quad-step-table-title">本阶段改写</div>
+          <RewrittenQuadTable step={step} />
+        </div>
+      ) : null}
       {removedRows.length > 0 ? (
         <div className="quad-step-table">
-          <div className="quad-step-table-title">本阶段已优化掉</div>
-          <QuadTable rows={removedRows} label={`${step.name} 已优化掉的四元式`} tone="removed" />
+          <div className="quad-step-table-title">本阶段已删除</div>
+          <QuadTable rows={removedRows} label={`${step.name} 已删除的四元式`} tone="removed" />
         </div>
       ) : null}
       <div className="quad-step-table">

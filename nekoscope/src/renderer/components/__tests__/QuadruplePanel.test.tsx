@@ -64,9 +64,11 @@ describe("QuadruplePanel", () => {
                 { op: "program", ob1: "t", ob2: "_", t: "_" },
                 { op: ":=", ob1: "C3", ob2: "_", t: "I1" },
               ],
-              removedRows: [
-                { op: "+", ob1: "C1", ob2: "C2", t: "T1" },
-                { op: ":=", ob1: "T1", ob2: "_", t: "I1" },
+              rewrittenRows: [
+                {
+                  before: { op: "+", ob1: "C1", ob2: "C2", t: "T1" },
+                  after: { op: ":=", ob1: "C3", ob2: "_", t: "I1" },
+                },
               ],
             },
           ],
@@ -81,9 +83,10 @@ describe("QuadruplePanel", () => {
     expect(screen.getByText("四元式序列")).toBeTruthy();
     expect(screen.getByText("O1 常量折叠")).toBeTruthy();
     expect(screen.getByText("3 -> 2")).toBeTruthy();
-    const removedTable = screen.getByRole("table", { name: "O1 常量折叠 已优化掉的四元式" });
-    expect(within(removedTable).getByText("+")).toBeTruthy();
-    expect(within(removedTable).getByText("C2")).toBeTruthy();
+    const rewrittenTable = screen.getByRole("table", { name: "O1 常量折叠 改写的四元式" });
+    expect(within(rewrittenTable).getByText("+")).toBeTruthy();
+    expect(within(rewrittenTable).getByText("C2")).toBeTruthy();
+    expect(screen.queryByRole("table", { name: "O1 常量折叠 已删除的四元式" })).toBeNull();
     expect(screen.getByRole("table", { name: "O1 常量折叠 优化后四元式" })).toBeTruthy();
     await user.click(screen.getByRole("tab", { name: "优化结果" }));
     expect(screen.getByText("C1 = 5")).toBeTruthy();

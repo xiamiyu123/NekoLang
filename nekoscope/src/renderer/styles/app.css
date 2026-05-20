@@ -1642,6 +1642,29 @@ button {
   background: var(--danger-card-bg);
 }
 
+.quad-row-rewritten-before {
+  color: var(--danger-code-text);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
+}
+
+.quad-row-rewritten-after {
+  color: var(--accent-strong);
+}
+
+.quad-inline-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.quad-inline-row code {
+  color: inherit;
+  background: transparent;
+}
+
 .table-card {
   min-width: 0;
 }
