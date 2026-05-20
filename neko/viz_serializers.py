@@ -60,8 +60,8 @@ from neko.ast_nodes import (
 from neko.build_utils import CompilationResult, generate_code
 from neko.dag import build_quadruple_dags
 from neko.errors import NekoError, SUGGESTIONS
-from neko.optimizer import optimize_ast_for_arm64
-from neko.semantic import Quadruple, SemanticAnalyzer
+from neko.quadruple_optimizer import optimize_quadruples
+from neko.semantic import Quadruple
 from neko.symbol_table import SymbolEntry, SymbolTable
 from neko.tokens import Token
 
@@ -501,7 +501,7 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
     initial = serialize_quadruples(result.analyzer.quadruples)
     base = {
         "level": "O1",
-        "source": "ARM64 AST optimizer",
+        "source": "Quadruple DAG optimizer",
         "enabled": not result.analyzer.errors,
         "changed": False,
         "beforeCount": len(result.analyzer.quadruples),
@@ -527,10 +527,10 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
         return base
 
     try:
-        optimized_ast = optimize_ast_for_arm64(result.ast, opt_level=1)
-        optimized_analyzer = SemanticAnalyzer()
-        optimized_analyzer.set_source(result.source)
-        optimized_analyzer.analyze(optimized_ast)
+        optimized_result = optimize_quadruples(
+            result.analyzer.quadruples,
+            result.analyzer.symbol_table.const_table,
+        )
     except Exception as exc:
         base["enabled"] = False
         base["diagnostics"] = [
@@ -554,15 +554,15 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
         ]
         return base
 
-    optimized = serialize_quadruples(optimized_analyzer.quadruples)
-    changed = not _quadruple_rows_equal(result.analyzer.quadruples, optimized_analyzer.quadruples)
+    optimized = serialize_quadruples(optimized_result.quadruples)
+    changed = not _quadruple_rows_equal(result.analyzer.quadruples, optimized_result.quadruples)
     base.update(
         {
             "changed": changed,
-            "afterCount": len(optimized_analyzer.quadruples),
+            "afterCount": len(optimized_result.quadruples),
             "optimized": optimized,
-            "optimizedConstants": dict(optimized_analyzer.symbol_table.const_table),
-            "diagnostics": serialize_errors(optimized_analyzer.errors),
+            "optimizedConstants": dict(optimized_result.constants),
+            "diagnostics": [],
             "steps": [
                 {
                     "name": "读取初始四元式",
@@ -573,17 +573,24 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
                 },
                 {
                     "name": "O1 常量折叠",
-                    "detail": "对字面量算术、比较和字符内建表达式先求值。",
+                    "detail": "在四元式上折叠常量算术、比较和等值判断。",
                     "beforeCount": len(result.analyzer.quadruples),
-                    "afterCount": len(optimized_analyzer.quadruples),
-                    "changed": changed,
+                    "afterCount": len(optimized_result.quadruples),
+                    "changed": optimized_result.folded_count > 0,
                 },
                 {
-                    "name": "重新生成四元式",
-                    "detail": "用优化后的 AST 再跑语义分析，得到优化结果。",
+                    "name": "O1 公共子表达式消除",
+                    "detail": "按基本块的 DAG 值编号复用重复计算结果。",
                     "beforeCount": len(result.analyzer.quadruples),
-                    "afterCount": len(optimized_analyzer.quadruples),
-                    "changed": changed,
+                    "afterCount": len(optimized_result.quadruples),
+                    "changed": optimized_result.cse_count > 0,
+                },
+                {
+                    "name": "删除死临时赋值",
+                    "detail": "移除折叠和复用后不再被读取的临时结果。",
+                    "beforeCount": len(result.analyzer.quadruples),
+                    "afterCount": len(optimized_result.quadruples),
+                    "changed": optimized_result.removed_temp_count > 0,
                 },
             ],
         }

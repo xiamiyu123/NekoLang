@@ -561,6 +561,26 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual(optimization["diagnostics"], [])
         self.assertEqual(optimization["steps"][1]["name"], "O1 常量折叠")
         self.assertTrue(optimization["steps"][1]["changed"])
+        self.assertTrue(optimization["steps"][3]["changed"])
+
+    def test_serialize_compilation_result_eliminates_repeated_quadruple_expression(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int) (x int) (y int))) (paw (:= x (+ a b)) (:= y (+ a b))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        optimization = serialized["quadrupleOptimization"]
+
+        self.assertTrue(optimization["changed"])
+        self.assertEqual(optimization["beforeCount"], 6)
+        self.assertEqual(optimization["afterCount"], 5)
+        self.assertEqual(
+            [q["op"] for q in optimization["optimized"]],
+            ["program", "+", ":=", ":=", "end"],
+        )
+        self.assertEqual(optimization["optimized"][3]["ob1"], "T1")
+        self.assertEqual(optimization["optimized"][3]["t"], "I4")
+        self.assertTrue(optimization["steps"][2]["changed"])
 
     def test_serialize_compilation_result_with_errors(self):
         from neko.viz_serializers import serialize_compilation_result
