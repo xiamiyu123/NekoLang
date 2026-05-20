@@ -14,6 +14,16 @@ export interface ASTNode {
   [key: string]: unknown;
 }
 
+export interface SyntaxTreeNode {
+  nodeType: "SyntaxTree" | "SyntaxForm" | "Terminal" | string;
+  line: number;
+  column: number;
+  tokenType?: string;
+  value?: string;
+  children?: SyntaxTreeNode[];
+  [key: string]: unknown;
+}
+
 /** Compilation error */
 export interface CompileError {
   phase: string;
@@ -153,6 +163,7 @@ export interface CompileResult {
   source: string;
   tokens: Token[];
   ast: ASTNode;
+  syntaxTree?: SyntaxTreeNode;
   symbols: SymbolTableSnapshot;
   quadruples: Quadruple[];
   quadrupleDag?: QuadrupleDag;

@@ -1092,10 +1092,20 @@ button {
 
 .ast-toolbar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   padding: 8px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+}
+
+.ast-toolbar .quad-toolbar {
+  min-height: 0;
+  margin-right: auto;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
 }
 
 .ast-canvas {
@@ -1116,6 +1126,20 @@ button {
   white-space: pre-line;
   background: var(--ast-node-bg);
   box-shadow: var(--shadow-soft);
+}
+
+.ast-flow-node.terminal {
+  min-width: 38px;
+  max-width: 92px;
+  padding: 4px 8px;
+  border-color: color-mix(in srgb, var(--accent-strong) 42%, var(--line));
+  border-radius: 6px;
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  background: var(--panel-2);
 }
 
 .assembly-panel {
