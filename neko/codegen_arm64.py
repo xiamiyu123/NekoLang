@@ -293,12 +293,30 @@ class ARM64Codegen:
 
     def _peephole_optimize(self, lines: list[str]) -> list[str]:
         """
-        O1 peephole 优化：在汇编行列表上做局部模式匹配。
-        规则：
-          1. 删除连续空行
-          2. 删除 mov r, r（自赋值）
-          3. 删除跳到相邻 label 的 b 指令
-          4. 删除相邻重复的 mov
+        O1 peephole 优化——在汇编文本行上做局部模式匹配消除冗余指令。
+
+        这是汇编级的"窥孔优化"，扫描生成的汇编文本行，
+        用正则表达式识别无意义的指令模式，直接删除。
+
+        规则 1：删除连续空行
+          \n\n\n → \n（连续多个空行合并为一个）
+
+        规则 2：删除自赋值（mov r, r）
+          优化前：mov w0, w0             ← w0 的值赋给 w0，无意义
+          优化后：（删除）                 ← 不生成任何指令
+
+        规则 3：删除跳到相邻 label 的 b 指令
+          优化前：b    L123              ← 跳到下一行 label
+                 L123:                   ← label 就在下一行
+          优化后：L123:                   ← 直接在这里继续，跳转没意义
+
+        规则 4：删除相邻重复的 mov 指令
+          优化前：mov w0, #1
+                 mov w0, #1             ← 和上一行完全相同，冗余
+          优化后：mov w0, #1             ← 删掉第二行
+
+        这些优化虽然简单，但对编译器生成的无意义汇编代码很有效，
+        能减少 O0 模式下产生的大量冗余指令。
         """
         optimized: list[str] = []
         previous_line = None
@@ -553,9 +571,27 @@ class ARM64Codegen:
     def _compute_frame_layout(self, var_pairs: list[tuple[str, str]],
                               save_main_args: bool) -> FrameLayout:
         """
-        计算栈帧布局。从 x29 向上依次排列：
-          保存的寄存器 → 局部变量 → 临时区
-        每个变量按对齐要求排列，计算其相对于 x29 的负偏移。
+        计算函数的栈帧布局——确定每个变量离 x29 帧指针的偏移。
+
+        ARM64 栈帧内存布局（具体字节数）：
+        以 main 函数为例，有 2 个 int 变量 a(4B) 和 b(4B)：
+
+          x29（帧指针）→ ┌──────────────────┐  ← sp + frame_size（高地址）
+                         │ x29 (FP)    8B   │  ← 保存的帧指针
+                         │ x30 (LR)    8B   │  ← 保存的链接寄存器（返回地址）
+          x29 - 16 →     │ x19         8B   │  ← 被调用者保留（callee-saved）
+                         │ d8          8B   │  ← 被调用者保留浮点
+                         │ x20 (argc)  8B   │  ← main 函数额外保存
+                         │ x21 (argv)  8B   │  ← main 函数额外保存
+          x29 - 48 →     ├──────────────────┤  ← save_area_size = 48
+                         │ 变量 a: 4B   │  ← offset = 52（从 x29 向上偏移）
+                         │ 变量 b: 4B   │  ← offset = 56
+                         ├──────────────────┤
+                         │ 临时区         │  ← EXPR_TEMP_SLOTS(8)*8 + CALL_ARG_SLOTS(16)*8 = 192B
+          sp（栈指针） → └──────────────────┘  ← 低地址
+
+        计算完之后，变量的真实栈地址通过 sub x9, x29, #offset 获得。
+        例如变量 a 在栈上的地址：sub x9, x29, #52  →  x9 = x29 - 52。
         """
         save_area_size = 48 if save_main_args else 32
         current = save_area_size - 16
@@ -670,8 +706,20 @@ class ARM64Codegen:
 
     def _push_expr_temp(self, type_str: str) -> int:
         """
-        push 表达式临时值：将 w0/d0/x0 保存到临时栈槽。
-        用于二元运算中保存左操作数（因为计算右操作数时会覆盖寄存器）。
+        将当前的 w0/d0/x0 保存到表达式临时栈槽（push 操作）。
+
+        为什么需要 push/pop？
+          假设要生成 (+ a b) 的汇编，顺序是：
+            1. 生成 a 的求值指令 → 结果在 w0 中
+            2. push_expr_temp("int") → 把 w0 存到临时槽，返回槽号 0
+            3. 生成 b 的求值指令 → 结果在 w0 中（w0 被覆盖了！）
+            4. load_expr_temp(0, "int") → 从槽 0 恢复 a 的值到 w1
+            5. add w0, w1, w0 → w0 = a + b
+
+        如果不 push，第 3 步会覆盖 a 的值，第 5 步就只能用 w0 + w0。
+
+        临时槽用 expr_temp_depth 跟踪嵌套深度，最深 8 层
+        （限制如 (+ (+ (+ (...) ...) ...) ...) 这样的嵌套表达式）。
         """
         slot = self.expr_temp_depth
         if slot >= EXPR_TEMP_SLOTS:
@@ -765,7 +813,32 @@ class ARM64Codegen:
             self._gen_function(node)
 
     def _gen_function(self, node: FuncDefNode | LambdaDefNode):
-        """生成一个 NekoLang 函数的完整汇编。"""
+        """
+        生成一个 NekoLang 函数（或 lambda）的完整 ARM64 汇编。
+
+        汇编函数结构：
+          _neko_fn_add:                ; 函数标签（mangled 名）
+            sub sp, sp, #N             ; 分配栈帧
+            stp x29, x30, [sp, #...]   ; 保存 FP/LR
+            add x29, sp, #...          ; 设置 FP
+            ; spill 参数到栈
+            ; 函数体指令
+            ; epilogue label 入口
+          Lepilogue_X:                 ; 返回标签
+            ldp x29, x30, [sp, #...]   ; 恢复 FP/LR
+            add sp, sp, #N             ; 回收栈帧
+            ret                        ; 返回调用者
+
+        用 return 语句的结构：
+          b Lepilogue_X 跳转到 epilogue label 统一处理返回，
+          而不是每个 return 都内联生成 ldp/ret 指令。
+          这避免了函数体内多条 return 语句产生重复代码。
+
+        上下文保存/恢复：
+          saved_vars 等保存当前函数的 var_types/var_offsets 等状态。
+          因为函数可以嵌套定义（一个 function 体内定义另一个 function），
+          进入嵌套函数时这些状态会被覆盖，退出时需要恢复。
+        """
         saved_types = self.var_types
         saved_offsets = self.var_offsets
         saved_slots = self.var_slot_kinds
@@ -1299,9 +1372,28 @@ class ARM64Codegen:
 
     def _prepare_call_arguments(self, args: list[ASTNode], param_types: list[str]):
         """
-        准备函数调用参数。
-        按 ARM64 ABI：先生成每个参数的求值指令（存到栈），
-        再逐个加载到参数寄存器 x0-x7/d0-d7。
+        准备函数调用参数——按照 ARM64 ABI 将参数放入正确的寄存器。
+
+        ARM64 ABI 参数传递规则：
+          第 1-8 个整数/指针参数 → x0-x7（或 w0-w7）
+          第 1-8 个浮点参数     → d0-d7
+          第 9 个及以上的参数   → 必须在栈上传递（NekoLang 暂不支持超过 8 个）
+
+        例如 (add 3 5) 生成的过程：
+          1. 求值每个参数：
+             gen_expr(IntLiteral(3)) → mov w0, #3
+             store_stack_arg(0, "int") → str w0, [sp]（存到 sp）
+             gen_expr(IntLiteral(5)) → mov w0, #5
+             store_stack_arg(1, "int") → str w0, [sp, #8]
+          2. 按 ABI 加载到参数寄存器：
+             load_stack_arg(0, "int") → ldr w0, [sp]   （第 1 个整数参数在 w0）
+             load_stack_arg(1, "int") → ldr w1, [sp, #8]（第 2 个整数参数在 w1）
+          3. 调用：
+             bl _neko_fn_add
+
+        为什么需要先存栈再加载？因为参数求值可能生成嵌套调用，
+        不能保证每个参数的寄存器不被覆盖。先存栈再统一加载到参数寄存器，
+        保证了顺序正确性。
         """
         if len(args) != len(param_types):
             raise RuntimeError("call argument count mismatch")
@@ -1613,9 +1705,21 @@ class ARM64Codegen:
 
     def _emit_load_imm(self, reg: str, value: int, bits: int = 32):
         """
-        加载立即数到寄存器（movz + movk）。
-        ARM64 的 movz 加载 16 位立即数到指定位移位置，
-        movk 保持其他位不变合并到指定位移位置。
+        加载任意 32 位或 64 位立即数到寄存器（movz + movk 组合）。
+
+        ARM64 的 mov 指令只能加载 12 位立即数（0-4095）。
+        更大的值需要组合 movz 和 movk：
+          movz — Move with Zero：将 16 位数加载到指定位移，其余位清零
+          movk — Move with Keep：将 16 位数合并到指定位移，其余位保留
+
+        例如加载 0x1234_5678_ABCD_EF01 到 x0（64 位）：
+          movz x0, #0xEF01                  ; 低 16 位（位移 0），其余清零
+          movk x0, #0xABCD, lsl #16         ; 位 16-31，保留已有位
+          movk x0, #0x5678, lsl #32         ; 位 32-47，保留已有位
+          movk x0, #0x1234, lsl #48         ; 位 48-63，保留已有位
+
+        算法：把目标值按 16 位一组拆分。找到第一个非零段用 movz，
+        其余非零段用 movk。
         """
         mask = (1 << bits) - 1
         unsigned = value & mask

@@ -445,33 +445,62 @@ class LLVMCodegen:
     def _gen_function(self, node: FuncDefNode | LambdaDefNode):
         """
         生成函数的 LLVM IR 函数体。
-        参数处理：LLVM 函数参数是 SSA 值（寄存器），
-        但 NekoLang 中参数可被赋值，所以需要 spill 到栈上（alloca + store）。
+
+        参数处理详解（为什么需要 alloca + store）：
+          LLVM 使用 SSA（Static Single Assignment），每个变量只能被赋值一次。
+          LLVM 函数的参数是 SSA 值（%a, %b 等"寄存器"），不能被 store 覆盖。
+
+          但 NekoLang 中函数参数可以被赋值，例如：
+            (function foo ((x int)) int (begin (:= x 10) (return x)))
+
+          所以在函数入口处，每个参数需要：
+            1. alloca 分配一个栈槽（得到一个指向该栈槽的指针 %x.addr = i32*）
+            2. store 把参数的寄存器值存到这个栈槽
+            3. 后续函数体中所有对 x 的读写都通过 load/store 访问这个栈槽
+
+          这样处理之后，(:= x 10) 就是 store i32 10, i32* %x.addr，
+          LLVM 的 mem2reg 优化 pass 会自动把所有 alloca/load/store
+          提升为真正的 SSA 形式（ph id 节点处理不同路径的赋值）。
+
+        上下文保存/恢复：
+          save/restore 四个状态变量，用于支持嵌套函数的场景
+          （一个函数体内部可以定义另一个函数，需要递归调用 _gen_function）。
         """
+        # 取出之前声明好的 LLVM 函数对象
         func = self.module.globals[self._function_symbol(node.name)]
+        # 为函数添加 entry 基本块——这是函数的第一个 basic block
         entry = func.append_basic_block(name="entry")
+
+        # ── 保存调用者的上下文（嵌套函数递归时会覆盖这些变量） ──
         saved_builder = self.builder
         saved_named_values = self.named_values
         saved_var_types = self.var_types
         saved_return_type = self.current_return_type
 
-        self.builder = ir.IRBuilder(entry)
-        self.named_values = {}
-        self.var_types = {}
+        # ── 设置新函数的上下文 ──
+        self.builder = ir.IRBuilder(entry)  # 新建 build er，绑定到 entry 块
+        self.named_values = {}              # 清空变量表（新作用域）
+        self.var_types = {}                 # 清空类型表
         self.current_return_type = node.return_type
 
+        # ── 把函数参数 spill 到栈上 ──
+        # func.args 是 LLVM 函数的参数（SSA 值）
+        # node.params 是 NekoLang 的参数列表 [(name, type), ...]
         for arg, (name, type_str) in zip(func.args, node.params):
-            arg.name = name
-            alloca = self.builder.alloca(_llvm_type(type_str), name=name)
-            self.builder.store(arg, alloca)
-            self.named_values[name] = alloca
-            self.var_types[name] = type_str
+            arg.name = name  # LLVM 参数命名（IR 文本可读性）
+            alloca = self.builder.alloca(_llvm_type(type_str), name=name)  # 分配栈槽
+            self.builder.store(arg, alloca)   # 将 SSA 值存入栈槽
+            self.named_values[name] = alloca  # 记录：变量 name 的栈槽
+            self.var_types[name] = type_str   # 记录：变量 name 的类型
 
+        # ── 生成函数体的 LLVM IR ──
         self._gen_statement(node.body)
 
+        # ── 如果函数体没有以 ret 结尾（缺少 return），补一个默认返回值 ──
         if not self.builder.block.is_terminated:
             self.builder.ret(self._default_value(node.return_type))
 
+        # ── 恢复调用者的上下文 ──
         self.builder = saved_builder
         self.named_values = saved_named_values
         self.var_types = saved_var_types
@@ -553,47 +582,66 @@ class LLVMCodegen:
 
     def _gen_if(self, node: IfNode):
         """
-        if 语句翻译：cbranch（条件分支）+ then/else/end 三个基本块。
-          %cond = icmp ...
-          br i1 %cond, label %if.then, label %if.else
-        if.then: ... br label %if.end
-        if.else: ... br label %if.end
-        if.end: ; 继续执行
+        if 语句翻译为 basic block + 条件跳转模式：
+          %cond = icmp ...                  ; 计算条件表达式 → i1
+          br i1 %cond, label %if.then, label %if.else  ; 条件分支
+        if.then:
+          ... then 分支的指令 ...
+          br label %if.end                  ; 跳到结尾
+        if.else:
+          ... else 分支的指令 ...
+          br label %if.end                  ; 跳到结尾
+        if.end:
+          ... 后续指令 ...                  ; 两条路径汇合后继续执行
+
+        LLVM 中 basic block 必须以跳转指令结尾（terminator）。
+        is_terminated 检查当前 block 是否已经有 ret/br 等结尾指令，
+        如果没有才加 branch，防止重复添加 terminator。
         """
+        # 1. 计算条件表达式，得到 i1 类型的值
         cond_val = self._coerce_to_condition(self._gen_expression(node.condition))
+        # 2. 创建三个 basic block
         func = self.builder.function
         then_bb = func.append_basic_block(name="if.then")
         else_bb = func.append_basic_block(name="if.else")
         end_bb = func.append_basic_block(name="if.end")
-
+        # 3. 条件分支跳转
         self.builder.cbranch(cond_val, then_bb, else_bb)
-
+        # 4. 生成 then 分支（切换到 then_bb 中插入指令）
         self.builder.position_at_start(then_bb)
         self._gen_statement(node.then_branch)
         if not self.builder.block.is_terminated:
             self.builder.branch(end_bb)
-
+        # 5. 生成 else 分支
         self.builder.position_at_start(else_bb)
         self._gen_statement(node.else_branch)
         if not self.builder.block.is_terminated:
             self.builder.branch(end_bb)
-
+        # 6. 切换到 end_bb，后续代码在此生成
         self.builder.position_at_start(end_bb)
 
     def _gen_while(self, node: WhileNode):
         """
-        while 循环翻译：loop/body/end 三个基本块 + 回边。
-          br label %while.cond
-        while.cond: %cond = ...; br i1 %cond, %while.body, %while.end
-        while.body: ...; br label %while.cond
-        while.end: ; 循环出口
+        while 循环翻译为 basic block + 前跳/回跳模式：
+          br label %while.cond               ; 无条件跳到条件判断
+        while.cond:
+          %cond = ...                        ; 计算条件
+          br i1 %cond, %while.body, %while.end  ; 条件分支
+        while.body:
+          ... 循环体的指令 ...
+          br label %while.cond               ; 回跳到条件判断（回边）
+        while.end:
+          ... 后续指令 ...                   ; 循环出口
+
+        与 if 的核心区别：while.body 的末尾有一条"回边"，
+        跳回 while.cond 重新判断条件，形成循环。
         """
         func = self.builder.function
         loop_bb = func.append_basic_block(name="while.cond")
         body_bb = func.append_basic_block(name="while.body")
         end_bb = func.append_basic_block(name="while.end")
 
-        self.builder.branch(loop_bb)
+        self.builder.branch(loop_bb)  # 跳到条件判断
 
         self.builder.position_at_start(loop_bb)
         cond_val = self._coerce_to_condition(self._gen_expression(node.condition))
@@ -602,7 +650,7 @@ class LLVMCodegen:
         self.builder.position_at_start(body_bb)
         self._gen_statement(node.body)
         if not self.builder.block.is_terminated:
-            self.builder.branch(loop_bb)
+            self.builder.branch(loop_bb)  # 回边：跳回条件判断
 
         self.builder.position_at_start(end_bb)
 
@@ -854,9 +902,24 @@ class LLVMCodegen:
 
     def _gen_func_call(self, node: FuncCallNode) -> ir.Value:
         """
-        函数调用：
-        直接调用（函数名在 function_nodes/extern_nodes 中）→ call 已知函数
-        间接调用（变量中存函数指针）→ load → bitcast → call
+        函数调用。分两种情况：
+
+        1. 直接调用——函数名在 function_nodes 或 extern_nodes 中。
+           已知 callee，直接生成 call 指令：
+             %calltmp = call i32 @neko_fn_add(i32 %arg1, i32 %arg2)
+           直接调用时，LLVM 的 call 指令后跟 "@符号名"。
+
+        2. 间接调用——通过变量中存储的函数指针调用。
+           例如 (var ((f (func (int) int)))) (:= f (lambda ((x int)) int ...)) (print (f 5))
+           变量 f 中存的是 i8*（不透明函数指针）。
+           间接调用需要：
+             a. load 出 i8* 函数指针
+             b. bitcast 回具体的函数指针类型（如 i32(i32)*）
+             c. call 该指针
+           对应 LLVM IR：
+             %f.fptr = load i8*, i8** %f         ; 从变量取出 i8*
+             %casted = bitcast i8* to i32(i32)*   ; 转为具体函数类型
+             %result = call i32 %casted(i32 %x)    ; 间接调用
         """
         func_node = self.function_nodes.get(node.name)
         extern_node = self.extern_nodes.get(node.name)
@@ -904,8 +967,33 @@ class LLVMCodegen:
 
     def _coerce_value(self, value: ir.Value, target_type_str: str) -> ir.Value:
         """
-        类型转换：LLVM IR 是强类型的，不能直接把 i8 传给需要 i32 的指令。
-        自动插入 sitofp/zext/trunc/bitcast/inttoptr/fptosi 等转换指令。
+        类型转换器——确保 LLVM IR 值的类型匹配目标类型。
+
+        LLVM IR 是强类型语言，每个操作都要求操作数的位宽、符号性和类别
+        完全符合指令的要求。例如：
+          %x = add i32 %a, %b          ← 必须两个操作数都是 i32
+          store i32 %val, i32* %ptr    ← 值的类型和指针的目标类型必须匹配
+
+        NekoLang 的类型系统相对宽松（char 可当 int 用、int 可当 bool 用），
+        这些隐式转换由本方法自动插入对应的 LLVM 指令实现。
+
+        转换规则速查：
+          char → int        无需转换（char 在 w0 中已经是 32 位，CPU 寄存器无位宽）
+          int  → float      sitofp（有符号整数转浮点）
+          float → int       fptosi（浮点转有符号整数）
+          int  → bool       icmp != 0（非零即真）
+          float → bool      fcmp != 0.0（非零即真）
+          int  → char       trunc i32 to i8（截断到 8 位）
+          int 0 → pointer   inttoptr（零指针：字面量 0 转换为空指针）
+          i8  → i32         zext（零扩展，无符号）
+          i64 → i32         trunc（截断）
+          i8* → i8*         bitcast（指针类型间转换）
+          bool → int        zext i1 to i32（零扩展）
+        """
+        target_type = _llvm_type(target_type_str)
+        # 类型已经匹配，无需转换
+        if value.type == target_type:
+            return value
         """
         target_type = _llvm_type(target_type_str)
         if value.type == target_type:
