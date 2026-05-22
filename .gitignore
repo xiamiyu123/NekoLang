@@ -17,6 +17,7 @@ env/
 *.neko~
 .claude
 CLAUDE.md
+*.docx
 nekoscope/node_modules/
 nekoscope/out/
 nekoscope/release/
