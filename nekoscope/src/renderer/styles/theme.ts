@@ -23,6 +23,28 @@ export function isThemePreference(value: string | null): value is ThemePreferenc
   return value === "system" || value === "light" || value === "dark" || value === "neko";
 }
 
+function getStorage(): Storage | null {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function loadThemePreference(): ThemePreference {
+  const storedPreference = getStorage()?.getItem(THEME_STORAGE_KEY) ?? null;
+  return isThemePreference(storedPreference) ? storedPreference : "system";
+}
+
+export function saveThemePreference(preference: ThemePreference): void {
+  try {
+    getStorage()?.setItem(THEME_STORAGE_KEY, preference);
+  } catch {
+    // Some test and browser privacy contexts expose localStorage but reject writes.
+  }
+}
+
 export function resolveTheme(preference: ThemePreference, systemPrefersDark: boolean): ResolvedTheme {
   if (preference === "system") return systemPrefersDark ? "dark" : "light";
   return preference;
