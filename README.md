@@ -349,6 +349,14 @@ pong:miaow-from-neko
 
 本项目使用 [UV](https://docs.astral.sh/uv/) 管理 Python 环境和依赖。完整跨平台安装说明见 [安装与跨平台依赖](docs/installation.zh.md)。
 
+运行前先准备三类依赖：
+
+| 场景 | 需要安装 | 安装 / 同步命令 |
+|------|----------|-----------------|
+| 使用 `neko` / `nekgo` 查看 tokens、AST、四元式、LLVM IR | Python 3.10+、`uv`、项目 Python 依赖 | `uv sync --group dev` |
+| 使用 `neko build/run`、`nekgo build/run/test` 生成可执行文件 | 上一项 + `clang` 和平台 C 链接工具链 | macOS: `xcode-select --install`；Ubuntu: `sudo apt install clang build-essential` |
+| 运行或打包 NekoScope | 上两项 + Node.js 22、NekoScope Node 依赖 | `cd nekoscope && npm ci` |
+
 ```bash
 # macOS/Linux 可用官方安装脚本安装 UV
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -390,6 +398,14 @@ uv run neko llvm-ir examples/demo.neko
 | Fedora | `sudo dnf install clang gcc glibc-devel make` |
 | Arch Linux | `sudo pacman -S uv clang base-devel` |
 | Windows | `winget install LLVM.LLVM`，并安装 Visual Studio Build Tools 的 C++ 工作负载，或使用 MSYS2 clang |
+
+如果要启动 NekoScope 开发版：
+
+```bash
+cd nekoscope
+npm ci
+npm run dev
+```
 
 所有开发命令都可以通过 `uv run` 在项目虚拟环境中执行，无需手动激活 venv。
 

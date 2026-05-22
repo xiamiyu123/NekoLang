@@ -6,6 +6,14 @@
 
 项目使用 `uv` 管理 Python 环境和命令入口。
 
+从零开始运行前，先按用途安装依赖：
+
+| 用途 | 依赖 | 命令 |
+|------|------|------|
+| 查看 tokens、AST、符号表、四元式、LLVM IR | Python 3.10+、`uv`、项目 Python 依赖 | `uv sync --group dev` |
+| 编译运行 `.neko` 程序 | 上一项 + `clang` 和平台 C 链接工具链 | macOS: `xcode-select --install`；Ubuntu: `sudo apt install clang build-essential` |
+| 运行 NekoScope 开发版 | 上两项 + Node.js 22、NekoScope Node 依赖 | `cd nekoscope && npm ci && npm run dev` |
+
 ```bash
 uv sync --group dev
 ```
