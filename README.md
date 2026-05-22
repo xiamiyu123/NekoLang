@@ -479,6 +479,7 @@ uv run pytest tests/ -q -n auto
 
 - [实现架构](docs/architecture.md)
 - [文法规范](docs/grammar.md)
+- [预测分析表构造说明](docs/parser-table-construction.md)
 - [安装与跨平台依赖](docs/installation.zh.md)
 - [用户指南（中文）](docs/user-guide.zh.md)
 - [语言元素详解（中文）](docs/language-elements.zh.md)
