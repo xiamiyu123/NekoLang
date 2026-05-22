@@ -36,7 +36,17 @@ from neko.ast_nodes import (
     WhileNode,
 )
 from neko.lexer import Lexer
+from neko.semantic import Quadruple
 from neko.tokens import Token, TokenType
+
+
+def _collect_terminals(node):
+    terminals = []
+    if node.get("nodeType") == "Terminal":
+        terminals.append(node)
+    for child in node.get("children", []):
+        terminals.extend(_collect_terminals(child))
+    return terminals
 
 
 class TestTokenSerializer(unittest.TestCase):
@@ -496,10 +506,12 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertIn("source", serialized)
         self.assertIn("tokens", serialized)
         self.assertIn("ast", serialized)
+        self.assertIn("syntaxTree", serialized)
         self.assertIn("symbols", serialized)
         self.assertIn("quadruples", serialized)
         self.assertIn("quadrupleDag", serialized)
         self.assertIn("quadrupleOptimization", serialized)
+        self.assertIn("quadrupleLiveness", serialized)
         self.assertIn("assembly", serialized)
         self.assertIn("errors", serialized)
         self.assertEqual(serialized["backend"], "llvm")
@@ -513,6 +525,25 @@ class TestCompilationResultSerializer(unittest.TestCase):
         )
         self.assertIsInstance(serialized["assembly"], str)
         self.assertEqual(serialized["errors"], [])
+
+    def test_serialize_compilation_result_includes_concrete_syntax_tree(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (paw (:= a (+ b 1))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+
+        terminals = _collect_terminals(serialized["syntaxTree"])
+        values = [terminal["value"] for terminal in terminals]
+        token_types = [terminal["tokenType"] for terminal in terminals]
+
+        for value in ["(", ")", "nya", "paw", ":=", "+", "a", "b", "1"]:
+            self.assertIn(value, values)
+        self.assertNotIn("EOF", token_types)
+        nya = next(terminal for terminal in terminals if terminal["value"] == "nya")
+        self.assertEqual(nya["tokenType"], "program")
+        self.assertEqual(nya["line"], 1)
+        self.assertEqual(nya["column"], 2)
 
     def test_serialize_compilation_result_includes_quadruple_dag(self):
         from neko.viz_serializers import serialize_compilation_result
@@ -543,6 +574,15 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertIn("b", names)
         self.assertIn("a", names)
 
+    def test_quadruple_dag_omits_blocks_without_nodes(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (paw (meow 1)))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+
+        self.assertEqual(serialized["quadrupleDag"]["blocks"], [])
+
     def test_serialize_compilation_result_includes_optimized_quadruples(self):
         from neko.viz_serializers import serialize_compilation_result
 
@@ -556,11 +596,175 @@ class TestCompilationResultSerializer(unittest.TestCase):
         self.assertEqual(optimization["afterCount"], 4)
         self.assertEqual([q["op"] for q in optimization["initial"]], ["program", "+", ":=", "print", "end"])
         self.assertEqual([q["op"] for q in optimization["optimized"]], ["program", ":=", "print", "end"])
-        self.assertEqual(optimization["optimized"][1]["ob1"], "C1")
-        self.assertEqual(optimization["optimizedConstants"], {"5": "C1"})
+        folded_const = optimization["optimized"][1]["ob1"]
+        self.assertEqual(optimization["optimizedConstants"]["5"], folded_const)
         self.assertEqual(optimization["diagnostics"], [])
         self.assertEqual(optimization["steps"][1]["name"], "O1 常量折叠")
         self.assertTrue(optimization["steps"][1]["changed"])
+        self.assertTrue(optimization["steps"][3]["changed"])
+
+    def test_serialize_compilation_result_eliminates_repeated_quadruple_expression(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int) (x int) (y int))) (paw (:= x (+ a b)) (:= y (+ a b))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        optimization = serialized["quadrupleOptimization"]
+
+        self.assertTrue(optimization["changed"])
+        self.assertEqual(optimization["beforeCount"], 6)
+        self.assertEqual(optimization["afterCount"], 5)
+        self.assertEqual(
+            [q["op"] for q in optimization["optimized"]],
+            ["program", "+", ":=", ":=", "end"],
+        )
+        self.assertEqual(optimization["optimized"][3]["ob1"], "I3")
+        self.assertEqual(optimization["optimized"][3]["t"], "I4")
+        self.assertTrue(optimization["steps"][2]["changed"])
+
+    def test_quadruple_dag_orders_commutative_operands_by_kind(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (y int))) (paw (:= y (+ (+ a 3) a))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        dag = serialized["quadrupleDag"]["blocks"][0]
+        nodes_by_id = {node["id"]: node for node in dag["nodes"]}
+        plus_nodes = [node for node in dag["nodes"] if node["op"] == "+"]
+
+        first_plus = plus_nodes[0]
+        first_edges = {
+            edge["role"]: nodes_by_id[edge["target"]]
+            for edge in dag["edges"]
+            if edge["source"] == first_plus["id"]
+        }
+
+        self.assertEqual(first_edges["left"]["value"], "3")
+        self.assertEqual(first_edges["right"]["value"], "a")
+
+        second_plus = plus_nodes[1]
+        second_edges = {
+            edge["role"]: nodes_by_id[edge["target"]]
+            for edge in dag["edges"]
+            if edge["source"] == second_plus["id"]
+        }
+
+        self.assertEqual(second_edges["left"]["value"], "a")
+        self.assertEqual(second_edges["right"]["op"], "+")
+        self.assertIn("T1", second_edges["right"]["names"])
+
+    def test_quadruple_dag_orders_node_names_by_kind(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int) (f int) (g int))) (paw (:= f (+ a b)) (:= g (+ a b))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        dag = serialized["quadrupleDag"]["blocks"][0]
+        plus_node = next(node for node in dag["nodes"] if node["op"] == "+")
+
+        self.assertEqual(plus_node["names"], ["f", "g", "T1", "T2"])
+
+    def test_serialize_compilation_result_reports_incremental_optimization_counts(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = """(nya optimization_steps_demo
+          (nyan ((seed int) (base int) (offset int) (x int) (y int) (z int)
+                 (folded int) (total int)))
+          (paw
+            (:= seed (argv-int 0))
+            (:= base (+ 2 3))
+            (:= offset (+ 40 2))
+            (:= x (+ seed base))
+            (:= y (+ seed base))
+            (:= z (+ seed base))
+            (:= folded (+ offset 8))
+            (:= total (+ (+ x y) z))
+            (meow total)
+            (meow folded)))"""
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+        optimization = serialized["quadrupleOptimization"]
+        steps = optimization["steps"]
+
+        self.assertEqual(optimization["beforeCount"], 21)
+        self.assertEqual(optimization["afterCount"], 16)
+        self.assertEqual((steps[1]["beforeCount"], steps[1]["afterCount"], steps[1]["changed"]), (21, 21, True))
+        self.assertEqual((steps[2]["beforeCount"], steps[2]["afterCount"], steps[2]["changed"]), (21, 21, True))
+        self.assertEqual((steps[3]["beforeCount"], steps[3]["afterCount"], steps[3]["changed"]), (21, 16, True))
+        self.assertEqual(len(steps[1]["beforeRows"]), 21)
+        self.assertEqual(len(steps[1]["afterRows"]), 21)
+        self.assertEqual(steps[1]["removedRows"], [])
+        self.assertIn(
+            {"op": "+", "ob1": "C2", "ob2": "C3", "t": "T2"},
+            [row["before"] for row in steps[1]["rewrittenRows"]],
+        )
+        self.assertGreater(len(steps[3]["removedRows"]), 0)
+        self.assertEqual(len(steps[3]["afterRows"]), 16)
+        self.assertEqual(steps[3]["afterRows"], optimization["optimized"])
+
+    def test_quadruple_liveness_marks_rows_by_reverse_scan(self):
+        from neko.quadruple_liveness import build_quadruple_liveness
+
+        quads = [
+            Quadruple("+", "I1", "I2", "T1"),
+            Quadruple("-", "I3", "I4", "T2"),
+            Quadruple("*", "T1", "T2", "T3"),
+            Quadruple("-", "I1", "T3", "T4"),
+            Quadruple("/", "T1", "C1", "T5"),
+            Quadruple("+", "T4", "T5", "I5"),
+        ]
+
+        rows = build_quadruple_liveness(quads, {"I1": "a", "I2": "b", "I5": "x"})["blocks"][0]["rows"]
+
+        self.assertEqual((rows[0]["ob1"]["live"], rows[0]["ob2"]["live"], rows[0]["t"]["live"]), (True, True, True))
+        self.assertEqual((rows[2]["ob1"]["live"], rows[2]["ob2"]["live"], rows[2]["t"]["live"]), (True, False, True))
+        self.assertEqual((rows[4]["ob1"]["live"], rows[4]["ob2"]["live"], rows[4]["t"]["live"]), (False, None, True))
+        self.assertEqual((rows[5]["ob1"]["live"], rows[5]["ob2"]["live"], rows[5]["t"]["live"]), (False, False, True))
+        self.assertEqual(rows[0]["ob1"]["label"], "a")
+        self.assertEqual(rows[0]["ob2"]["label"], "b")
+
+    def test_quadruple_liveness_uses_optimized_rows(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int))) (paw (:= a (+ 2 3)) (meow a)))"
+        serialized = serialize_compilation_result(compile_source(source), backend="llvm")
+
+        self.assertEqual(
+            len(serialized["quadrupleLiveness"]["rows"]),
+            len(serialized["quadrupleOptimization"]["optimized"]),
+        )
+        self.assertEqual([row["op"] for row in serialized["quadrupleLiveness"]["rows"]], ["program", ":=", "print", "end"])
+
+    def test_quadruple_liveness_keeps_basic_blocks_independent(self):
+        from neko.quadruple_liveness import build_quadruple_liveness
+
+        quads = [
+            Quadruple("+", "I1", "I2", "T1"),
+            Quadruple("if_false", "T1", "_", "L1"),
+            Quadruple("+", "T1", "I3", "T2"),
+        ]
+
+        blocks = build_quadruple_liveness(quads)["blocks"]
+
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual(blocks[0]["rows"][0]["t"]["live"], True)
+        self.assertEqual(blocks[1]["rows"][0]["ob1"]["live"], False)
+        self.assertEqual(blocks[1]["rows"][0]["ob2"]["live"], True)
+
+    def test_quadruple_dag_and_optimizer_share_commutative_rules(self):
+        from neko.viz_serializers import serialize_compilation_result
+
+        source = "(nya t (nyan ((a int) (b int) (x bool) (y bool))) (paw (:= x (!= a b)) (:= y (!= b a))))"
+        result = compile_source(source)
+        serialized = serialize_compilation_result(result, backend="llvm")
+
+        dag = serialized["quadrupleDag"]["blocks"][0]
+        not_equal_nodes = [node for node in dag["nodes"] if node["op"] == "!="]
+        optimization = serialized["quadrupleOptimization"]
+
+        self.assertEqual(len(not_equal_nodes), 1)
+        self.assertTrue(optimization["steps"][2]["changed"])
+        self.assertEqual([q["op"] for q in optimization["optimized"]], ["program", "!=", ":=", ":=", "end"])
 
     def test_serialize_compilation_result_with_errors(self):
         from neko.viz_serializers import serialize_compilation_result

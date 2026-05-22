@@ -14,6 +14,16 @@ export interface ASTNode {
   [key: string]: unknown;
 }
 
+export interface SyntaxTreeNode {
+  nodeType: "SyntaxTree" | "SyntaxForm" | "Terminal" | string;
+  line: number;
+  column: number;
+  tokenType?: string;
+  value?: string;
+  children?: SyntaxTreeNode[];
+  [key: string]: unknown;
+}
+
 /** Compilation error */
 export interface CompileError {
   phase: string;
@@ -54,6 +64,10 @@ export interface QuadrupleOptimizationStep {
   beforeCount: number;
   afterCount: number;
   changed: boolean;
+  beforeRows?: Quadruple[];
+  afterRows?: Quadruple[];
+  removedRows?: Quadruple[];
+  rewrittenRows?: Array<{ before: Quadruple; after: Quadruple }>;
 }
 
 export interface QuadrupleOptimization {
@@ -69,6 +83,33 @@ export interface QuadrupleOptimization {
   optimizedConstants: Record<string, string | number>;
   steps: QuadrupleOptimizationStep[];
   diagnostics: CompileError[];
+}
+
+export interface QuadrupleLivenessOperand {
+  value: string;
+  label: string;
+  live: boolean | null;
+}
+
+export interface QuadrupleLivenessRow {
+  index: number;
+  op: string;
+  ob1: QuadrupleLivenessOperand;
+  ob2: QuadrupleLivenessOperand;
+  t: QuadrupleLivenessOperand;
+}
+
+export interface QuadrupleLivenessBlock {
+  blockIndex: number;
+  startQuad: number;
+  endQuad: number;
+  rows: QuadrupleLivenessRow[];
+}
+
+export interface QuadrupleLiveness {
+  source: "optimized" | string;
+  rows: QuadrupleLivenessRow[];
+  blocks: QuadrupleLivenessBlock[];
 }
 
 export interface QuadrupleDagNode {
@@ -122,10 +163,12 @@ export interface CompileResult {
   source: string;
   tokens: Token[];
   ast: ASTNode;
+  syntaxTree?: SyntaxTreeNode;
   symbols: SymbolTableSnapshot;
   quadruples: Quadruple[];
   quadrupleDag?: QuadrupleDag;
   quadrupleOptimization?: QuadrupleOptimization;
+  quadrupleLiveness?: QuadrupleLiveness;
   assembly: string;
   errors: CompileError[];
   backend: string;

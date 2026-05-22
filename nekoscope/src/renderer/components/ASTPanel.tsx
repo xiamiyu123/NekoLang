@@ -11,20 +11,27 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import dagre from "dagre";
-import type { ASTNode } from "../types/compiler";
+import type { ASTNode, SyntaxTreeNode } from "../types/compiler";
 import { astThemeColors, type ResolvedTheme } from "../styles/theme";
 
 type AstThemeColors = (typeof astThemeColors)[ResolvedTheme];
 
 /** AST keys that are metadata, not children */
-const META_KEYS = new Set(["nodeType", "line", "column"]);
+const META_KEYS = new Set(["nodeType", "line", "column", "tokenType"]);
 
 interface Props {
   ast: ASTNode | null;
+  syntaxTree?: SyntaxTreeNode | null;
   theme: ResolvedTheme;
 }
 
-function labelFor(node: ASTNode): string {
+type TreeNode = ASTNode | SyntaxTreeNode;
+type TreeMode = "ast" | "syntax";
+
+function labelFor(node: TreeNode): string {
+  if (node.nodeType === "Terminal") {
+    return String(node.value ?? node.tokenType ?? "");
+  }
   const parts = [node.nodeType];
   if (node.name != null) parts.push(String(node.name));
   if (node.value != null) parts.push(String(node.value));
@@ -34,7 +41,7 @@ function labelFor(node: ASTNode): string {
 
 /** Recursively convert AST JSON → react-flow nodes + edges, with unique id counter */
 function convertTree(
-  ast: ASTNode,
+  ast: TreeNode,
   prefix: string,
   nodes: Node[],
   edges: Edge[],
@@ -46,7 +53,11 @@ function convertTree(
     id,
     type: "astNode",
     position: { x: 0, y: 0 },
-    data: { handleColor: themeColors.handle, label: labelFor(ast) },
+    data: {
+      handleColor: themeColors.handle,
+      isTerminal: ast.nodeType === "Terminal",
+      label: labelFor(ast),
+    },
   });
 
   for (const [key, val] of Object.entries(ast)) {
@@ -56,13 +67,13 @@ function convertTree(
         if (child != null && typeof child === "object" && "nodeType" in child) {
           const childId = `${prefix}-${key}-${i}`;
           edges.push({ id: `${id}->${childId}`, source: id, target: childId, style: { stroke: themeColors.edge } });
-          convertTree(child as ASTNode, childId, nodes, edges, theme);
+          convertTree(child as TreeNode, childId, nodes, edges, theme);
         }
       });
     } else if (val != null && typeof val === "object" && "nodeType" in val) {
       const childId = `${prefix}-${key}`;
       edges.push({ id: `${id}->${childId}`, source: id, target: childId, style: { stroke: themeColors.edge } });
-      convertTree(val as ASTNode, childId, nodes, edges, theme);
+      convertTree(val as TreeNode, childId, nodes, edges, theme);
     }
   }
 }
@@ -73,7 +84,8 @@ function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "TB", nodesep: 30, ranksep: 60 });
   for (const n of nodes) {
-    g.setNode(n.id, { width: 150, height: 50 });
+    const isTerminal = Boolean(n.data?.isTerminal);
+    g.setNode(n.id, { width: isTerminal ? 76 : 150, height: isTerminal ? 38 : 50 });
   }
   for (const e of edges) {
     g.setEdge(e.source, e.target);
@@ -81,17 +93,20 @@ function layoutNodes(nodes: Node[], edges: Edge[]): Node[] {
   dagre.layout(g);
   return nodes.map((n) => {
     const d = g.node(n.id);
+    const isTerminal = Boolean(n.data?.isTerminal);
+    const width = isTerminal ? 76 : 150;
+    const height = isTerminal ? 38 : 50;
     return {
       ...n,
       position: {
-        x: d.x - 75,
-        y: d.y - 25,
+        x: d.x - width / 2,
+        y: d.y - height / 2,
       },
     };
   });
 }
 
-export function astToFlow(ast: ASTNode, theme: ResolvedTheme = "dark"): { nodes: Node[]; edges: Edge[] } {
+export function astToFlow(ast: TreeNode, theme: ResolvedTheme = "dark"): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   convertTree(ast, "root", nodes, edges, theme);
@@ -99,10 +114,10 @@ export function astToFlow(ast: ASTNode, theme: ResolvedTheme = "dark"): { nodes:
 }
 
 /** Custom AST node display */
-function ASTNodeDisplay({ data }: { data: { handleColor: string; label: string } }) {
+function ASTNodeDisplay({ data }: { data: { handleColor: string; isTerminal?: boolean; label: string } }) {
   return (
     <div
-      className="ast-flow-node"
+      className={`ast-flow-node ${data.isTerminal ? "terminal" : ""}`}
     >
       <Handle type="target" position={Position.Top} style={{ background: data.handleColor }} />
       {data.label}
@@ -146,12 +161,14 @@ function ASTCanvas({
   );
 }
 
-export function ASTPanel({ ast, theme }: Props) {
+export function ASTPanel({ ast, syntaxTree, theme }: Props) {
+  const [treeMode, setTreeMode] = useState<TreeMode>("ast");
   const [fullViewOpen, setFullViewOpen] = useState(false);
+  const activeTree = treeMode === "syntax" ? syntaxTree : ast;
   const { nodes, edges } = useMemo(() => {
-    if (!ast) return { nodes: [], edges: [] };
-    return astToFlow(ast, theme);
-  }, [ast, theme]);
+    if (!activeTree) return { nodes: [], edges: [] };
+    return astToFlow(activeTree, theme);
+  }, [activeTree, theme]);
   const themeColors = astThemeColors[theme];
 
   if (!ast) {
@@ -165,6 +182,28 @@ export function ASTPanel({ ast, theme }: Props) {
   return (
     <div className="ast-panel">
       <div className="ast-toolbar">
+        {syntaxTree ? (
+          <div className="quad-toolbar compact" role="tablist" aria-label="语法树模式">
+            <button
+              className={`tab-button ${treeMode === "ast" ? "active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={treeMode === "ast"}
+              onClick={() => setTreeMode("ast")}
+            >
+              抽象 AST
+            </button>
+            <button
+              className={`tab-button ${treeMode === "syntax" ? "active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={treeMode === "syntax"}
+              onClick={() => setTreeMode("syntax")}
+            >
+              精确语法树
+            </button>
+          </div>
+        ) : null}
         <button
           className="dag-overview-button"
           type="button"
@@ -186,7 +225,7 @@ export function ASTPanel({ ast, theme }: Props) {
             <header className="ast-modal-head">
               <div>
                 <span>语法树全貌</span>
-                <strong>{ast.nodeType}</strong>
+                <strong>{activeTree?.nodeType ?? ast.nodeType}</strong>
               </div>
               <button
                 className="icon-button"

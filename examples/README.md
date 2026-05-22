@@ -8,6 +8,7 @@
 |------|----------|----------|
 | `demo.neko` | `uv run neko run examples/demo.neko` | 基础变量、算术、输出 |
 | `dag_optimization_demo.neko` | `uv run neko run examples/dag_optimization_demo.neko` | 四元式 DAG 与公共子表达式合并 |
+| `optimization_steps_demo.neko` | `uv run neko run examples/optimization_steps_demo.neko -- 7` | O1 常量折叠、公共子表达式消除、死临时删除 |
 | `fibonacci.neko` | `uv run neko run examples/fibonacci.neko` | 循环、变量更新 |
 | `v0_1_demo.neko` | `uv run neko run examples/v0_1_demo.neko` | v0.1 基础能力串联 |
 | `runtime_demo.neko` | `uv run neko run examples/runtime_demo.neko -- 41` | `argc`、`argv-int`、文件写入 |

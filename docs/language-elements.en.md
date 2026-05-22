@@ -757,4 +757,4 @@ This example shows:
 - Use `(+ s1 s2)` for string concatenation, `int-to-string` for formatting
 - Use single quotes `'a'` for char literals, distinct from double-quoted strings
 
-For implementation-oriented details, see [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) and [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md).
+For implementation-oriented details, see [architecture.md](architecture.md), [grammar.md](grammar.md), and [llvm_backend.md](llvm_backend.md).

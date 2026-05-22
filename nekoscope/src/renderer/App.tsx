@@ -26,10 +26,10 @@ import { StageLesson } from "./components/StageLesson";
 import { SymbolTablePanel } from "./components/SymbolTablePanel";
 import { TokenPanel } from "./components/TokenPanel";
 import {
-  isThemePreference,
+  loadThemePreference,
   nextThemePreference,
   resolveTheme,
-  THEME_STORAGE_KEY,
+  saveThemePreference,
   themePreferenceDescriptions,
   themePreferenceLabels,
   type ResolvedTheme,
@@ -159,9 +159,7 @@ function computeCompletedStages(result: CompileResult | null): Set<string> {
 }
 
 function getInitialThemePreference(): ThemePreference {
-  if (typeof window === "undefined") return "system";
-  const storedPreference = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return isThemePreference(storedPreference) ? storedPreference : "system";
+  return loadThemePreference();
 }
 
 function getSystemPrefersDark(): boolean {
@@ -342,7 +340,7 @@ export default function App() {
     document.documentElement.dataset.themePreference = themePreference;
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.style.colorScheme = resolvedTheme === "dark" ? "dark" : "light";
-    window.localStorage.setItem(THEME_STORAGE_KEY, themePreference);
+    saveThemePreference(themePreference);
   }, [resolvedTheme, themePreference]);
 
   // Keep file contents cache in sync with editor
@@ -699,7 +697,7 @@ function ArtifactView({
     return <TokenPanel tokens={result?.tokens ?? null} theme={theme} />;
   }
   if (activeStage === "ast") {
-    return <ASTPanel ast={result?.ast ?? null} theme={theme} />;
+    return <ASTPanel ast={result?.ast ?? null} syntaxTree={result?.syntaxTree ?? null} theme={theme} />;
   }
   if (activeStage === "symbols") {
     return <SymbolTablePanel symbols={result?.symbols ?? null} />;
@@ -709,6 +707,7 @@ function ArtifactView({
       <QuadruplePanel
         quadruples={result?.quadruples ?? null}
         optimization={result?.quadrupleOptimization ?? null}
+        liveness={result?.quadrupleLiveness ?? null}
         dag={result?.quadrupleDag ?? null}
         theme={theme}
       />

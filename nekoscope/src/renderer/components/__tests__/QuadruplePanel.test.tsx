@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QuadruplePanel } from "../QuadruplePanel";
 
@@ -32,7 +32,7 @@ describe("QuadruplePanel", () => {
         ]}
         optimization={{
           level: "O1",
-          source: "ARM64 AST optimizer",
+          source: "Quadruple DAG optimizer",
           enabled: true,
           changed: true,
           beforeCount: 3,
@@ -55,6 +55,21 @@ describe("QuadruplePanel", () => {
               beforeCount: 3,
               afterCount: 2,
               changed: true,
+              beforeRows: [
+                { op: "program", ob1: "t", ob2: "_", t: "_" },
+                { op: "+", ob1: "C1", ob2: "C2", t: "T1" },
+                { op: ":=", ob1: "T1", ob2: "_", t: "I1" },
+              ],
+              afterRows: [
+                { op: "program", ob1: "t", ob2: "_", t: "_" },
+                { op: ":=", ob1: "C3", ob2: "_", t: "I1" },
+              ],
+              rewrittenRows: [
+                {
+                  before: { op: "+", ob1: "C1", ob2: "C2", t: "T1" },
+                  after: { op: ":=", ob1: "C3", ob2: "_", t: "I1" },
+                },
+              ],
             },
           ],
           diagnostics: [],
@@ -68,6 +83,11 @@ describe("QuadruplePanel", () => {
     expect(screen.getByText("四元式序列")).toBeTruthy();
     expect(screen.getByText("O1 常量折叠")).toBeTruthy();
     expect(screen.getByText("3 -> 2")).toBeTruthy();
+    const rewrittenTable = screen.getByRole("table", { name: "O1 常量折叠 改写的四元式" });
+    expect(within(rewrittenTable).getByText("+")).toBeTruthy();
+    expect(within(rewrittenTable).getByText("C2")).toBeTruthy();
+    expect(screen.queryByRole("table", { name: "O1 常量折叠 已删除的四元式" })).toBeNull();
+    expect(screen.getByRole("table", { name: "O1 常量折叠 优化后四元式" })).toBeTruthy();
     await user.click(screen.getByRole("tab", { name: "优化结果" }));
     expect(screen.getByText("C1 = 5")).toBeTruthy();
   });
@@ -132,5 +152,80 @@ describe("QuadruplePanel", () => {
     await user.click(screen.getByRole("tab", { name: "优化过程" }));
     expect(screen.queryByText(/没有可构造 DAG/)).toBeNull();
     expect(screen.getByText("T1, T2")).toBeTruthy();
+  });
+
+  it("renders optimized quadruple liveness annotations", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuadruplePanel
+        quadruples={[
+          { op: "+", ob1: "I1", ob2: "I2", t: "T1" },
+          { op: "+", ob1: "T1", ob2: "I3", t: "I4" },
+        ]}
+        liveness={{
+          source: "optimized",
+          rows: [
+            {
+              index: 1,
+              op: "+",
+              ob1: { value: "I1", label: "a", live: true },
+              ob2: { value: "I2", label: "b", live: true },
+              t: { value: "T1", label: "T1", live: true },
+            },
+            {
+              index: 2,
+              op: "+",
+              ob1: { value: "T1", label: "T1", live: false },
+              ob2: { value: "I3", label: "c", live: true },
+              t: { value: "I4", label: "x", live: true },
+            },
+          ],
+          blocks: [
+            {
+              blockIndex: 1,
+              startQuad: 1,
+              endQuad: 2,
+              rows: [
+                {
+                  index: 1,
+                  op: "+",
+                  ob1: { value: "I1", label: "a", live: true },
+                  ob2: { value: "I2", label: "b", live: true },
+                  t: { value: "T1", label: "T1", live: true },
+                },
+                {
+                  index: 2,
+                  op: "+",
+                  ob1: { value: "T1", label: "T1", live: false },
+                  ob2: { value: "I3", label: "c", live: true },
+                  t: { value: "I4", label: "x", live: true },
+                },
+              ],
+            },
+          ],
+        }}
+        theme="dark"
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "活跃信息" }));
+    const table = screen.getByRole("table", { name: "B1 活跃信息" });
+    expect(within(table).getByText("a")).toBeTruthy();
+    expect(within(table).getAllByText("(y)").length).toBeGreaterThan(0);
+    expect(within(table).getAllByText("T1")).toHaveLength(2);
+    expect(within(table).getByText("(n)")).toBeTruthy();
+  });
+
+  it("shows an empty liveness state when backend data is missing", async () => {
+    const user = userEvent.setup();
+    render(
+      <QuadruplePanel
+        quadruples={[{ op: "program", ob1: "t", ob2: "_", t: "_" }]}
+        theme="dark"
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "活跃信息" }));
+    expect(screen.getByText(/没有可展示的活跃信息/)).toBeTruthy();
   });
 });

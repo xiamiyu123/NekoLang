@@ -47,12 +47,14 @@ EXAMPLES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "example
 
 EXAMPLE_LABELS = {
     "dag_optimization_demo": "DAG 优化示例",
+    "optimization_steps_demo": "O1 分步优化示例",
 }
 
 EXAMPLE_ORDER = {
     "demo": 10,
     "dag_optimization_demo": 20,
-    "fibonacci": 30,
+    "optimization_steps_demo": 30,
+    "fibonacci": 40,
 }
 
 

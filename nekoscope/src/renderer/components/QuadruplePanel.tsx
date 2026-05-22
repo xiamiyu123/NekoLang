@@ -1,5 +1,12 @@
 import { useState } from "react";
-import type { Quadruple, QuadrupleDag, QuadrupleOptimization } from "../types/compiler";
+import type {
+  Quadruple,
+  QuadrupleDag,
+  QuadrupleLiveness,
+  QuadrupleLivenessOperand,
+  QuadrupleOptimization,
+  QuadrupleOptimizationStep,
+} from "../types/compiler";
 import { QuadrupleDagPanel } from "./QuadrupleDagPanel";
 import type { ResolvedTheme } from "../styles/theme";
 import { buildQuadrupleDag } from "../quadrupleDag";
@@ -7,11 +14,13 @@ import { buildQuadrupleDag } from "../quadrupleDag";
 interface Props {
   quadruples: Quadruple[] | null;
   optimization?: QuadrupleOptimization | null;
+  liveness?: QuadrupleLiveness | null;
   dag?: QuadrupleDag | null;
   theme: ResolvedTheme;
 }
 
-type QuadView = "initial" | "process" | "optimized";
+type QuadView = "initial" | "process" | "optimized" | "liveness";
+type QuadRowTone = "normal" | "removed" | "rewritten-before" | "rewritten-after";
 
 function explainOperand(value: string): string {
   if (value === "_") return "空";
@@ -22,7 +31,15 @@ function explainOperand(value: string): string {
   return "值";
 }
 
-function QuadTable({ rows, label }: { rows: Quadruple[]; label: string }) {
+function QuadTable({
+  rows,
+  label,
+  tone = "normal",
+}: {
+  rows: Quadruple[];
+  label: string;
+  tone?: QuadRowTone;
+}) {
   return (
     <table className="teaching-table dense" aria-label={label}>
       <thead>
@@ -36,7 +53,7 @@ function QuadTable({ rows, label }: { rows: Quadruple[]; label: string }) {
       </thead>
       <tbody>
         {rows.map((quad, index) => (
-          <tr key={`${index}-${quad.op}-${quad.t}`}>
+          <tr className={tone === "normal" ? undefined : `quad-row-${tone}`} key={`${index}-${quad.op}-${quad.t}`}>
             <td className="mono-cell muted">{index}</td>
             <td><span className="op-pill">{quad.op}</span></td>
             <td className="mono-cell" title={explainOperand(quad.ob1)}>{quad.ob1}</td>
@@ -46,6 +63,75 @@ function QuadTable({ rows, label }: { rows: Quadruple[]; label: string }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+function RewrittenQuadTable({ step }: { step: QuadrupleOptimizationStep }) {
+  const rows = step.rewrittenRows ?? [];
+  if (rows.length === 0) return null;
+
+  return (
+    <table className="teaching-table dense" aria-label={`${step.name} 改写的四元式`}>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>改写前</th>
+          <th>改写后</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={`${index}-${row.before.op}-${row.after.op}`}>
+            <td className="mono-cell muted">{index}</td>
+            <td>
+              <QuadInlineRow quad={row.before} tone="rewritten-before" />
+            </td>
+            <td>
+              <QuadInlineRow quad={row.after} tone="rewritten-after" />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function QuadInlineRow({ quad, tone }: { quad: Quadruple; tone: QuadRowTone }) {
+  return (
+    <span className={`quad-inline-row quad-row-${tone}`}>
+      <span className="op-pill">{quad.op}</span>
+      <code>{quad.ob1}</code>
+      <code>{quad.ob2}</code>
+      <code>{quad.t}</code>
+    </span>
+  );
+}
+
+function StepQuadTables({ step }: { step: QuadrupleOptimizationStep }) {
+  const removedRows = step.removedRows ?? [];
+  const rewrittenRows = step.rewrittenRows ?? [];
+  const afterRows = step.afterRows ?? [];
+  if (removedRows.length === 0 && rewrittenRows.length === 0 && afterRows.length === 0) return null;
+
+  return (
+    <div className="quad-step-body">
+      {rewrittenRows.length > 0 ? (
+        <div className="quad-step-table">
+          <div className="quad-step-table-title">本阶段改写</div>
+          <RewrittenQuadTable step={step} />
+        </div>
+      ) : null}
+      {removedRows.length > 0 ? (
+        <div className="quad-step-table">
+          <div className="quad-step-table-title">本阶段已删除</div>
+          <QuadTable rows={removedRows} label={`${step.name} 已删除的四元式`} tone="removed" />
+        </div>
+      ) : null}
+      <div className="quad-step-table">
+        <div className="quad-step-table-title">本阶段优化后</div>
+        <QuadTable rows={afterRows} label={`${step.name} 优化后四元式`} />
+      </div>
+    </div>
   );
 }
 
@@ -62,7 +148,64 @@ function ConstantMap({ constants }: { constants?: Record<string, string | number
   );
 }
 
-export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) {
+function LivenessCell({ operand }: { operand: QuadrupleLivenessOperand }) {
+  if (operand.value === "_") {
+    return <span className="mono-cell muted">_</span>;
+  }
+  if (operand.live === null) {
+    return <span className="mono-cell">{operand.label}</span>;
+  }
+  return (
+    <span className={`quad-live-cell ${operand.live ? "live" : "dead"}`}>
+      <span className="mono-cell">{operand.label}</span>
+      <span className="quad-live-mark">({operand.live ? "y" : "n"})</span>
+    </span>
+  );
+}
+
+function QuadrupleLivenessPanel({ liveness }: { liveness?: QuadrupleLiveness | null }) {
+  if (!liveness || liveness.rows.length === 0) {
+    return <div className="empty-panel compact">当前四元式没有可展示的活跃信息。</div>;
+  }
+
+  const blocks = liveness.blocks.length > 0
+    ? liveness.blocks
+    : [{ blockIndex: 1, startQuad: 1, endQuad: liveness.rows.length, rows: liveness.rows }];
+
+  return (
+    <div className="quad-liveness">
+      {blocks.map((block) => (
+        <section className="quad-live-block" key={`${block.blockIndex}-${block.startQuad}`}>
+          <div className="quad-step-table-title">B{block.blockIndex} · 四元式 {block.startQuad}-{block.endQuad}</div>
+          <table className="teaching-table dense quad-live-table" aria-label={`B${block.blockIndex} 活跃信息`}>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>操作</th>
+                <th>参数 1</th>
+                <th>参数 2</th>
+                <th>结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row) => (
+                <tr key={row.index}>
+                  <td className="mono-cell muted">{row.index}</td>
+                  <td><span className="op-pill">{row.op}</span></td>
+                  <td><LivenessCell operand={row.ob1} /></td>
+                  <td><LivenessCell operand={row.ob2} /></td>
+                  <td><LivenessCell operand={row.t} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+export function QuadruplePanel({ quadruples, optimization, liveness, dag, theme }: Props) {
   const [activeView, setActiveView] = useState<QuadView>("initial");
 
   if (!quadruples) {
@@ -109,6 +252,15 @@ export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) 
         >
           优化结果
         </button>
+        <button
+          className={`tab-button ${activeView === "liveness" ? "active" : ""}`}
+          type="button"
+          role="tab"
+          aria-selected={activeView === "liveness"}
+          onClick={() => setActiveView("liveness")}
+        >
+          活跃信息
+        </button>
       </div>
 
       <div className="data-panel">
@@ -146,6 +298,7 @@ export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) 
                       <p>{step.detail}</p>
                     </div>
                     <code>{step.beforeCount}{" -> "}{step.afterCount}</code>
+                    <StepQuadTables step={step} />
                   </div>
                 ))
               )}
@@ -158,6 +311,10 @@ export function QuadruplePanel({ quadruples, optimization, dag, theme }: Props) 
             <ConstantMap constants={optimization?.optimizedConstants} />
             <QuadTable rows={optimizedRows} label="优化后四元式" />
           </>
+        ) : null}
+
+        {activeView === "liveness" ? (
+          <QuadrupleLivenessPanel liveness={liveness} />
         ) : null}
       </div>
     </div>

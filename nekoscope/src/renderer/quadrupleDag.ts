@@ -1,7 +1,9 @@
 import type { Quadruple, QuadrupleDag, QuadrupleDagBlock, QuadrupleDagNode } from "./types/compiler";
 
 const SUPPORTED_BINARY_OPS = new Set(["+", "-", "*", "/", "<", ">", "=", "<=", ">=", "!="]);
-const COMMUTATIVE_OPS = new Set(["+", "*", "="]);
+const COMMUTATIVE_OPS = new Set(["+", "*", "=", "!="]);
+
+type OperandSortKey = [number, number, string];
 
 interface DagBuildState {
   nodes: QuadrupleDagNode[];
@@ -9,6 +11,7 @@ interface DagBuildState {
   valueNodes: Map<string, string>;
   exprNodes: Map<string, string>;
   currentDef: Map<string, string>;
+  nameSortKeys: Map<string, OperandSortKey>;
 }
 
 function createState(): DagBuildState {
@@ -18,6 +21,7 @@ function createState(): DagBuildState {
     valueNodes: new Map(),
     exprNodes: new Map(),
     currentDef: new Map(),
+    nameSortKeys: new Map(),
   };
 }
 
@@ -30,6 +34,34 @@ function newNode(state: DagBuildState, op: string, value = ""): string {
 
 function labelOperand(value: string, labels: Record<string, string>): string {
   return labels[value] ?? value;
+}
+
+function operandSortKey(operand: string): OperandSortKey {
+  const unknownMatch = operand.match(/^unknown:(.+):\d+$/);
+  if (unknownMatch) operand = unknownMatch[1];
+
+  if (operand.startsWith("const:")) {
+    return [0, 0, operand.slice("const:".length)];
+  }
+
+  const exprMatch = operand.match(/^expr:(\d+)$/);
+  if (exprMatch) {
+    return [2, Number(exprMatch[1]), operand];
+  }
+
+  const addrMatch = operand.match(/^([CIT])(\d+)$/);
+  if (addrMatch) {
+    const rank = { C: 0, I: 1, T: 2 }[addrMatch[1] as "C" | "I" | "T"];
+    return [rank, Number(addrMatch[2]), operand];
+  }
+
+  return [1, 0, operand];
+}
+
+function compareOperandSortKey(left: OperandSortKey, right: OperandSortKey): number {
+  if (left[0] !== right[0]) return left[0] - right[0];
+  if (left[1] !== right[1]) return left[1] - right[1];
+  return left[2].localeCompare(right[2]);
 }
 
 function nodeForOperand(state: DagBuildState, operand: string, labels: Record<string, string>): string {
@@ -50,28 +82,50 @@ function attachName(state: DagBuildState, id: string, name: string, labels: Reco
   if (name === "_") return;
   const label = labelOperand(name, labels);
   const oldId = state.currentDef.get(name);
+  state.nameSortKeys.set(label, operandSortKey(name));
   if (oldId && oldId !== id) {
     const oldNode = nodeById(state, oldId);
     oldNode.names = oldNode.names.filter((item) => item !== label);
   }
   const node = nodeById(state, id);
-  if (!node.names.includes(label)) node.names.push(label);
+  if (!node.names.includes(label)) {
+    node.names.push(label);
+    node.names.sort((left, right) => (
+      compareOperandSortKey(
+        state.nameSortKeys.get(left) ?? operandSortKey(left),
+        state.nameSortKeys.get(right) ?? operandSortKey(right),
+      )
+    ));
+  }
   state.currentDef.set(name, id);
 }
 
-function nodeForExpression(state: DagBuildState, op: string, leftId: string, rightId: string): string {
+function nodeForExpression(
+  state: DagBuildState,
+  op: string,
+  leftId: string,
+  rightId: string,
+  leftOperand: string,
+  rightOperand: string,
+): string {
   let keyLeft = leftId;
   let keyRight = rightId;
-  if (COMMUTATIVE_OPS.has(op) && keyRight < keyLeft) {
-    [keyLeft, keyRight] = [keyRight, keyLeft];
+  if (COMMUTATIVE_OPS.has(op)) {
+    const keyComparison = compareOperandSortKey(
+      operandSortKey(rightOperand),
+      operandSortKey(leftOperand),
+    );
+    if (keyComparison < 0 || (keyComparison === 0 && keyRight < keyLeft)) {
+      [keyLeft, keyRight] = [keyRight, keyLeft];
+    }
   }
   const key = `${op}|${keyLeft}|${keyRight}`;
   const existing = state.exprNodes.get(key);
   if (existing) return existing;
 
   const id = newNode(state, op);
-  state.edges.push({ source: id, target: leftId, role: "left" });
-  state.edges.push({ source: id, target: rightId, role: "right" });
+  state.edges.push({ source: id, target: keyLeft, role: "left" });
+  state.edges.push({ source: id, target: keyRight, role: "right" });
   state.exprNodes.set(key, id);
   return id;
 }
@@ -130,7 +184,7 @@ function buildBlock(
     if (SUPPORTED_BINARY_OPS.has(quad.op) && quad.ob1 !== "_" && quad.ob2 !== "_" && quad.t !== "_") {
       const leftId = nodeForOperand(state, quad.ob1, labels);
       const rightId = nodeForOperand(state, quad.ob2, labels);
-      const exprId = nodeForExpression(state, quad.op, leftId, rightId);
+      const exprId = nodeForExpression(state, quad.op, leftId, rightId, quad.ob1, quad.ob2);
       attachName(state, exprId, quad.t, labels);
       return;
     }

@@ -10,25 +10,25 @@
 
 ## 背景
 
-NekoLang 是一个教学用途的编译语言，需要一个可视化工具帮助学生理解编译管线各阶段的数据变换。该工具需要模仿 Compiler Explorer (godbolt.org) 的思路，但更贴合 NekoLang 的设计语言和实际编译管线。
+NekoLang 是一个教学用途的编译语言，需要一个可视化工具帮助学生理解编译管线各阶段的数据变换。该工具借鉴 Compiler Explorer 的阶段对照思路，但更贴合 NekoLang 的设计语言和实际编译管线。
 
 ## 决策
 
-### 1. 核心形态：管线视图 + Godbolt 对比
+### 1. 核心形态：源码工作区 + 阶段教学面板
 
-**选择**：默认多面板管线视图（横向排列各阶段），双击某阶段可放大为 Godbolt 式左右对比视图。
+**选择**：默认源码工作区 + 阶段导航 + 单阶段教学面板。语法树和 DAG 等图形视图在面板内提供全貌弹窗。
 
-**理由**：教学场景下，学生需要看到数据在阶段之间的流动和变换，而不是只看首尾两端。管线视图能直观展示"源码 → Tokens → AST → 汇编"的完整变换链。Godbolt 对比视图作为补充，用于深入观察某两个阶段之间的精确映射。
+**理由**：教学场景下，学生需要按阶段理解数据变换。当前实现把源码编辑、编译/运行、工作区文件树放在左侧，把阶段说明和当前产物放在右侧，避免多个大型可视化面板同时挤在一个窗口里。AST、CST、DAG 这类图形产物可通过全貌弹窗放大查看。
 
 **替代方案**：
-- 纯 Godbolt 风格（左右两栏）：只能看首尾，缺少中间阶段的教学信息
-- 纯管线视图：无法做精确的行间映射对比
+- 纯左右对比风格：只能看首尾，缺少中间阶段的教学信息
+- 同屏展示全部阶段：信息密度过高，AST/DAG 这类图形容易过小
 
 ### 2. 部署形态：Electron 桌面应用
 
 **选择**：Electron 桌面应用，内嵌 Web 前端。
 
-**理由**：Electron 结合了 Web 前端的交互丰富性和桌面应用的独立性。Monaco Editor（VSCode 编辑器核心）、react-flow（AST 树形图）、react-mosaic（面板布局）等 Web 生态库可以直接使用。同时桌面应用避免了浏览器安全限制和部署服务器的复杂性。
+**理由**：Electron 结合了 Web 前端的交互丰富性和桌面应用的独立性。Monaco Editor（VSCode 编辑器核心）和 React Flow（AST、CST、DAG 图）可以直接使用。同时桌面应用避免了浏览器安全限制和部署服务器的复杂性。
 
 **替代方案**：
 - 纯 Web 应用：需要部署服务器，学生需要网络连接
@@ -52,7 +52,7 @@ NekoLang 是一个教学用途的编译语言，需要一个可视化工具帮�
 **理由**：
 - Monaco Editor 有成熟的 React 封装 (`@monaco-editor/react`)
 - react-flow 用于 AST 交互式树形图
-- react-mosaic 用于 VSCode 风格的面板布局
+- React 组件和 CSS Grid 管理源码区、阶段区和弹窗布局
 - 代码高亮、行间映射等需求有丰富的社区方案
 
 **替代方案**：
@@ -61,9 +61,9 @@ NekoLang 是一个教学用途的编译语言，需要一个可视化工具帮�
 
 ### 5. AST 可视化：react-flow 交互式树形图
 
-**选择**：用 react-flow 绘制 AST 节点-连线图，支持缩放、拖拽、点击展开/折叠。
+**选择**：用 React Flow 绘制 AST、CST 和四元式 DAG 的节点-连线图，支持缩放、拖拽和全貌查看。
 
-**理由**：AST 是树形结构，react-flow 的节点-连线模型天然适合。支持交互操作（缩放、拖拽、折叠），节点可以自定义渲染（显示类型、值、源码位置）。视觉上最直观，学生能一眼看到树结构和父子关系。
+**理由**：AST、CST 和 DAG 都适合用节点-连线模型展示。React Flow 支持交互操作和自定义节点，配合 dagre 自动布局后，学生能直观看到树结构、终结符叶子和公共子表达式复用关系。
 
 **替代方案**：
 - 可折叠缩进树（类似 JSON 树）：实现简单，但不如图形直观
@@ -71,9 +71,9 @@ NekoLang 是一个教学用途的编译语言，需要一个可视化工具帮�
 
 ### 6. 视觉设计：全面猫咪主题
 
-**选择**：全面猫咪化设计语言——圆角猫耳面板、粉色/紫色配色、猫咪插画、猫爪印动画。
+**选择**：保留猫咪主题，但提供 light/dark/neko 三套主题偏好。
 
-**理由**：NekoLang 的核心特色是猫咪主题关键字（nya、meow、purr），可视化工具应延续这一设计语言。在教学场景下，有辨识度的设计能让学生对编译过程形成更强的记忆锚点。
+**理由**：NekoLang 的核心特色是猫咪主题关键字（nya、meow、purr），可视化工具应延续这一设计语言。同时编译产物阅读需要较高对比度，所以默认提供深色/浅色可切换主题，猫猫模式作为个性化选择。
 
 **替代方案**：
 - 极简专业 + 猫咪点缀：平衡方案，但辨识度不够强
@@ -94,11 +94,11 @@ NekoLang 是一个教学用途的编译语言，需要一个可视化工具帮�
 **替代方案**：
 - 独立仓库：干净分离，但跨仓库开发调试麻烦
 
-### 9. Python 环境：要求用户预装
+### 9. Python 环境：开发依赖系统 uv，打包依赖内置 uv
 
-**选择**：应用启动时检测系统 Python 版本，缺少时弹窗引导安装。
+**选择**：开发模式直接调用系统 `uv`；打包模式把 `uv` 可执行文件复制到 Electron resources，并用它在应用数据目录中创建后端虚拟环境。
 
-**理由**：教学场景下学生通常已装 Python（课程前置条件），且 `uv` 可以一键配环境。打包体积最小（~100MB vs 内嵌 Python 的 ~300-500MB）。
+**理由**：`uv` 可以按 `pyproject.toml` 管理 Python 环境，不需要追踪 `uv.lock`。打包应用不再要求目标机器的 `PATH` 中有 `uv`，同时避免把完整 Python 解释器和依赖预打进安装包。
 
 **替代方案**：
 - PyInstaller 内嵌 Python：零依赖，但打包体积大，llvmlite C 扩展打包易出问题
@@ -111,21 +111,24 @@ NekoLang 是一个教学用途的编译语言，需要一个可视化工具帮�
 需要在 `neko/` 包中添加：
 
 1. `neko/viz_serializers.py` — Token、AST、Error 的 JSON 序列化层
-2. `neko/viz_api.py` — FastAPI 应用，暴露 `/api/compile`、`/api/tokens`、`/api/ast`、`/api/assembly` 等端点
+2. `neko/viz_api.py` — FastAPI 应用，暴露 `/api/compile`、`/api/run`、`/api/workspace/*` 等端点
+3. `neko/syntax_tree.py`、`neko/dag.py`、`neko/quadruple_optimizer.py`、`neko/quadruple_liveness.py` — CST、DAG、优化过程和活跃信息展示产物
 
-编译器核心模块（lexer、parser、semantic、codegen）不需要修改。
+编译器核心模块（lexer、parser、semantic、codegen）仍是真实编译链路；NekoScope 的优化与活跃信息目前只用于教学展示。
 
 ### 新增目录
 
 ```
 nekoscope/          # Electron + React 前端
 ├── package.json
-├── electron/       # Electron 主进程
-├── src/            # React 应用源码
-└── assets/         # Logo、猫咪插画等静态资源
+├── scripts/        # dev/pack 脚本，打包时复制 uv
+└── src/
+    ├── main/       # Electron 主进程
+    ├── preload/    # 安全 IPC 暴露
+    └── renderer/   # React 应用源码
 ```
 
 ### 依赖
 
 - Python 端：新增 `fastapi` + `uvicorn` 依赖
-- Node 端：`electron`、`react`、`@monaco-editor/react`、`reactflow`、`react-mosaic`
+- Node 端：`electron`、`react`、`@monaco-editor/react`、`reactflow`、`dagre`、`lucide-react`

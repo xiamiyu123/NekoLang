@@ -33,7 +33,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen --group dev
+        run: uv sync --group dev
 
       - name: Run fast tests
         run: uv run pytest tests/ -q -m "not slow" -n auto
@@ -57,7 +57,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen --group dev
+        run: uv sync --group dev
 
       - name: Run slow tests
         run: uv run pytest tests/ -q -m slow -n auto
@@ -81,7 +81,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen --group dev
+        run: uv sync --group dev
 
       - name: Show runner architecture
         run: uname -a && python -c "import platform; print(platform.system(), platform.machine())"

@@ -5,12 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .quadruple_rules import COMMUTATIVE_OPS, SUPPORTED_BINARY_OPS, operand_sort_key
 from .semantic import Quadruple
 
 
 VALUE_OP = "value"
-SUPPORTED_BINARY_OPS = {"+", "-", "*", "/", "<", ">", "=", "<=", ">=", "!="}
-COMMUTATIVE_OPS = {"+", "*", "="}
 BOUNDARY_OPS = {"program", "end", "label", "goto", "if_false", "param", "call", "return", "print"}
 
 
@@ -42,6 +41,7 @@ class DagBuilder:
         self.value_nodes: dict[str, str] = {}
         self.expr_nodes: dict[tuple[str, str, str], str] = {}
         self.current_def: dict[str, str] = {}
+        self.name_sort_keys: dict[str, tuple[int, int, str]] = {}
         self.labels = labels or {}
 
     def build(self, quads: list[tuple[int, Quadruple]], block_index: int) -> BasicBlockDag:
@@ -63,7 +63,7 @@ class DagBuilder:
                     continue
                 left_id = self._node_for_operand(quad.ob1)
                 right_id = self._node_for_operand(quad.ob2)
-                expr_id = self._node_for_expression(quad.op, left_id, right_id)
+                expr_id = self._node_for_expression(quad.op, left_id, right_id, quad.ob1, quad.ob2)
                 self._attach_name(expr_id, quad.t)
                 continue
             skipped.append(_skipped_quad(quad_index, quad, "该四元式不参与表达式 DAG 构造"))
@@ -94,13 +94,24 @@ class DagBuilder:
             self.value_nodes[operand] = self._new_node(VALUE_OP, value=self._label(operand))
         return self.value_nodes[operand]
 
-    def _node_for_expression(self, op: str, left_id: str, right_id: str) -> str:
+    def _node_for_expression(
+        self,
+        op: str,
+        left_id: str,
+        right_id: str,
+        left_operand: str,
+        right_operand: str,
+    ) -> str:
         key_left, key_right = left_id, right_id
-        if op in COMMUTATIVE_OPS and key_right < key_left:
-            key_left, key_right = key_right, key_left
+        if op in COMMUTATIVE_OPS:
+            left_key = (operand_sort_key(left_operand), left_id)
+            right_key = (operand_sort_key(right_operand), right_id)
+            if right_key < left_key:
+                key_left, key_right = right_id, left_id
+
         key = (op, key_left, key_right)
         if key not in self.expr_nodes:
-            self.expr_nodes[key] = self._new_node(op, left=left_id, right=right_id)
+            self.expr_nodes[key] = self._new_node(op, left=key_left, right=key_right)
         return self.expr_nodes[key]
 
     def _attach_name(self, node_id: str, name: str) -> None:
@@ -108,6 +119,7 @@ class DagBuilder:
             return
         old_node_id = self.current_def.get(name)
         label = self._label(name)
+        self.name_sort_keys[label] = operand_sort_key(name)
         if old_node_id and old_node_id != node_id:
             old_node = self._get_node(old_node_id)
             old_node.names = [item for item in old_node.names if item != label]
@@ -115,6 +127,7 @@ class DagBuilder:
         node = self._get_node(node_id)
         if label not in node.names:
             node.names.append(label)
+            node.names.sort(key=lambda item: self.name_sort_keys.get(item, operand_sort_key(item)))
         self.current_def[name] = node_id
 
     def _label(self, name: str) -> str:
@@ -136,7 +149,7 @@ def _skipped_quad(index: int, quad: Quadruple, reason: str) -> dict[str, Any]:
     }
 
 
-def _split_basic_blocks(quadruples: list[Quadruple]) -> list[list[tuple[int, Quadruple]]]:
+def split_basic_blocks(quadruples: list[Quadruple]) -> list[list[tuple[int, Quadruple]]]:
     blocks: list[list[tuple[int, Quadruple]]] = []
     current: list[tuple[int, Quadruple]] = []
 
@@ -178,15 +191,18 @@ def _format_quad(index: int, quad: Quadruple, labels: dict[str, str]) -> dict[st
 
 def build_quadruple_dags(quadruples: list[Quadruple], labels: dict[str, str] | None = None) -> dict[str, Any]:
     labels = labels or {}
-    blocks = _split_basic_blocks(quadruples)
-    dags = [DagBuilder(labels).build(block, index + 1) for index, block in enumerate(blocks)]
+    raw_blocks = split_basic_blocks(quadruples)
+    dags = [
+        (block, DagBuilder(labels).build(block, index + 1))
+        for index, block in enumerate(raw_blocks)
+    ]
     return {
         "blocks": [
             {
                 "blockIndex": dag.block_index,
                 "startQuad": dag.start_quad,
                 "endQuad": dag.end_quad,
-                "statements": [_format_quad(quad_index, quad, labels) for quad_index, quad in blocks[index]],
+                "statements": [_format_quad(quad_index, quad, labels) for quad_index, quad in block],
                 "nodes": [
                     {
                         "id": node.id,
@@ -200,6 +216,7 @@ def build_quadruple_dags(quadruples: list[Quadruple], labels: dict[str, str] | N
                 "edges": list(dag.edges),
                 "skipped": list(dag.skipped),
             }
-            for index, dag in enumerate(dags)
+            for block, dag in dags
+            if dag.nodes
         ]
     }

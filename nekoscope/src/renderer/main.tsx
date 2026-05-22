@@ -1,10 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { isThemePreference, resolveTheme, THEME_STORAGE_KEY } from "./styles/theme";
+import { loadThemePreference, resolveTheme } from "./styles/theme";
 
-const storedPreference = window.localStorage.getItem(THEME_STORAGE_KEY);
-const initialPreference = isThemePreference(storedPreference) ? storedPreference : "system";
+const initialPreference = loadThemePreference();
 const initialSystemPrefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true;
 const initialTheme = resolveTheme(initialPreference, initialSystemPrefersDark);
 

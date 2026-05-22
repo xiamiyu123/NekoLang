@@ -6,6 +6,7 @@ plain dicts suitable for JSON encoding. Used by the NekoScope API layer.
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 from typing import Any, Callable
 
 from neko.ast_nodes import (
@@ -60,8 +61,10 @@ from neko.ast_nodes import (
 from neko.build_utils import CompilationResult, generate_code
 from neko.dag import build_quadruple_dags
 from neko.errors import NekoError, SUGGESTIONS
-from neko.optimizer import optimize_ast_for_arm64
-from neko.semantic import Quadruple, SemanticAnalyzer
+from neko.quadruple_liveness import build_quadruple_liveness
+from neko.quadruple_optimizer import optimize_quadruples
+from neko.semantic import Quadruple
+from neko.syntax_tree import build_syntax_tree
 from neko.symbol_table import SymbolEntry, SymbolTable
 from neko.tokens import Token
 
@@ -497,11 +500,70 @@ def _quadruple_rows_equal(left: list[Quadruple], right: list[Quadruple]) -> bool
     return [serialize_quadruple(q) for q in left] == [serialize_quadruple(q) for q in right]
 
 
+def _quadruple_row_key(row: dict[str, str]) -> tuple[str, str, str, str]:
+    return (row["op"], row["ob1"], row["ob2"], row["t"])
+
+
+def _step_row_changes(
+    before: list[Quadruple],
+    after: list[Quadruple],
+) -> tuple[list[dict[str, str]], list[dict[str, dict[str, str]]]]:
+    before_rows = serialize_quadruples(before)
+    after_rows = serialize_quadruples(after)
+    matcher = SequenceMatcher(
+        None,
+        [_quadruple_row_key(row) for row in before_rows],
+        [_quadruple_row_key(row) for row in after_rows],
+        autojunk=False,
+    )
+    removed: list[dict[str, str]] = []
+    rewritten: list[dict[str, dict[str, str]]] = []
+
+    for tag, before_start, before_end, after_start, after_end in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        if tag == "delete":
+            removed.extend(before_rows[before_start:before_end])
+            continue
+        if tag == "replace":
+            before_slice = before_rows[before_start:before_end]
+            after_slice = after_rows[after_start:after_end]
+            pair_count = min(len(before_slice), len(after_slice))
+            rewritten.extend(
+                {"before": before_slice[index], "after": after_slice[index]}
+                for index in range(pair_count)
+            )
+            removed.extend(before_slice[pair_count:])
+
+    return removed, rewritten
+
+
+def _optimization_step(
+    name: str,
+    detail: str,
+    before: list[Quadruple],
+    after: list[Quadruple],
+    changed: bool,
+) -> dict[str, Any]:
+    removed_rows, rewritten_rows = _step_row_changes(before, after)
+    return {
+        "name": name,
+        "detail": detail,
+        "beforeCount": len(before),
+        "afterCount": len(after),
+        "changed": changed,
+        "beforeRows": serialize_quadruples(before),
+        "afterRows": serialize_quadruples(after),
+        "removedRows": removed_rows,
+        "rewrittenRows": rewritten_rows,
+    }
+
+
 def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any]:
     initial = serialize_quadruples(result.analyzer.quadruples)
     base = {
         "level": "O1",
-        "source": "ARM64 AST optimizer",
+        "source": "Quadruple DAG optimizer",
         "enabled": not result.analyzer.errors,
         "changed": False,
         "beforeCount": len(result.analyzer.quadruples),
@@ -527,10 +589,10 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
         return base
 
     try:
-        optimized_ast = optimize_ast_for_arm64(result.ast, opt_level=1)
-        optimized_analyzer = SemanticAnalyzer()
-        optimized_analyzer.set_source(result.source)
-        optimized_analyzer.analyze(optimized_ast)
+        optimized_result = optimize_quadruples(
+            result.analyzer.quadruples,
+            result.analyzer.symbol_table.const_table,
+        )
     except Exception as exc:
         base["enabled"] = False
         base["diagnostics"] = [
@@ -554,41 +616,61 @@ def serialize_quadruple_optimization(result: CompilationResult) -> dict[str, Any
         ]
         return base
 
-    optimized = serialize_quadruples(optimized_analyzer.quadruples)
-    changed = not _quadruple_rows_equal(result.analyzer.quadruples, optimized_analyzer.quadruples)
+    optimized = serialize_quadruples(optimized_result.quadruples)
+    changed = not _quadruple_rows_equal(result.analyzer.quadruples, optimized_result.quadruples)
     base.update(
         {
             "changed": changed,
-            "afterCount": len(optimized_analyzer.quadruples),
+            "afterCount": len(optimized_result.quadruples),
             "optimized": optimized,
-            "optimizedConstants": dict(optimized_analyzer.symbol_table.const_table),
-            "diagnostics": serialize_errors(optimized_analyzer.errors),
+            "optimizedConstants": dict(optimized_result.constants),
+            "diagnostics": [],
             "steps": [
-                {
-                    "name": "读取初始四元式",
-                    "detail": "语义分析先生成未优化的线性中间表示。",
-                    "beforeCount": len(result.analyzer.quadruples),
-                    "afterCount": len(result.analyzer.quadruples),
-                    "changed": False,
-                },
-                {
-                    "name": "O1 常量折叠",
-                    "detail": "对字面量算术、比较和字符内建表达式先求值。",
-                    "beforeCount": len(result.analyzer.quadruples),
-                    "afterCount": len(optimized_analyzer.quadruples),
-                    "changed": changed,
-                },
-                {
-                    "name": "重新生成四元式",
-                    "detail": "用优化后的 AST 再跑语义分析，得到优化结果。",
-                    "beforeCount": len(result.analyzer.quadruples),
-                    "afterCount": len(optimized_analyzer.quadruples),
-                    "changed": changed,
-                },
+                _optimization_step(
+                    "读取初始四元式",
+                    "语义分析先生成未优化的线性中间表示。",
+                    result.analyzer.quadruples,
+                    result.analyzer.quadruples,
+                    False,
+                ),
+                _optimization_step(
+                    "O1 常量折叠",
+                    "在四元式上折叠常量算术、比较和等值判断。",
+                    result.analyzer.quadruples,
+                    optimized_result.folded_quadruples,
+                    optimized_result.folded_count > 0,
+                ),
+                _optimization_step(
+                    "O1 公共子表达式消除",
+                    "按基本块的 DAG 值编号复用重复计算结果。",
+                    optimized_result.folded_quadruples,
+                    optimized_result.cse_quadruples,
+                    optimized_result.cse_count > 0,
+                ),
+                _optimization_step(
+                    "删除死临时赋值",
+                    "移除折叠和复用后不再被读取的临时结果。",
+                    optimized_result.cse_quadruples,
+                    optimized_result.pruned_quadruples,
+                    optimized_result.removed_temp_count > 0,
+                ),
             ],
         }
     )
     return base
+
+
+def _optimized_quadruples_for_liveness(result: CompilationResult) -> tuple[list[Quadruple], dict[str, str]]:
+    if result.analyzer.errors:
+        return result.analyzer.quadruples, dict(result.analyzer.symbol_table.const_table)
+    try:
+        optimized_result = optimize_quadruples(
+            result.analyzer.quadruples,
+            result.analyzer.symbol_table.const_table,
+        )
+        return optimized_result.quadruples, dict(optimized_result.constants)
+    except Exception:
+        return result.analyzer.quadruples, dict(result.analyzer.symbol_table.const_table)
 
 
 # ---------------------------------------------------------------------------
@@ -614,12 +696,12 @@ def serialize_symbol_table(table: SymbolTable) -> dict[str, Any]:
     }
 
 
-def _dag_operand_labels(table: SymbolTable) -> dict[str, str]:
+def _dag_operand_labels(table: SymbolTable, constants: dict[str, str] | None = None) -> dict[str, str]:
     labels: dict[str, str] = {}
     for entry in table.entries:
         if entry.addr_name:
             labels[entry.addr_name] = entry.name
-    for value, address in table.const_table.items():
+    for value, address in (constants or table.const_table).items():
         labels[str(address)] = str(value)
     return labels
 
@@ -640,10 +722,13 @@ def serialize_compilation_result(
         except Exception:
             assembly = ""
 
+    liveness_quadruples, liveness_constants = _optimized_quadruples_for_liveness(result)
+
     return {
         "source": result.source,
         "tokens": serialize_tokens(result.tokens),
         "ast": serialize_ast(result.ast),
+        "syntaxTree": build_syntax_tree(result.tokens),
         "symbols": serialize_symbol_table(result.analyzer.symbol_table),
         "quadruples": serialize_quadruples(result.analyzer.quadruples),
         "quadrupleDag": build_quadruple_dags(
@@ -651,6 +736,10 @@ def serialize_compilation_result(
             labels=_dag_operand_labels(result.analyzer.symbol_table),
         ),
         "quadrupleOptimization": serialize_quadruple_optimization(result),
+        "quadrupleLiveness": build_quadruple_liveness(
+            liveness_quadruples,
+            labels=_dag_operand_labels(result.analyzer.symbol_table, liveness_constants),
+        ),
         "assembly": assembly,
         "errors": serialize_errors(result.analyzer.errors),
         "backend": backend,

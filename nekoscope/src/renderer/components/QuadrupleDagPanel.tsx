@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Maximize2, X } from "lucide-react";
 import ReactFlow, {
   Background,
@@ -139,14 +139,21 @@ function DagCanvas({
 }
 
 export function QuadrupleDagPanel({ dag, theme }: Props) {
+  const blocks = useMemo(() => (dag?.blocks ?? []).filter((item) => item.nodes.length > 0), [dag]);
   const preferredBlock = useMemo(() => {
-    const blocks = dag?.blocks ?? [];
     const opIndex = blocks.findIndex((item) => item.nodes.some((node) => node.op !== "value"));
     return opIndex >= 0 ? opIndex : 0;
-  }, [dag]);
+  }, [blocks]);
   const [selectedBlock, setSelectedBlock] = useState<number | null>(null);
-  const activeBlock = selectedBlock ?? preferredBlock;
-  const block = dag?.blocks[activeBlock] ?? null;
+  useEffect(() => {
+    setSelectedBlock(null);
+  }, [dag]);
+  const selectedIndex =
+    selectedBlock == null || blocks.length === 0
+      ? preferredBlock
+      : Math.min(Math.max(selectedBlock, 0), blocks.length - 1);
+  const activeBlock = selectedIndex;
+  const block = blocks[activeBlock] ?? null;
   const [fullViewOpen, setFullViewOpen] = useState(false);
   const colors = astThemeColors[theme];
   const { nodes, edges } = useMemo(() => {
@@ -154,7 +161,7 @@ export function QuadrupleDagPanel({ dag, theme }: Props) {
     return dagToFlow(block, theme);
   }, [block, theme]);
 
-  if (!dag || dag.blocks.length === 0) {
+  if (!dag || blocks.length === 0) {
     return <div className="empty-panel">当前四元式序列没有可构造 DAG 的基本块。</div>;
   }
 
@@ -162,7 +169,7 @@ export function QuadrupleDagPanel({ dag, theme }: Props) {
     <div className="dag-panel">
       <div className="dag-toolbar">
         <div className="dag-block-bar" aria-label="基本块列表">
-          {dag.blocks.map((item, index) => (
+          {blocks.map((item, index) => (
             <button
               className={`dag-block-button ${index === activeBlock ? "active" : ""}`}
               type="button"

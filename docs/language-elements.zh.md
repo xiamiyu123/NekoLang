@@ -912,7 +912,7 @@ libraries = []
 - `libraries` 添加 `clang -l`
 - `csrc/` 和 `csrc/include/` 存在时会自动加入头文件搜索路径
 
-完整网络示例可参考 [socket_adapter_demo](/Users/xiami/Learning/NekoLang/examples/socket_adapter_demo)。
+完整网络示例可参考 [socket_adapter_demo](../examples/socket_adapter_demo)。
 
 ## 19. 综合示例
 
@@ -971,4 +971,4 @@ libraries = []
 - 多文件程序把公共函数和 extern 声明拆到独立 `.neko` 文件，用 `import` 引入
 - 和 C 交互时，让 C 适配层处理真实指针，NekoLang 侧只保存 `pointer` 句柄
 
-如果要进一步对照实现细节，可继续阅读 [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) 和 [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)。
+如果要进一步对照实现细节，可继续阅读 [architecture.md](architecture.md)、[grammar.md](grammar.md) 和 [llvm_backend.md](llvm_backend.md)。

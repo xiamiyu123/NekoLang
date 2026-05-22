@@ -1092,10 +1092,20 @@ button {
 
 .ast-toolbar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   padding: 8px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
+}
+
+.ast-toolbar .quad-toolbar {
+  min-height: 0;
+  margin-right: auto;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
 }
 
 .ast-canvas {
@@ -1116,6 +1126,20 @@ button {
   white-space: pre-line;
   background: var(--ast-node-bg);
   box-shadow: var(--shadow-soft);
+}
+
+.ast-flow-node.terminal {
+  min-width: 38px;
+  max-width: 92px;
+  padding: 4px 8px;
+  border-color: color-mix(in srgb, var(--accent-strong) 42%, var(--line));
+  border-radius: 6px;
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  background: var(--panel-2);
 }
 
 .assembly-panel {
@@ -1607,6 +1631,98 @@ button {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.quad-step-body {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.quad-step-table {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quad-step-table-title {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.quad-row-removed td {
+  color: var(--danger-code-text);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
+  background: var(--danger-code-bg);
+}
+
+.quad-row-removed .op-pill {
+  color: var(--danger-code-text);
+  border-color: var(--danger-line);
+  background: var(--danger-card-bg);
+}
+
+.quad-row-rewritten-before {
+  color: var(--danger-code-text);
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 2px;
+}
+
+.quad-row-rewritten-after {
+  color: var(--accent-strong);
+}
+
+.quad-inline-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.quad-inline-row code {
+  color: inherit;
+  background: transparent;
+}
+
+.quad-liveness {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.quad-live-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.quad-live-table td {
+  vertical-align: middle;
+}
+
+.quad-live-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.quad-live-cell.live {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.quad-live-cell.dead {
+  color: var(--faint);
+}
+
+.quad-live-mark {
+  font-weight: 900;
 }
 
 .table-card {
