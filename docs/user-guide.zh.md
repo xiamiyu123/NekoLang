@@ -1,13 +1,13 @@
 # NekoLang 用户指南
 
-本文面向“想把 NekoLang 程序跑起来”的用户，按实际使用路径介绍语言、项目结构、外部 C 适配层和示例。若需要更偏安装的说明，可阅读 [installation.zh.md](/Users/xiami/Learning/NekoLang/docs/installation.zh.md)；若需要更偏编译器实现的说明，可继续阅读 [grammar.md](/Users/xiami/Learning/NekoLang/docs/grammar.md) 和 [llvm_backend.md](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)。
+本文面向“想把 NekoLang 程序跑起来”的用户，按实际使用路径介绍语言、项目结构、外部 C 适配层和示例。若需要更偏安装的说明，可阅读 [installation.zh.md](installation.zh.md)；若需要更偏编译器实现的说明，可继续阅读 [architecture.md](architecture.md)、[grammar.md](grammar.md) 和 [llvm_backend.md](llvm_backend.md)。
 
 ## 1. 环境准备
 
 项目使用 `uv` 管理 Python 环境和命令入口。
 
 ```bash
-uv sync
+uv sync --group dev
 ```
 
 常用命令都通过 `uv run` 执行：
@@ -17,6 +17,8 @@ uv run neko check examples/demo.neko
 uv run neko run examples/demo.neko
 uv run nekgo new hello
 ```
+
+仓库不追踪 `uv.lock`。开发和 CI 都按 `pyproject.toml` 重新解析依赖，提交时不要把本地生成的 `uv.lock` 加入版本控制。
 
 依赖分成两层：
 

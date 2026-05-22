@@ -1,5 +1,7 @@
 # NekoScope — 编译管线可视化教学工具 PRD
 
+> 历史规划文档：本文保留早期产品设想，用于理解 NekoScope 的设计来源。当前实现状态请以 [实现架构](architecture.md)、[NekoScope 打包](nekoscope-packaging.md)、[NekoScope 测试文档](nekoscope-test-doc.md) 和 [ADR-001](adr/001-nekoscope-architecture.md) 为准。
+
 ## 概述
 
 NekoScope 是 NekoLang 的编译管线可视化教学工具。它以 Electron 桌面应用的形式，将 NekoLang 编译器的每个阶段（词法分析、语法分析、语义分析、代码生成）以交互式面板的形式呈现，帮助学生直观理解编译过程中的数据变换。
@@ -48,29 +50,29 @@ NekoScope 是 NekoLang 的编译管线可视化教学工具。它以 Electron �
 | 前端框架 | React | 生态成熟，可视化库丰富 |
 | 代码编辑器 | Monaco Editor | VSCode 内核，语法高亮、自动补全 |
 | AST 可视化 | react-flow | 交互式节点-连线图，支持缩放/拖拽 |
-| 面板布局 | react-mosaic | VSCode 风格的可拖拽面板布局 |
+| 布局 | React 组件 + CSS Grid | 管理源码工作区、阶段面板和全貌弹窗 |
 | 后端 API | FastAPI | Python 异步 HTTP 服务，自动 OpenAPI 文档 |
 | 编译器 | neko.* 模块 | 直接复用现有编译管线，零重复实现 |
-| Python 环境 | 用户预装 Python 3.10+ (uv) | 打包体积最小，教学环境已有 Python |
+| Python 环境 | 开发模式系统 `uv`，打包模式内置 `uv` | 依赖由 `pyproject.toml` 创建，不追踪 `uv.lock` |
 
 ## 核心功能
 
-### 1. 管线视图（默认视图）
+### 1. 阶段视图（默认视图）
 
-横向排列的多阶段面板，每个面板展示编译管线的一个阶段的输出：
+当前实现采用源码工作区 + 阶段导航 + 单阶段教学面板，每个阶段展示编译管线的一个产物：
 
 | 面板 | 数据来源 | 可视化方式 |
 |------|----------|-----------|
 | 源码 | 用户输入 | Monaco Editor，内置示例库 |
 | Tokens | `Lexer.tokenize()` | Token 卡片列表，颜色区分类型 |
-| AST | `Parser.parse()` | react-flow 交互式树形图 |
+| AST / CST | `Parser.parse()` / `syntax_tree.py` | React Flow 交互式树形图 |
 | Symbol Table | `SemanticAnalyzer.symbol_table` | 表格视图，作用域缩进区分 |
-| Quads | `SemanticAnalyzer.dump_quadruples()` | 类汇编表格，带地址标注 |
+| Quads | `SemanticAnalyzer.dump_quadruples()` | 四元式表格、DAG、优化过程、活跃信息 |
 | Assembly | `generate_assembly()` / `generate_ir()` | 代码高亮，下拉切换后端 |
 
-### 2. Godbolt 对比视图（双击放大）
+### 2. 图形全貌视图
 
-双击任意阶段面板可放大为 Godbolt 式对比视图：左边源码，右边该阶段输出，行间高亮映射。
+AST、CST 和 DAG 面板提供全貌弹窗，便于查看较大的图形产物。源码到产物的精确高亮映射仍属于后续增强。
 
 ### 3. 阶段间高亮映射
 
@@ -112,7 +114,7 @@ NekoScope 是 NekoLang 的编译管线可视化教学工具。它以 Electron �
 - 数据结构：数组操作
 - 进阶：lambda、字符串操作
 
-## MVP 范围（P0）
+## 早期 MVP 范围（P0，历史）
 
 第一版只做四个核心面板，覆盖"前端-中端-后端"三大编译阶段：
 
@@ -125,7 +127,7 @@ NekoScope 是 NekoLang 的编译管线可视化教学工具。它以 Electron �
 - [ ] Electron 应用壳 + FastAPI 子进程
 - [ ] Monaco Editor 代码输入 + 示例库加载
 - [ ] Tokens 面板：Token 卡片列表，颜色区分类型
-- [ ] AST 面板：react-flow 交互式树形图
+- [ ] AST 面板：React Flow 交互式树形图
 - [ ] Assembly 面板：代码高亮，ARM64/LLVM IR 下拉切换
 - [ ] 实时编译（500ms debounce）
 - [ ] 单向高亮映射（源码 → 下游）
@@ -236,9 +238,9 @@ NekoLang/
 
 ## 长期路线图
 
-### P0：MVP 四面板
+### P0：早期 MVP
 
-四面板管线视图（源码 → Tokens → AST → Assembly）+ 实时编译 + 单向映射 + 错误定位。
+早期目标是源码、Tokens、AST、Assembly 四个核心视图 + 实时编译 + 单向映射 + 错误定位。当前实现已经扩展为源码工作区、阶段导航和单阶段教学面板。
 
 ### P1：双向映射 + 逐步动画
 
@@ -272,7 +274,7 @@ NekoLang/
 1. `npm run dev` 启动 NekoScope，自动启动 FastAPI 子进程
 2. Monaco Editor 可编辑 `.neko` 代码，支持语法高亮
 3. 内置示例库可点击加载
-4. 编辑代码后 500ms 内自动编译，四个面板同步更新
+4. 编辑代码后 500ms 内自动编译，核心阶段视图同步更新
 5. Tokens 面板显示颜色区分的 Token 列表
 6. AST 面板显示可交互的树形图（缩放、拖拽、折叠）
 7. Assembly 面板可切换 ARM64/LLVM IR

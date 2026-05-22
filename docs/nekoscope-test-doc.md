@@ -1,111 +1,87 @@
-# NekoScope 前端测试文档
+# NekoScope 测试文档
 
-## 测试范围
-
-覆盖 NekoScope Electron 前端（`nekoscope/`）的 React 组件单元测试和 API 客户端测试。
+本文说明 NekoScope 当前前端、主进程和打包脚本的测试范围。编译器后端 API 和序列化层测试见仓库根目录 `tests/`，例如 `tests/test_viz_api.py`、`tests/test_viz_serializers.py`、`tests/test_quadruple_optimizer.py`。
 
 ## 测试技术栈
 
-- **vitest** — 测试运行器
-- **@testing-library/react** — React 组件渲染与查询
-- **@testing-library/user-event** — 用户交互模拟
-- **@testing-library/jest-dom** — DOM 断言扩展
-- **jsdom** — 浏览器环境模拟
+| 工具 | 用途 |
+|------|------|
+| `vitest` | TypeScript 单元测试运行器 |
+| `@testing-library/react` | React 组件渲染和 DOM 查询 |
+| `@testing-library/user-event` | 用户交互模拟 |
+| `@testing-library/jest-dom` | DOM 断言扩展 |
+| `jsdom` | 浏览器环境模拟 |
 
 ## 运行测试
 
 ```bash
 cd nekoscope
-npm run test        # 单次运行全部测试
-npm run test:watch  # 监听模式
+npm test
+npm run test:watch
 ```
+
+CI 会在 Linux、macOS ARM64 和 Windows 上运行 `npm test`，并继续执行 `npm run build`、`npm run pack` 与内置 `uv` 检查。
 
 ## 测试文件清单
 
-### 1. API 客户端测试 (`src/renderer/api/__tests__/client.test.ts`)
+当前共有 14 个测试文件、77 个测试用例。
 
-| # | 测试 | 验证内容 |
-|---|------|---------|
-| 1 | `compile` 发送 POST 并返回结果 | fetch 调用参数正确，JSON 解析正确 |
-| 2 | `compile` 在非 ok 时抛出 | HTTP 错误时抛出异常 |
-| 3 | `getExamples` 返回示例列表 | GET 请求正确，返回解析后的数组 |
-| 4 | `getExampleSource` 返回源码字符串 | URL encode 正确，返回 source 字段 |
-| 5 | `setBaseUrl` 改变 API 地址 | baseUrl 正确更新 |
+| 文件 | 测试数 | 覆盖范围 |
+|------|--------|----------|
+| `src/main/__tests__/lifecycle.test.ts` | 6 | Electron 主进程生命周期、FastAPI 启停、macOS 窗口重开行为 |
+| `src/renderer/__tests__/App.test.tsx` | 5 | 编译错误展示、源码区键盘缩放、阶段说明折叠、概览跳转、运行动作 |
+| `src/renderer/api/__tests__/client.test.ts` | 10 | `/compile`、`/run`、示例列表、示例源码、后端错误透传、DAG 示例兜底 |
+| `src/renderer/components/__tests__/ASTPanel.test.tsx` | 10 | AST/CST 转 React Flow、Terminal 叶子样式、AST/CST 切换、全貌弹窗 |
+| `src/renderer/components/__tests__/AssemblyPanel.test.tsx` | 4 | 汇编文本、后端选择器、空状态、后端切换回调 |
+| `src/renderer/components/__tests__/QuadrupleDagPanel.test.tsx` | 9 | DAG 节点/边转换、交换律操作数排序、别名排序、空块、全貌弹窗 |
+| `src/renderer/components/__tests__/QuadruplePanel.test.tsx` | 7 | 四元式表格、优化过程/结果切换、DAG 内嵌、前端 DAG 兜底、活跃信息 |
+| `src/renderer/components/__tests__/SourceWorkbench.test.tsx` | 3 | Monaco 自动布局、编译/运行按钮、示例条中的 DAG 优化样例 |
+| `src/renderer/components/__tests__/StageGuide.test.tsx` | 2 | 阶段标签、产物名称、阶段选择 |
+| `src/renderer/components/__tests__/SymbolTablePanel.test.tsx` | 2 | 标识符/常量池展示、空状态 |
+| `src/renderer/components/__tests__/TabBar.test.tsx` | 3 | 标签渲染、活跃态、切换回调 |
+| `src/renderer/components/__tests__/TokenPanel.test.tsx` | 4 | token 类型和值、行列号、空列表、未编译提示 |
+| `src/scripts/dev.test.ts` | 4 | 开发脚本跨平台启动、环境变量清理、参数透传、本地 bin 解析 |
+| `src/scripts/package.test.ts` | 8 | 发布版本生成、参数透传、electron-builder bin 解析、内置 `uv` 路径和文件名 |
 
-### 2. TokenPanel 测试 (`src/renderer/components/__tests__/TokenPanel.test.tsx`)
+## 关键回归点
 
-| # | 测试 | 验证内容 |
-|---|------|---------|
-| 1 | 渲染 token 的类型、值和行号 | 卡片显示 type/value/line 信息 |
-| 2 | 显示行列号信息 | 每个 token 显示 `line:col` 格式位置 |
-| 3 | 空列表提示 | `tokens=[]` 时显示 "No tokens produced" |
-| 4 | null 状态提示 | `tokens=null` 时显示 "Compile source code to see tokens" |
+### 语法树
 
-**Token 类型颜色映射**：
+`ASTPanel` 默认展示抽象 AST。传入 `syntaxTree` 后，用户可切换到“精确语法树”，看到括号、关键字、运算符、标识符和字面量等 `Terminal` 叶子。全貌弹窗跟随当前模式展示。
 
-| Token 类型 | 颜色 | 色值 |
-|-----------|------|------|
-| keyword | mauve (紫) | `#cba6f7` |
-| identifier | blue (蓝) | `#89b4fa` |
-| literal | green (绿) | `#a6e3a1` |
-| operator | peach (橙) | `#fab387` |
-| delimiter | overlay0 (灰) | `#6c7086` |
-| program | pink (粉) | `#f5c2e7` |
-| type (int/float/...) | sky (天蓝) | `#89dceb` |
+### 四元式优化
 
-### 3. AssemblyPanel 测试 (`src/renderer/components/__tests__/AssemblyPanel.test.tsx`)
+`QuadruplePanel` 覆盖初始四元式、优化过程、优化结果和活跃信息。优化过程会区分本阶段删除行、改写行和阶段输出；DAG 数据缺失时，前端可以用四元式构造基础展示。
 
-| # | 测试 | 验证内容 |
-|---|------|---------|
-| 1 | 渲染汇编代码文本 | asm 字符串可见 |
-| 2 | 后端选择器当前值正确 | `<select>` 默认值匹配 `backend` prop |
-| 3 | null 汇编显示提示 | `assembly=null` 时显示编译提示 |
-| 4 | 切换后端触发回调 | `onBackendChange` 被调用，参数正确 |
+### DAG 展示
 
-### 4. ASTPanel 测试 (`src/renderer/components/__tests__/ASTPanel.test.tsx`)
+`QuadrupleDagPanel` 覆盖基本块选择、空块过滤、全貌弹窗，以及与后端一致的交换律操作数排序：常量优先，命名变量其次，临时变量最后。
 
-**astToFlow 单元测试**：
+### 主进程与打包脚本
 
-| # | 测试 | 验证内容 |
-|---|------|---------|
-| 1 | 叶子节点转为单个节点 | 无子节点的 AST 产生 1 node + 0 edge |
-| 2 | 嵌套 AST 产生多节点 | FunctionDef → Block → AssignStmt → IntLiteral 产生 ≥4 nodes + ≥3 edges |
-| 3 | 叶子节点显示值 | `IntLiteral(42)` 节点 label 包含 "42" |
-| 4 | 有 name 的节点显示名称 | `FunctionDef("t")` 节点 label 包含 "t" |
+主进程测试关注 FastAPI 后端是否随窗口生命周期正确启动和关闭。脚本测试关注跨平台命令启动和打包前复制 `uv`，避免在 Windows 或打包 CI 中依赖 POSIX-only shell 行为。
 
-**ASTPanel 组件测试**：
+## 与 Python 测试的分工
 
-| # | 测试 | 验证内容 |
-|---|------|---------|
-| 5 | null AST 显示提示 | `ast=null` 时显示编译提示 |
-| 6 | 提供 AST 时渲染 react-flow 容器 | DOM 中存在 `.react-flow` 元素 |
+NekoScope 前端测试只断言 UI 和 TypeScript 数据转换。编译器真实行为由 Python 测试负责：
 
-### 5. TabBar 测试 (`src/renderer/components/__tests__/TabBar.test.tsx`)
+| Python 测试 | 覆盖范围 |
+|-------------|----------|
+| `tests/test_viz_serializers.py` | 编译产物 JSON 字段、CST、DAG、优化步骤、活跃信息 |
+| `tests/test_quadruple_optimizer.py` | 常量折叠、公共子表达式消除、死临时赋值删除 |
+| `tests/test_viz_api.py` | FastAPI 端点、项目模式、运行接口 |
+| `tests/test_llvm.py` / `tests/test_arm64.py` | 目标代码生成和真实编译运行 |
 
-| # | 测试 | 验证内容 |
-|---|------|---------|
-| 1 | 渲染所有标签 | Tokens / AST / Assembly 三个按钮可见 |
-| 2 | 活跃标签高亮 | 选中标签颜色为 pink `rgb(245, 194, 231)` |
-| 3 | 点击触发 onChange | 点击 Assembly 后回调收到 `"assembly"` |
+## CI 中的 NekoScope 检查
 
-## 测试总数：22
+主 CI 的 `NekoScope compatibility` job 在三大平台执行：
 
-| 文件 | 测试数 | 状态 |
-|------|--------|------|
-| `client.test.ts` | 5 | ✓ |
-| `TokenPanel.test.tsx` | 4 | ✓ |
-| `AssemblyPanel.test.tsx` | 4 | ✓ |
-| `ASTPanel.test.tsx` | 6 | ✓ |
-| `TabBar.test.tsx` | 3 | ✓ |
-| **合计** | **22** | ✓ |
+```bash
+npm ci
+node ./scripts/dev.mjs --help
+npm test
+npm run build
+npm run pack
+```
 
-## 测试覆盖的边界条件
-
-| 场景 | 覆盖组件 | 处理方式 |
-|------|---------|---------|
-| 数据为 null | TokenPanel, ASTPanel, AssemblyPanel | 显示"编译源码"提示文本 |
-| 空列表 | TokenPanel | 显示"No tokens produced" |
-| 后端切换 | AssemblyPanel | `onBackendChange` 回调验证 |
-| 未知 token 类型 | TokenPanel (tokenColor) | 回退到 `overlay1` 颜色 |
-| 深层嵌套 AST | ASTPanel (astToFlow) | 递归转换至叶子节点 |
-| ResizeObserver 缺失 | vitest setup | mock ResizeObserver 类 |
+随后检查打包目录内存在可执行的内置 `uv`。发布工作流 `.github/workflows/nekoscope-package.yml` 会在测试通过后执行 `npm run dist`，生成 Linux、macOS ARM64 和 Windows 安装包。

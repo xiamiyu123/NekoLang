@@ -301,9 +301,9 @@ demo/
 (extern neko_tcp_close (pointer) int)
 ```
 
-完整示例项目见 [examples/socket_adapter_demo](/Users/xiami/Learning/NekoLang/examples/socket_adapter_demo)。
+完整示例项目见 [examples/socket_adapter_demo](examples/socket_adapter_demo)。
 
-如果想看一个更小的“用户自己写 C 函数，Neko 主程序直接调用”的项目，可运行 [examples/c_function_demo](/Users/xiami/Learning/NekoLang/examples/c_function_demo)：
+如果想看一个更小的“用户自己写 C 函数，Neko 主程序直接调用”的项目，可运行 [examples/c_function_demo](examples/c_function_demo)：
 
 ```bash
 cd examples/c_function_demo
@@ -347,15 +347,17 @@ pong:miaow-from-neko
 
 ## 环境准备
 
-本项目使用 [UV](https://docs.astral.sh/uv/) 管理 Python 环境和依赖。完整跨平台安装说明见 [安装与跨平台依赖](/Users/xiami/Learning/NekoLang/docs/installation.zh.md)。
+本项目使用 [UV](https://docs.astral.sh/uv/) 管理 Python 环境和依赖。完整跨平台安装说明见 [安装与跨平台依赖](docs/installation.zh.md)。
 
 ```bash
 # macOS/Linux 可用官方安装脚本安装 UV
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 克隆后同步依赖
-uv sync
+uv sync --group dev
 ```
+
+仓库不追踪 `uv.lock`，CI 和本地开发都按 `pyproject.toml` 解析依赖。
 
 依赖分成两层：
 
@@ -400,6 +402,8 @@ nekgo --help
 ```
 
 ## 使用方法
+
+`neko` 支持子命令，同时保留早期 `uv run neko examples/demo.neko --all` 这种 flag 风格。
 
 ```bash
 # 语义检查
@@ -457,15 +461,17 @@ uv run pytest tests/ -q -n auto
 
 ## 相关文档
 
-- [文法规范](/Users/xiami/Learning/NekoLang/docs/grammar.md)
-- [安装与跨平台依赖](/Users/xiami/Learning/NekoLang/docs/installation.zh.md)
-- [用户指南（中文）](/Users/xiami/Learning/NekoLang/docs/user-guide.zh.md)
-- [语言元素详解（中文）](/Users/xiami/Learning/NekoLang/docs/language-elements.zh.md)
-- [Language Elements Guide (English)](/Users/xiami/Learning/NekoLang/docs/language-elements.en.md)
-- [LLVM 后端说明](/Users/xiami/Learning/NekoLang/docs/llvm_backend.md)
-- [ARM64 后端说明](/Users/xiami/Learning/NekoLang/docs/arm64_backend.md)
-- [开发路线图](/Users/xiami/Learning/NekoLang/docs/roadmap.md)
-- [v0.1 规格](/Users/xiami/Learning/NekoLang/docs/v0.1-spec.md)
+- [实现架构](docs/architecture.md)
+- [文法规范](docs/grammar.md)
+- [安装与跨平台依赖](docs/installation.zh.md)
+- [用户指南（中文）](docs/user-guide.zh.md)
+- [语言元素详解（中文）](docs/language-elements.zh.md)
+- [Language Elements Guide (English)](docs/language-elements.en.md)
+- [LLVM 后端说明](docs/llvm_backend.md)
+- [ARM64 后端说明](docs/arm64_backend.md)
+- [NekoScope 打包](docs/nekoscope-packaging.md)
+- [开发路线图](docs/roadmap.md)
+- [v0.1 规格](docs/v0.1-spec.md)
 
 ## 编译器架构
 
@@ -475,10 +481,13 @@ uv run pytest tests/ -q -n auto
   → [语法分析器] → AST
   → [导入解析] → 合并 function / extern 定义
   → [语义分析器] → 符号表 + 四元式
+  → [可视化序列化] → CST / DAG / 优化过程 / 活跃信息
   → [LLVM / ARM64 代码生成]
   → clang 链接 runtime.c 与项目内 C 源码
   → 可执行文件
 ```
+
+四元式 DAG、O1 分步优化和活跃信息目前服务于 NekoScope 教学展示，不参与目标代码生成。ARM64 后端自己的 `--opt-level 1` 走 AST 级常量折叠和后端 peephole。更完整的模块说明见 [实现架构](docs/architecture.md)。
 
 ## 项目结构
 
@@ -493,6 +502,12 @@ neko/
 ├── parser.py         # 递归下降语法分析器
 ├── symbol_table.py   # 符号表系统
 ├── semantic.py       # 语义分析 + 四元式生成
+├── dag.py            # 四元式基本块 DAG 构造
+├── quadruple_optimizer.py   # 四元式 O1 教学优化
+├── quadruple_liveness.py    # 优化后四元式活跃信息
+├── syntax_tree.py    # 保留终结符的具体语法树
+├── viz_api.py        # NekoScope FastAPI 服务
+├── viz_serializers.py # 编译产物 JSON 序列化
 ├── codegen_llvm.py   # LLVM IR 代码生成
 ├── codegen_arm64.py  # Apple Silicon ARM64 汇编后端
 ├── build_utils.py    # 共享编译工具函数
@@ -506,4 +521,10 @@ examples/
 ├── c_function_demo/            # 项目内 C 自定义函数示例
 ├── import_extern_runtime_demo/ # 多文件导入与 extern 示例
 └── socket_adapter_demo/        # 项目内 C socket 适配层示例
+
+nekoscope/
+├── src/main/          # Electron 主进程，启动 FastAPI 后端
+├── src/renderer/      # React + Monaco + React Flow 前端
+├── scripts/           # dev/pack 脚本，打包时复制 uv
+└── package.json       # electron-builder 配置
 ```

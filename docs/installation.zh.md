@@ -17,6 +17,8 @@ NekoLang 的依赖分成两层：
 uv run neko check examples/demo.neko
 uv run neko tokens examples/demo.neko
 uv run neko ast examples/demo.neko
+uv run neko symbols examples/demo.neko
+uv run neko quads examples/demo.neko
 uv run neko llvm-ir examples/demo.neko
 ```
 
@@ -139,8 +141,10 @@ pacman -S --needed mingw-w64-ucrt-x86_64-clang mingw-w64-ucrt-x86_64-python
 克隆仓库后同步依赖：
 
 ```bash
-uv sync
+uv sync --group dev
 ```
+
+仓库不追踪 `uv.lock`，CI 也使用 `uv sync --group dev` 按 `pyproject.toml` 安装依赖。请不要把本地生成的 `uv.lock` 提交到仓库。
 
 运行命令：
 
@@ -210,4 +214,3 @@ cd examples/import_extern_runtime_demo
 nekgo build
 nekgo run
 ```
-
