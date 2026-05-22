@@ -1,4 +1,16 @@
-"""NekoLang compiler CLI."""
+"""
+CLI 入口（Command Line Interface）
+
+编译原理角色：
+  CLI 不是编译器的某个阶段，而是编译器的**用户界面**。
+  它提供命令行入口，让用户在终端中调用编译器的各个功能。
+
+  NekoLang 的 CLI 支持两种调用方式：
+    1. 新版子命令风格：neko check/build/run/ast/tokens... <file>
+    2. 旧版参数风格：neko <file> --tokens --ast ...
+
+  所有子命令最终都调用 build_utils.py 中的编译管线函数。
+"""
 
 import argparse
 import os
@@ -20,7 +32,11 @@ from neko.build_utils import (
 from neko.errors import NekoError
 
 
+# ── 子命令函数 ────────────────────────────────────────────────
+# 每个子命令对应一个函数，接收 argparse.Namespace 参数，返回退出码。
+
 def command_tokens(args: argparse.Namespace) -> int:
+    """打印词法分析生成的 Token 序列（对应 uv run neko tokens <file>）。"""
     result = compile_file_with_imports(args.file)
     for tok in result.tokens:
         print(tok)
@@ -28,12 +44,15 @@ def command_tokens(args: argparse.Namespace) -> int:
 
 
 def command_ast(args: argparse.Namespace) -> int:
+    """打印语法分析生成的抽象语法树（对应 uv run neko ast <file>）。"""
     result = compile_file_with_imports(args.file)
     print(dump_ast(result.ast))
     return 0
 
 
 def command_symbols(args: argparse.Namespace) -> int:
+    """打印语义分析生成的符号表（对应 uv run neko symbols <file>）。
+       如果有语义错误，先打印错误信息再打印符号表。"""
     result = compile_file_with_imports(args.file)
     print_semantic_errors(result.analyzer)
     print(result.analyzer.symbol_table.dump())
@@ -41,6 +60,7 @@ def command_symbols(args: argparse.Namespace) -> int:
 
 
 def command_quads(args: argparse.Namespace) -> int:
+    """打印语义分析生成的四元式（对应 uv run neko quads <file>）。"""
     result = compile_file_with_imports(args.file)
     print_semantic_errors(result.analyzer)
     print(result.analyzer.dump_quadruples())
@@ -48,8 +68,11 @@ def command_quads(args: argparse.Namespace) -> int:
 
 
 def command_all(args: argparse.Namespace) -> int:
+    """打印完整的编译过程输出（对应 uv run neko all <file>）：
+       词法分析 → Token → AST → 符号表 → 四元式"""
     result = compile_file_with_imports(args.file)
 
+    # 词法分析结果
     print("=" * 50)
     print("词法分析结果 (Tokens)")
     print("=" * 50)
@@ -57,19 +80,23 @@ def command_all(args: argparse.Namespace) -> int:
         print(tok)
     print()
 
+    # 语法分析结果
     print("=" * 50)
     print("语法分析结果 (AST)")
     print("=" * 50)
     print(dump_ast(result.ast))
 
+    # 语义错误（如果有）
     print_semantic_errors(result.analyzer)
 
+    # 符号表
     print("=" * 50)
     print("符号表")
     print("=" * 50)
     print(result.analyzer.symbol_table.dump())
     print()
 
+    # 四元式
     print("=" * 50)
     print("四元式 (Quadruples)")
     print("=" * 50)
@@ -78,6 +105,8 @@ def command_all(args: argparse.Namespace) -> int:
 
 
 def command_check(args: argparse.Namespace) -> int:
+    """检查源文件的语法和语义正确性（对应 uv run neko check <file>）。
+       不生成任何目标代码。"""
     result = compile_file_with_imports(args.file)
     if result.analyzer.errors:
         print_semantic_errors(result.analyzer)
@@ -87,6 +116,8 @@ def command_check(args: argparse.Namespace) -> int:
 
 
 def command_llvm_ir(args: argparse.Namespace) -> int:
+    """生成并打印 LLVM IR 中间代码（对应 uv run neko llvm-ir <file>）。
+       使用 LLVM 后端，输出 .ll 格式的文本。"""
     result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     print(generate_ir(result.ast))
@@ -94,6 +125,8 @@ def command_llvm_ir(args: argparse.Namespace) -> int:
 
 
 def command_asm(args: argparse.Namespace) -> int:
+    """生成并打印 ARM64 汇编代码（对应 uv run neko asm <file>）。
+       使用自研 ARM64 后端，支持指定优化等级。"""
     result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     print(generate_assembly(result.ast, opt_level=args.opt_level))
@@ -101,6 +134,8 @@ def command_asm(args: argparse.Namespace) -> int:
 
 
 def command_build(args: argparse.Namespace) -> int:
+    """编译源代码为可执行文件（对应 uv run neko build <file>）。
+       流程：词法分析 → 语法分析 → 语义分析 → 代码生成 → clang 链接 → 可执行文件"""
     result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
     output = args.output or default_output_name(args.file)
@@ -117,6 +152,16 @@ def command_build(args: argparse.Namespace) -> int:
 
 
 def command_run(args: argparse.Namespace) -> int:
+    """
+    编译并运行（对应 uv run neko run <file>）。
+
+    流程：
+      1. 编译为可执行文件（写入临时目录）
+      2. 运行生成的可执行文件
+      3. 传递用户指定的命令行参数
+
+    临时目录在程序运行结束后自动清理。
+    """
     result = compile_file_with_imports(args.file)
     ensure_no_semantic_errors(result)
 
@@ -138,7 +183,10 @@ def command_run(args: argparse.Namespace) -> int:
         return proc.returncode
 
 
+# ── 命令行解析器构建 ──────────────────────────────────────────
+
 def build_parser() -> argparse.ArgumentParser:
+    """构建新版命令行参数解析器（子命令风格）。"""
     parser = argparse.ArgumentParser(description="NekoLang Compiler")
     sub = parser.add_subparsers(dest="command")
 
@@ -191,7 +239,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# ── 旧版 CLI 兼容 ─────────────────────────────────────────────
+
 def run_legacy(argv: list[str]) -> int:
+    """
+    旧版命令行接口——使用 --flags 而不是子命令。
+
+    支持的参数：
+      neko <file> --tokens     打印 Token
+      neko <file> --ast        打印 AST
+      neko <file> --symbols    打印符号表
+      neko <file> --quads      打印四元式（默认）
+      neko <file> --all        打印所有阶段
+      neko <file> --llvm-ir    打印 LLVM IR
+      neko <file> -o <output>  编译为可执行文件
+    """
     parser = argparse.ArgumentParser(description="NekoLang Compiler")
     parser.add_argument("file", help="Source file (.neko)")
     parser.add_argument("--tokens", action="store_true", help="Print token stream")
@@ -262,7 +324,17 @@ def run_legacy(argv: list[str]) -> int:
     return 1 if result.analyzer.errors else 0
 
 
+# ── 主入口 ─────────────────────────────────────────────────────
+
 def main(argv: list[str] | None = None) -> int:
+    """
+    主程序入口——决定使用新版子命令风格还是旧版参数风格。
+
+    如果第一个参数是已知的子命令（check/build/run/llvm-ir/asm/ast/tokens/symbols/quads/all），
+    用新版子命令风格；否则回退到旧版参数风格。
+
+    所有 NekoError 异常在这里被捕获并格式化输出。
+    """
     argv = list(sys.argv[1:] if argv is None else argv)
     commands = {"check", "build", "run", "llvm-ir", "asm", "ast", "tokens", "symbols", "quads", "all"}
 

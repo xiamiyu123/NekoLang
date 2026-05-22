@@ -1,4 +1,40 @@
-"""nekgo - NekoLang project management tool."""
+"""
+nekgo——NekoLang 项目管理工具
+
+编译原理角色：
+  nekgo 是 NekoLang 的项目级构建工具，类似于 cargo（Rust）或 npm（Node.js）。
+  和 neko CLI 不同，nekgo 针对**多文件项目**场景设计：
+    1. 读取 Neko.toml 配置文件（项目名、入口文件、C 构建配置、依赖）
+    2. 管理项目依赖（本地包）
+    3. 编译并链接运行时 C 代码
+    4. 运行项目测试
+
+  Neko.toml 项目结构：
+    my-project/
+      ├── Neko.toml          # 项目配置
+      ├── src/
+      │   └── main.neko      # 入口文件
+      ├── csrc/              # 额外的 C 源文件（可选）
+      │   ├── helper.c
+      │   └── include/
+      ├── tests/             # 测试文件（可选）
+      ├── build/             # 构建产物
+      └── .neko/packages/    # 本地依赖包
+
+  Neko.toml 示例：
+    [project]
+    name = "my-app"
+    entry = "src/main.neko"
+
+    [c]
+    auto_discover = true
+    libraries = ["m"]
+
+    [dependencies.my-lib]
+    path = "../my-lib"
+    version = "1.0.0"
+    exports = ["lib/main.neko"]
+"""
 
 import argparse
 import os
@@ -20,25 +56,30 @@ from neko.errors import NekoError
 
 
 def _resolve_backend(requested: str) -> str:
+    """解析 backend 参数，auto 模式下 Apple Silicon 用 arm64，否则用 llvm。"""
     if requested == "auto":
         return "arm64" if platform.system() == "Darwin" and platform.machine() == "arm64" else "llvm"
     return requested
 
 
+# ══════════════════════════════════════════════════════════════
+# 依赖管理
+# ══════════════════════════════════════════════════════════════
+
 @dataclass(frozen=True)
 class LocalDependency:
-    name: str
-    path: str
-    version: str
-    exports: tuple[str, ...]
-    export_paths: tuple[str, ...]
+    """已加载的本地包依赖。"""
+    name: str                                   # 包名
+    path: str                                   # 相对路径
+    version: str                                # 版本号
+    exports: tuple[str, ...]                    # 导出的 .neko 文件
+    export_paths: tuple[str, ...]               # 导出文件的绝对路径
 
 
-# ---------------------------------------------------------------------------
-# TOML parsing (minimal, for Neko.toml)
-# ---------------------------------------------------------------------------
+# ── TOML 解析（最小实现，仅支持 Neko.toml 需要的语法） ──────────
 
 def _ensure_section(root: dict, name: str) -> dict:
+    """确保 TOML 的嵌套 section 存在（如 [c] 或 [dependencies.xxx]）。"""
     section = root
     for part in name.split("."):
         next_section = section.setdefault(part, {})
@@ -50,7 +91,17 @@ def _ensure_section(root: dict, name: str) -> dict:
 
 
 def _parse_toml_simple(path: str) -> dict:
-    """Parse a minimal Neko.toml with basic key/value tables and string arrays."""
+    """
+    简化的 TOML 解析器——仅支持 Neko.toml 的基本语法。
+
+    Python 3.11+ 有自带的 tomllib，但为了兼容 Python 3.10 及以下版本，
+    这里实现了一个最小解析器。支持：
+      - Section 表： [project], [c], [dependencies.xxx]
+      - 键值对： key = "value"
+      - 字符串数组： exports = ["a.neko", "b.neko"]
+      - 布尔值： auto_discover = true
+      - 注释： # 开头的行
+    """
     result = {}
     current_section = None
     with open(path, "r", encoding="utf-8") as f:
@@ -85,6 +136,7 @@ def _parse_toml_simple(path: str) -> dict:
 
 
 def _load_toml_file(toml_path: str) -> dict:
+    """加载 TOML 文件——如果 Python 版本支持就用自带的 tomllib，否则用简化解析器。"""
     if not os.path.isfile(toml_path):
         print(f"错误: 未找到 {toml_path}。")
         raise SystemExit(1)
@@ -100,6 +152,7 @@ def _load_toml_file(toml_path: str) -> dict:
 
 
 def _load_project_manifest(project_dir: str) -> dict:
+    """加载项目根目录下的 Neko.toml 配置文件。"""
     toml_path = os.path.join(project_dir, "Neko.toml")
     if not os.path.isfile(toml_path):
         print("错误: 当前目录未找到 Neko.toml，请确认是否在 NekoLang 项目根目录中。")
@@ -108,6 +161,7 @@ def _load_project_manifest(project_dir: str) -> dict:
 
 
 def _project_config_from_manifest(config: dict) -> dict:
+    """从 TOML 配置中提取 [project] 段的配置信息。"""
     project = config.get("project", {})
     if not isinstance(project, dict):
         print("错误: Neko.toml [project] 必须是表。")
@@ -117,19 +171,21 @@ def _project_config_from_manifest(config: dict) -> dict:
         print("错误: Neko.toml [project] 缺少 'name' 字段。")
         raise SystemExit(1)
     if "entry" not in project:
-        project["entry"] = "src/main.neko"
+        project["entry"] = "src/main.neko"  # 默认入口
     return project
 
 
 def _load_project_config(project_dir: str) -> tuple[dict, CBuildConfig]:
-    """Load and validate Neko.toml from a project directory."""
+    """加载项目的配置（包括 [project] 和 [c] 配置）。"""
     config = _load_project_manifest(project_dir)
     project = _project_config_from_manifest(config)
-
     return project, resolve_c_build_config(project_dir, config.get("c"))
 
 
+# ── 参数验证 ──────────────────────────────────────────────────
+
 def _require_string(value, message: str) -> str:
+    """验证值必须是非空字符串。"""
     if not isinstance(value, str) or not value:
         print(message)
         raise SystemExit(1)
@@ -137,6 +193,7 @@ def _require_string(value, message: str) -> str:
 
 
 def _require_string_list(value, message: str) -> tuple[str, ...]:
+    """验证值必须是字符串数组。"""
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         print(message)
         raise SystemExit(1)
@@ -144,13 +201,17 @@ def _require_string_list(value, message: str) -> tuple[str, ...]:
 
 
 def _validate_package_name(name: str) -> str:
+    """验证包名——不允许包含路径分隔符。"""
     if name in {".", ".."} or "/" in name or "\\" in name:
         print(f"错误: 包名 '{name}' 不能包含路径分隔符。")
         raise SystemExit(1)
     return name
 
 
+# ── 包加载 ─────────────────────────────────────────────────────
+
 def _load_package_manifest(package_dir: str) -> tuple[str, str, tuple[str, ...]]:
+    """加载一个本地包的 Neko.toml，返回 (name, version, exports)。"""
     toml_path = os.path.join(package_dir, "Neko.toml")
     if not os.path.isfile(toml_path):
         print(f"错误: 包目录 '{package_dir}' 缺少 Neko.toml。")
@@ -168,6 +229,7 @@ def _load_package_manifest(package_dir: str) -> tuple[str, str, tuple[str, ...]]
     version = _require_string(package.get("version"), "错误: 包 Neko.toml [package] 缺少 'version' 字段。")
     exports = _require_string_list(package.get("exports"), "错误: 包 Neko.toml [package].exports 必须是字符串数组。")
 
+    # 验证所有导出文件确实存在
     for export in exports:
         export_path = os.path.abspath(os.path.join(package_dir, export))
         if not export_path.endswith(".neko"):
@@ -181,6 +243,12 @@ def _load_package_manifest(package_dir: str) -> tuple[str, str, tuple[str, ...]]
 
 
 def _load_project_dependencies(project_dir: str, config: dict) -> tuple[LocalDependency, ...]:
+    """
+    从 Neko.toml 的 [dependencies] 段加载所有本地依赖。
+
+    每个依赖是一个本地目录，包含自己的 Neko.toml。
+    依赖通过 exports 字段暴露 .neko 文件供主项目 import 使用。
+    """
     dependencies = config.get("dependencies", {})
     if dependencies is None:
         return ()
@@ -227,23 +295,24 @@ def _load_project_dependencies(project_dir: str, config: dict) -> tuple[LocalDep
 
 
 def _load_project_build_config(project_dir: str) -> tuple[dict, CBuildConfig, tuple[LocalDependency, ...]]:
+    """加载项目完整的构建配置：project 配置 + C 配置 + 依赖列表。"""
     config = _load_project_manifest(project_dir)
     project = _project_config_from_manifest(config)
     dependencies = _load_project_dependencies(project_dir, config)
     return project, resolve_c_build_config(project_dir, config.get("c")), dependencies
 
 
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
+# ── 构建工具函数 ──────────────────────────────────────────────
 
 def _project_output_path(project_dir: str, name: str) -> str:
+    """返回项目的可执行文件输出路径（build/<name>）。"""
     build_dir = os.path.join(project_dir, "build")
     os.makedirs(build_dir, exist_ok=True)
     return os.path.join(build_dir, name)
 
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    """去重但保持顺序。"""
     seen: set[str] = set()
     ordered: list[str] = []
     for value in values:
@@ -254,6 +323,13 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
 
 
 def _project_import_roots(entry_path: str, dependencies: tuple[LocalDependency, ...] = ()) -> list[str]:
+    """
+    返回项目的 import 搜索根目录列表。
+
+    包括：
+      - 入口文件所在目录（主项目的 src/）
+      - 所有依赖包的导出文件所在目录
+    """
     roots = [os.path.dirname(os.path.abspath(entry_path))]
     for dependency in dependencies:
         roots.extend(os.path.dirname(path) for path in dependency.export_paths)
@@ -261,6 +337,7 @@ def _project_import_roots(entry_path: str, dependencies: tuple[LocalDependency, 
 
 
 def _dependency_auto_import_paths(dependencies: tuple[LocalDependency, ...]) -> list[str]:
+    """返回所有依赖的自动导入文件路径列表。"""
     paths: list[str] = []
     for dependency in dependencies:
         paths.extend(dependency.export_paths)
@@ -272,6 +349,13 @@ def _compile_project_file(
     entry_path: str,
     dependencies: tuple[LocalDependency, ...] = (),
 ):
+    """
+    编译项目中的一个 .neko 文件（含 import 解析和依赖自动导入）。
+
+    和 compile_file_with_imports 的区别：
+      - 传入了 import_roots（搜索目录，从入口文件和依赖计算而来）
+      - 传入了 auto_import_paths（依赖的导出文件，自动导入）
+    """
     return compile_file_with_imports(
         source_path,
         import_roots=_project_import_roots(entry_path, dependencies),
@@ -290,6 +374,12 @@ def _compile_project_ast(
     opt_level: int,
     dependencies: tuple[LocalDependency, ...],
 ):
+    """
+    编译项目文件并生成可执行文件的完整流程。
+
+    此函数集中了项目编译的完整管线（编译 → 链接），
+    被 build、run、test 命令共用。
+    """
     result = _compile_project_file(source_path, entry_path, dependencies)
     if result.analyzer.errors:
         raise RuntimeError(_semantic_failure_detail(result))
@@ -306,10 +396,12 @@ def _compile_project_ast(
 
 
 def _semantic_failure_detail(result) -> str:
+    """返回语义错误的详细信息。"""
     return format_semantic_errors(result.analyzer) or "语义分析失败。"
 
 
 def _exception_detail(exc: BaseException) -> str:
+    """格式化异常信息为可读的字符串。"""
     if isinstance(exc, SystemExit):
         if isinstance(exc.code, str):
             return exc.code
@@ -319,16 +411,21 @@ def _exception_detail(exc: BaseException) -> str:
     return str(exc)
 
 
+# ── TOML 格式化工具（用于修改 Neko.toml） ─────────────────────
+
 def _toml_string(value: str) -> str:
+    """将字符串转义为 TOML 格式的字符串字面量。"""
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
 
 
 def _toml_array(values: tuple[str, ...]) -> str:
+    """将字符串列表格式化为 TOML 格式的数组。"""
     return "[" + ", ".join(_toml_string(value) for value in values) + "]"
 
 
 def _dependency_block(name: str, path: str, version: str, exports: tuple[str, ...]) -> str:
+    """生成 TOML 格式的依赖配置块。"""
     return (
         f"[dependencies.{name}]\n"
         f"path = {_toml_string(path)}\n"
@@ -344,6 +441,7 @@ def _append_dependency_to_manifest(
     version: str,
     exports: tuple[str, ...],
 ) -> None:
+    """将一个新的依赖写入 Neko.toml。"""
     toml_path = os.path.join(project_dir, "Neko.toml")
     with open(toml_path, "r", encoding="utf-8") as f:
         text = f.read()
@@ -359,6 +457,7 @@ def _append_dependency_to_manifest(
 
 
 def _copy_package(source_dir: str, dest_dir: str) -> None:
+    """复制包目录到 .neko/packages/，排除构建产物和版本控制文件。"""
     shutil.copytree(
         source_dir,
         dest_dir,
@@ -366,69 +465,20 @@ def _copy_package(source_dir: str, dest_dir: str) -> None:
     )
 
 
-def command_load(args: argparse.Namespace) -> int:
-    """Load a local Neko package into the current project."""
-    project_dir = os.getcwd()
-    config = _load_project_manifest(project_dir)
-    _project_config_from_manifest(config)
-    dependencies = config.get("dependencies", {})
-    if dependencies is None:
-        dependencies = {}
-    if not isinstance(dependencies, dict):
-        print("错误: Neko.toml [dependencies] 必须是表。")
-        return 1
-
-    package_dir = os.path.abspath(args.package_path)
-    if not os.path.isdir(package_dir):
-        print(f"错误: 包目录 '{args.package_path}' 未找到。")
-        return 1
-
-    try:
-        name, version, exports = _load_package_manifest(package_dir)
-    except SystemExit:
-        return 1
-
-    if name in dependencies:
-        print(f"包 '{name}' 已加载。")
-        return 0
-
-    packages_dir = os.path.join(project_dir, ".neko", "packages")
-    dest_dir = os.path.join(packages_dir, name)
-    if os.path.exists(dest_dir):
-        print(f"错误: 包目录已存在但 Neko.toml 未声明依赖: .neko/packages/{name}")
-        return 1
-
-    os.makedirs(packages_dir, exist_ok=True)
-    _copy_package(package_dir, dest_dir)
-    dep_path = f".neko/packages/{name}"
-    _append_dependency_to_manifest(project_dir, name, dep_path, version, exports)
-
-    print(f"已加载包 '{name}' {version}: {dep_path}")
-    return 0
-
-
-def command_list(args: argparse.Namespace) -> int:
-    """List local packages loaded by the current project."""
-    project_dir = os.getcwd()
-    config = _load_project_manifest(project_dir)
-    _project_config_from_manifest(config)
-    try:
-        dependencies = _load_project_dependencies(project_dir, config)
-    except SystemExit:
-        return 1
-
-    if not dependencies:
-        print("当前项目未加载包。")
-        return 0
-
-    for dependency in dependencies:
-        exports = ", ".join(dependency.exports)
-        print(f"{dependency.name} {dependency.version} ({dependency.path}) exports: {exports}")
-    return 0
-
+# ══════════════════════════════════════════════════════════════
+# 子命令
+# ══════════════════════════════════════════════════════════════
 
 def command_new(args: argparse.Namespace) -> int:
-    """Create a new NekoLang project."""
+    """创建新的 NekoLang 项目。
+
+    生成项目目录结构：
+      <name>/
+        ├── Neko.toml
+        ├── src/
+        │   └── main.neko
+        └── build/
+    """
     name = args.name
     project_dir = os.path.join(os.getcwd(), name)
 
@@ -469,8 +519,77 @@ def command_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_load(args: argparse.Namespace) -> int:
+    """
+    加载本地 Neko 包到当前项目中。
+
+    流程：
+      1. 验证包目录有效
+      2. 读取包的 Neko.toml 获取 name/version/exports
+      3. 复制包到 .neko/packages/<name>/
+      4. 将依赖信息写入主项目的 Neko.toml
+    """
+    project_dir = os.getcwd()
+    config = _load_project_manifest(project_dir)
+    _project_config_from_manifest(config)
+    dependencies = config.get("dependencies", {})
+    if dependencies is None:
+        dependencies = {}
+    if not isinstance(dependencies, dict):
+        print("错误: Neko.toml [dependencies] 必须是表。")
+        return 1
+
+    package_dir = os.path.abspath(args.package_path)
+    if not os.path.isdir(package_dir):
+        print(f"错误: 包目录 '{args.package_path}' 未找到。")
+        return 1
+
+    try:
+        name, version, exports = _load_package_manifest(package_dir)
+    except SystemExit:
+        return 1
+
+    if name in dependencies:
+        print(f"包 '{name}' 已加载。")
+        return 0
+
+    packages_dir = os.path.join(project_dir, ".neko", "packages")
+    dest_dir = os.path.join(packages_dir, name)
+    if os.path.exists(dest_dir):
+        print(f"错误: 包目录已存在但 Neko.toml 未声明依赖: .neko/packages/{name}")
+        return 1
+
+    os.makedirs(packages_dir, exist_ok=True)
+    _copy_package(package_dir, dest_dir)
+    dep_path = f".neko/packages/{name}"
+    _append_dependency_to_manifest(project_dir, name, dep_path, version, exports)
+
+    print(f"已加载包 '{name}' {version}: {dep_path}")
+    return 0
+
+
+def command_list(args: argparse.Namespace) -> int:
+    """列出当前项目已加载的所有本地依赖包。"""
+    project_dir = os.getcwd()
+    config = _load_project_manifest(project_dir)
+    _project_config_from_manifest(config)
+    try:
+        dependencies = _load_project_dependencies(project_dir, config)
+    except SystemExit:
+        return 1
+
+    if not dependencies:
+        print("当前项目未加载包。")
+        return 0
+
+    for dependency in dependencies:
+        exports = ", ".join(dependency.exports)
+        print(f"{dependency.name} {dependency.version} ({dependency.path}) exports: {exports}")
+    return 0
+
+
 def command_build(args: argparse.Namespace) -> int:
-    """Build the current project."""
+    """编译当前项目为可执行文件。"""
     project_dir = os.getcwd()
     config, c_build_config, dependencies = _load_project_build_config(project_dir)
 
@@ -507,7 +626,7 @@ def command_build(args: argparse.Namespace) -> int:
 
 
 def command_run(args: argparse.Namespace) -> int:
-    """Build and run the current project."""
+    """编译并运行当前项目。"""
     project_dir = os.getcwd()
     config, c_build_config, dependencies = _load_project_build_config(project_dir)
 
@@ -526,6 +645,7 @@ def command_run(args: argparse.Namespace) -> int:
         runtime_args = runtime_args[1:]
 
     if args.ephemeral:
+        # 临时模式：在临时目录编译运行，不写入 build/
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, name)
             try:
@@ -546,6 +666,7 @@ def command_run(args: argparse.Namespace) -> int:
             proc = subprocess.run([output_path, *runtime_args], text=True)
             return proc.returncode
 
+    # 持久模式：写入 build/ 目录
     output_path = _project_output_path(project_dir, name)
     try:
         _compile_project_ast(
@@ -567,8 +688,7 @@ def command_run(args: argparse.Namespace) -> int:
 
 
 def command_clean(args: argparse.Namespace) -> int:
-    """Remove the build/ directory."""
-    import shutil
+    """删除 build/ 构建产物目录。"""
     project_dir = os.getcwd()
     _load_project_config(project_dir)
     build_dir = os.path.join(project_dir, "build")
@@ -581,7 +701,16 @@ def command_clean(args: argparse.Namespace) -> int:
 
 
 def command_test(args: argparse.Namespace) -> int:
-    """Run all .neko test files in the tests/ directory."""
+    """
+    运行项目中的所有 .neko 测试文件。
+
+    流程：
+      1. 读取项目配置
+      2. 查找 tests/ 目录下所有 .neko 文件
+      3. 逐个编译并运行
+      4. 统计通过/失败数量
+      5. 显示失败细节
+    """
     project_dir = os.getcwd()
     config, c_build_config, dependencies = _load_project_build_config(project_dir)
     entry = config["entry"]
@@ -647,25 +776,30 @@ def command_test(args: argparse.Namespace) -> int:
     return 1 if failed > 0 else 0
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+# ══════════════════════════════════════════════════════════════
+# CLI 入口
+# ══════════════════════════════════════════════════════════════
 
 def build_parser() -> argparse.ArgumentParser:
+    """构建 nekgo 的命令行参数解析器。"""
     parser = argparse.ArgumentParser(description="nekgo - NekoLang 项目管理工具")
     sub = parser.add_subparsers(dest="command")
 
+    # new — 创建新项目
     p_new = sub.add_parser("new", help="创建新项目")
     p_new.add_argument("name", help="项目名称")
     p_new.set_defaults(func=command_new)
 
+    # load — 加载本地包
     p_load = sub.add_parser("load", help="加载本地 Neko 包")
     p_load.add_argument("package_path", help="本地包目录")
     p_load.set_defaults(func=command_load)
 
+    # list — 列出已加载的包
     p_list = sub.add_parser("list", help="列出当前项目已加载的包")
     p_list.set_defaults(func=command_list)
 
+    # build — 编译项目
     p_build = sub.add_parser("build", help="编译当前项目")
     p_build.add_argument("--verbose", action="store_true", help="打印 LLVM IR 和 clang 命令")
     p_build.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
@@ -673,6 +807,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_build.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 后端优化等级")
     p_build.set_defaults(func=command_build)
 
+    # run — 编译并运行
     p_run = sub.add_parser("run", help="编译并运行当前项目")
     p_run.add_argument("--verbose", action="store_true", help="打印 LLVM IR 和 clang 命令")
     p_run.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
@@ -682,12 +817,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("args", nargs=argparse.REMAINDER, help="传递给程序的参数")
     p_run.set_defaults(func=command_run)
 
+    # test — 运行测试
     p_test = sub.add_parser("test", help="运行项目测试")
     p_test.add_argument("--backend", choices=["auto", "llvm", "arm64"], default="auto", help="代码生成后端")
     p_test.add_argument("--mode", choices=["debug", "release"], default="debug", help="编译模式")
     p_test.add_argument("--opt-level", type=int, choices=[0, 1], default=0, help="ARM64 后端优化等级")
     p_test.set_defaults(func=command_test)
 
+    # clean — 清理构建产物
     p_clean = sub.add_parser("clean", help="清理构建产物")
     p_clean.set_defaults(func=command_clean)
 
@@ -695,6 +832,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """nekgo 的主入口。"""
     argv = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     try:
