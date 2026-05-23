@@ -142,7 +142,7 @@ class _ValueState:
         self.expr_values.clear()
 
     def optimize_row(self, quad: Quadruple) -> list[Quadruple]:
-        """优化一条四元式。返回可能为多条（替换/删除）四元式。"""
+        """优化一条四元式。返回可能为（替换/删除）四元式。"""
         # 基本块边界：清空表达式共享
         if quad.op == "label":
             self.clear_values()
@@ -260,8 +260,22 @@ class _ValueState:
 
     def _rewrite_temp_operands(self, quad: Quadruple) -> Quadruple:
         """
-        将四元式中所有临时变量替换为最新的规范形地址。
-        例如 T1 的最新值存储在 I5，则把 T1 替换为 I5。
+        将一条四元式中所有临时变量(T1,T2...)替换为规范形地址。
+
+        TEMP_RE = r"\bT\d+\b" — 匹配 T1, T2 等临时变量名。
+
+        _rewrite_temp_operand 对单个操作数字符串做正则替换，
+        _rewrite_temp_operands 对整个四元式的 ob1 和 ob2 做替换。
+
+        之所以只替换 ob1/ob2 不替换 t(目标),
+        是因为 t 是"被赋值"的目标,临时变量名保留即可。
+        而 ob1/ob2 中引用其他临时变量的值,需要换成当前最新的地址。
+
+        例如经过常量传播后 current_def["T1"] = "const:42",
+        那么四元式 (+, T1, C2, T3) 的 ob1 中的 T1 被替换为 C42。
+
+        又例如经过 CSE 后 value_holders["expr:5"] = ["I2", "T5"],
+        _canonical_operand 从中选 I2(规范形),所以 T5 被替换为 I2。
         """
         return Quadruple(
             quad.op,
@@ -271,15 +285,41 @@ class _ValueState:
         )
 
     def _rewrite_temp_operand(self, operand: str) -> str:
+        """
+        将单个操作数字符串中的临时变量(T1,T2...)替换为规范形地址。
+
+        处理逻辑：
+          1. 如果操作数是 "_"(空) 或 "(...)"(间接引用),
+             不处理,直接返回原值。
+          2. 否则用 TEMP_RE 正则查找 operand 中所有匹配 T{n} 的子串。
+          3. 对每个匹配到的 T{n}:
+             a. 查 current_def,看 T{n} 当前指向什么值 ID。
+             b. 如果没追踪到(current_def 中没有),保留 T{n} 不变。
+             c. 如果有,调用 _canonical_operand 把值 ID 转成
+                可读的地址字符串(常量→C{n}, 变量→I{n}, 否则返回原值)。
+
+        举例:
+          假设 current_def = {"T1": "const:42", "T5": "expr:5"}
+          value_holders = {"expr:5": ["I2", "T5"]}
+
+          输入 operand = "(+(I1, T5), _"  (表达式中引用了 T5)
+          正则匹配到 T5 → current_def["T5"] = "expr:5"
+          _canonical_operand("expr:5", ...)
+            → value_holders["expr:5"] = ["I2", "T5"]
+            → 选最小的规范形 = "I2"
+          结果: operand = "(+(I1, I2), _)"
+        """
+        # 下划线(空)或括号(间接引用)不处理
         if operand == "_" or (operand.startswith("(") and operand.endswith(")")):
             return operand
 
+        # 对每个 T{n} 匹配做替换
         def replace(match: re.Match[str]) -> str:
-            temp = match.group(0)
-            value_id = self.current_def.get(temp)
-            if not value_id:
+            temp = match.group(0)                     # 匹配到的 "T1"
+            value_id = self.current_def.get(temp)     # 查 current_def
+            if not value_id:                          # 没追踪到,保留原值
                 return temp
-            return self._canonical_operand(value_id, temp)
+            return self._canonical_operand(value_id, temp)  # 换成规范形地址
 
         return TEMP_RE.sub(replace, operand)
 
@@ -426,20 +466,24 @@ def optimize_quadruples(
     返回结果包含每个 pass 的中间产出和统计信息，
     用于 NekoScope 前端的优化过程可视化展示。
     """
+    # 可折叠的四元式列表 + 最终常量表
     folded, folded_state = _run_value_pass(
         quadruples,
         constants or {},
         enable_folding=True,
         enable_cse=False,
     )
+    # 在折叠后的基础上做 公共表达式消除（CSE），得到最终优化后的四元式列表
     cse, cse_state = _run_value_pass(
         folded,
         _constants_by_value(folded_state.const_by_addr),
         enable_folding=False,
         enable_cse=True,
     )
+    # 逆向用活跃信息删除死临时变量定义，得到最终优化后的四元式列表
     pruned = _remove_dead_temp_defs(cse)
     removed_temp_count = len(cse) - len(pruned)
+    # 统计删除的临时变量定义数（死代码删除的效果）
     return QuadrupleOptimizationResult(
         quadruples=pruned,
         constants=_constants_by_value(cse_state.const_by_addr),
